@@ -1,0 +1,62 @@
+mod app;
+mod bottom_bar;
+mod caret;
+mod commands;
+mod db_worker;
+mod editor;
+mod fuzzy;
+mod input;
+mod modals;
+mod mode;
+mod notes;
+mod settingpanel;
+mod settingtabs;
+mod sidebar;
+mod sound;
+mod theme;
+mod view_editor;
+mod view_stats;
+
+use app::App;
+use eframe::egui::{self, FontData, FontDefinitions, FontFamily};
+
+fn main() -> eframe::Result<()> {
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_decorations(false) // Borderless: NO title bar, NO borders
+            .with_transparent(true)  // Enables opacity and rounded edges
+            .with_inner_size([1040.0, 680.0])
+            .with_min_inner_size([480.0, 320.0])
+            .with_resizable(true),
+        vsync: true,
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        "mindforge",
+        options,
+        Box::new(|cc| {
+            setup_fonts(&cc.egui_ctx);
+            Ok(Box::new(App::new()))
+        }),
+    )
+}
+
+fn setup_fonts(ctx: &egui::Context) {
+    let mut fonts = FontDefinitions::default();
+    fonts.font_data.insert(
+        "mono".into(),
+        FontData::from_static(include_bytes!("../assets/JetBrainsMono-Regular.ttf")).into(),
+    );
+    fonts
+        .families
+        .get_mut(&FontFamily::Monospace)
+        .unwrap()
+        .insert(0, "mono".into());
+    fonts
+        .families
+        .get_mut(&FontFamily::Proportional)
+        .unwrap()
+        .insert(0, "mono".into());
+    ctx.set_fonts(fonts);
+}

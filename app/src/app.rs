@@ -1,0 +1,646 @@
+//! Main application controller, state management, and egui frame loop.
+
+use crate::bottom_bar::render_bottom_dock;
+use crate::caret::{Caret, CaretKind};
+use crate::db_worker::{spawn_db_worker, DbMsg};
+use crate::editor::Editor;
+use crate::fuzzy::{SearchItem, SearchResultKind};
+use crate::input::{handle_input, window_shortcuts};
+use crate::modals::{render_delete_confirm_modal, render_rename_modal, render_search_modal};
+use crate::mode::Mode;
+use crate::notes::{delete_active_note, quick_save_active_note, rename_active_note, update_search_results};
+use crate::settingpanel::render_setting_panel;
+use crate::settingtabs::{render_setting_tabs, SettingTab};
+use crate::sidebar::{render_sidebar, SidebarAction};
+use crate::sound::{SoundEngine, SoundProfile};
+use crate::theme::{Theme, ThemeKind};
+use crate::view_editor::{render_editor_body, render_editor_header};
+use crate::view_stats::render_stats;
+
+use chrono::Local;
+use core::{DailyActivity, Database, Note};
+use eframe::egui::{self, pos2, Color32, FontId, Rect};
+use std::sync::mpsc::Sender;
+use std::time::Duration;
+
+pub struct App {
+    pub ed: Editor,
+    pub cmd_ed: Editor,
+    pub in_command: bool,
+    pub caret: Caret,
+    pub theme: Theme,
+    pub sound: SoundEngine,
+    pub font_size: f32,
+    pub opacity: f32,
+    pub last_char_time: f64,
+    pub cell: Option<(f32, f32)>,
+    pub mode: Mode,
+    pub status_msg: String,
+    pub status_time: f64,
+
+    pub first_frame: bool,
+
+    // Sleek floating sidebar (Ctrl+B)
+    pub sidebar_open: bool,
+
+    // Two-column Preferences modal (Ctrl+,)
+    pub settings_open: bool,
+    pub active_setting_tab: SettingTab,
+
+    // Fuzzy search modal (Ctrl+P)
+    pub search_open: bool,
+    pub search_query: String,
+    pub search_results: Vec<SearchItem>,
+    pub search_selected: usize,
+    pub search_just_opened: bool,
+
+    // Rename modal (Ctrl+R)
+    pub rename_open: bool,
+    pub rename_input: String,
+    pub rename_just_opened: bool,
+
+    // Delete confirmation modal (Ctrl+D)
+    pub delete_confirm_open: bool,
+
+    // Active document & sidebar limits
+    pub active_note_id: Option<i64>,
+    pub active_note_title: String,
+    pub notes_list: Vec<Note>,
+    pub sidebar_notes_limit: usize,
+    pub total_notes_count: usize,
+
+    // Scrolling & auto-save
+    pub scroll_y: f32,
+    pub is_dirty: bool,
+    pub last_saved_time: f64,
+
+    // Database & worker channel
+    pub db: Option<Database>,
+    pub db_tx: Sender<DbMsg>,
+
+    // Daily Activity & Writing Story tracking
+    pub pending_secs: f32,
+    pub pending_keys: u32,
+    pub pending_words: u32,
+    pub pending_created: u32,
+    pub pending_edited: u32,
+    pub last_flush_time: f64,
+    pub today_activity: DailyActivity,
+    pub activity_history: Vec<DailyActivity>,
+    pub lifetime_activity: (u64, u64, u64, usize),
+}
+
+impl App {
+    pub fn new() -> Self {
+        let tx = spawn_db_worker();
+        let db = Database::open_default().ok();
+
+        let mut app = Self {
+            ed: Editor::new(),
+            cmd_ed: Editor::new(),
+            in_command: false,
+            caret: Caret::new(CaretKind::Block),
+            theme: Theme::from_kind(ThemeKind::Green),
+            sound: SoundEngine::new(SoundProfile::Thocky), // Mechanical keyboard enabled by default
+            font_size: 16.0,
+            opacity: 1.0,
+            last_char_time: -10.0,
+            cell: None,
+            mode: Mode::Normal,
+            status_msg: String::new(),
+            status_time: 0.0,
+            first_frame: true,
+            sidebar_open: false,
+            settings_open: false,
+            active_setting_tab: SettingTab::Carets,
+            search_open: false,
+            search_query: String::new(),
+            search_results: Vec::new(),
+            search_selected: 0,
+            search_just_opened: false,
+            rename_open: false,
+            rename_input: String::new(),
+            rename_just_opened: false,
+            delete_confirm_open: false,
+            active_note_id: None,
+            active_note_title: "Untitled Note".to_string(),
+            notes_list: Vec::new(),
+            sidebar_notes_limit: 50,
+            total_notes_count: 0,
+            scroll_y: 0.0,
+            is_dirty: false,
+            last_saved_time: 0.0,
+            db,
+            db_tx: tx,
+            pending_secs: 0.0,
+            pending_keys: 0,
+            pending_words: 0,
+            pending_created: 0,
+            pending_edited: 0,
+            last_flush_time: 0.0,
+            today_activity: DailyActivity::default(),
+            activity_history: Vec::new(),
+            lifetime_activity: (0, 0, 0, 0),
+        };
+
+        app.load_settings();
+        app.reload_db_state();
+        app
+    }
+
+    pub fn load_settings(&mut self) {
+        if let Some(db) = &self.db {
+            if let Ok(Some(c)) = db.get_setting("caret") {
+                if let Some(kind) = CaretKind::parse(&c) {
+                    self.caret.kind = kind;
+                }
+            }
+            if let Ok(Some(t)) = db.get_setting("theme") {
+                if let Some(kind) = ThemeKind::parse(&t) {
+                    self.theme = Theme::from_kind(kind);
+                }
+            }
+            if let Ok(Some(s)) = db.get_setting("sound") {
+                if let Some(profile) = SoundProfile::parse(&s) {
+                    self.sound.profile = profile;
+                }
+            }
+            if let Ok(Some(w)) = db.get_setting("caret_width") {
+                if let Ok(val) = w.parse::<f32>() {
+                    self.caret.width = val.clamp(1.0, 10.0);
+                }
+            }
+            if let Ok(Some(anim)) = db.get_setting("caret_animations") {
+                self.caret.animations_enabled = anim != "off" && anim != "false";
+            }
+            if let Ok(Some(op)) = db.get_setting("opacity") {
+                if let Ok(val) = op.parse::<f32>() {
+                    self.opacity = val.clamp(0.2, 1.0);
+                }
+            }
+            if let Ok(Some(f)) = db.get_setting("font") {
+                if let Ok(val) = f.parse::<f32>() {
+                    self.font_size = val.clamp(12.0, 48.0);
+                }
+            }
+        }
+    }
+
+    pub fn reload_db_state(&mut self) {
+        if let Some(db) = &self.db {
+            if let Ok(count) = db.get_notes_count() {
+                self.total_notes_count = count;
+            }
+            if let Ok(notes) = db.get_recent_notes(self.sidebar_notes_limit) {
+                self.notes_list = notes;
+                if self.active_note_id.is_none() {
+                    if let Some(first) = self.notes_list.first() {
+                        self.active_note_id = Some(first.id);
+                        self.active_note_title = first.topic.clone();
+                        self.ed.set_text(&first.body);
+                        self.is_dirty = false;
+                    }
+                }
+            }
+            if let Ok(recent) = db.get_recent_activity(14) {
+                let today_str = Local::now().date_naive().format("%Y-%m-%d").to_string();
+                if let Some(t) = recent.iter().find(|a| a.date == today_str) {
+                    self.today_activity = t.clone();
+                } else {
+                    self.today_activity = DailyActivity {
+                        date: today_str,
+                        ..Default::default()
+                    };
+                }
+                self.activity_history = recent;
+            }
+            if let Ok(lifetime) = db.get_lifetime_activity() {
+                self.lifetime_activity = lifetime;
+            }
+        }
+    }
+
+    pub fn flush_activity(&mut self, now: f64) {
+        let secs = self.pending_secs as u32;
+        let keys = self.pending_keys;
+        let words = self.pending_words;
+        let created = self.pending_created;
+        let edited = self.pending_edited;
+
+        if secs > 0 || keys > 0 || words > 0 || created > 0 || edited > 0 {
+            let today_str = Local::now().date_naive().format("%Y-%m-%d").to_string();
+            let _ = self.db_tx.send(DbMsg::FlushActivity {
+                date: today_str,
+                delta_secs: secs,
+                delta_keys: keys,
+                delta_words: words,
+                delta_created: created,
+                delta_edited: edited,
+            });
+            self.today_activity.active_seconds += secs;
+            self.today_activity.keystrokes += keys;
+            self.today_activity.words_written += words;
+            self.today_activity.notes_created += created;
+            self.today_activity.notes_edited += edited;
+
+            self.lifetime_activity.0 += secs as u64;
+            self.lifetime_activity.1 += keys as u64;
+            self.lifetime_activity.2 += words as u64;
+
+            self.pending_secs = 0.0;
+            self.pending_keys = 0;
+            self.pending_words = 0;
+            self.pending_created = 0;
+            self.pending_edited = 0;
+            self.last_flush_time = now;
+        }
+    }
+
+    pub fn quick_save_active_note(&mut self, now: f64) {
+        quick_save_active_note(self, now);
+    }
+
+    pub fn delete_active_note(&mut self, now: f64) {
+        delete_active_note(self, now);
+    }
+
+    pub fn rename_active_note(&mut self, new_title: &str, now: f64) {
+        rename_active_note(self, new_title, now);
+    }
+
+    pub fn update_search_results(&mut self) {
+        update_search_results(self);
+    }
+
+    pub fn set_status(&mut self, msg: impl Into<String>, now: f64) {
+        self.status_msg = msg.into();
+        self.status_time = now;
+    }
+
+    pub fn draw(&mut self, ui: &mut egui::Ui, dt: f32, now: f64, typed: bool) {
+        let painter = ui.painter().clone();
+        let font = FontId::monospace(self.font_size);
+
+        let (cw, lh) = *self.cell.get_or_insert_with(|| {
+            let g = painter.layout_no_wrap("M".to_owned(), font.clone(), Color32::WHITE);
+            (g.size().x, g.size().y)
+        });
+
+        let bounds = ui.max_rect();
+
+        // 5px Rounded window background frame
+        painter.rect(
+            bounds,
+            5.0,
+            Color32::from_rgba_unmultiplied(12, 12, 14, (self.opacity * 255.0) as u8),
+            eframe::egui::Stroke::new(1.0, Color32::from_rgb(32, 34, 40)),
+            egui::StrokeKind::Inside,
+        );
+
+        let content_left_margin = if self.sidebar_open { 280.0 } else { 48.0 };
+
+        // Bottom dock rectangle
+        let cmd_bar_height = 36.0;
+        let cmd_bar_rect = Rect::from_min_max(
+            pos2(bounds.min.x, bounds.max.y - cmd_bar_height),
+            bounds.max,
+        );
+
+        let editor_top = bounds.min.y + 44.0;
+        let editor_bottom = cmd_bar_rect.min.y - 8.0;
+        let editor_rect = Rect::from_min_max(
+            pos2(bounds.min.x + content_left_margin, editor_top),
+            pos2(bounds.max.x - 24.0, editor_bottom),
+        );
+
+        // Clean Header (Zero Clunky Buttons! Purely keyboard shortcut driven with top-right drag gripper)
+        if self.mode == Mode::Normal {
+            render_editor_header(
+                ui,
+                &painter,
+                bounds,
+                content_left_margin,
+                &self.active_note_title,
+                &self.theme,
+            );
+        }
+
+        // Active View rendering delegated to dedicated view modules
+        match self.mode {
+            Mode::Normal => {
+                render_editor_body(
+                    ui,
+                    &painter,
+                    editor_rect,
+                    &self.ed,
+                    &mut self.caret,
+                    &mut self.scroll_y,
+                    &self.theme,
+                    self.font_size,
+                    cw,
+                    lh,
+                    dt,
+                    now,
+                    typed,
+                    self.settings_open || self.search_open,
+                );
+            }
+            Mode::Stats => {
+                let today_str = Local::now().date_naive().format("%Y-%m-%d").to_string();
+                let yest_str = (Local::now().date_naive() - chrono::Duration::days(1))
+                    .format("%Y-%m-%d")
+                    .to_string();
+                render_stats(
+                    ui,
+                    editor_rect,
+                    &self.today_activity,
+                    &self.activity_history,
+                    self.lifetime_activity,
+                    self.total_notes_count,
+                    &self.theme,
+                    &today_str,
+                    &yest_str,
+                );
+            }
+        }
+
+        // Bottom Dock (No shortcut clutter! Just active status feedback and word stats)
+        let (row, col) = self.ed.row_col();
+        render_bottom_dock(
+            &painter,
+            cmd_bar_rect,
+            content_left_margin,
+            self.in_command,
+            &self.cmd_ed.text(),
+            &self.status_msg,
+            self.status_time,
+            now,
+            row,
+            col,
+            self.ed.text().split_whitespace().count(),
+            self.theme.accent,
+            self.theme.muted,
+        );
+
+        // Sleek Sidebar (Ctrl+B)
+        if self.sidebar_open {
+            let active_mode_idx = match self.mode {
+                Mode::Normal => 0,
+                Mode::Stats => 1,
+            };
+            let action = render_sidebar(
+                ui,
+                &painter,
+                bounds,
+                active_mode_idx,
+                self.active_note_id,
+                &self.notes_list,
+                self.sidebar_notes_limit,
+                self.total_notes_count,
+                self.theme.accent,
+                self.theme.text,
+                self.theme.muted,
+            );
+            if let Some(act) = action {
+                match act {
+                    SidebarAction::SwitchMode(idx) => {
+                        match idx {
+                            0 => self.mode = Mode::Normal,
+                            1 => {
+                                self.reload_db_state();
+                                self.mode = Mode::Stats;
+                            }
+                            _ => {}
+                        }
+                    }
+                    SidebarAction::LoadNote { id, topic, body } => {
+                        self.active_note_id = Some(id);
+                        self.active_note_title = topic.clone();
+                        self.ed.set_text(&body);
+                        self.mode = Mode::Normal;
+                        self.is_dirty = false;
+                        self.scroll_y = 0.0;
+                        self.set_status("Opened note", now);
+                    }
+                    SidebarAction::NewNote => {
+                        self.active_note_id = None;
+                        self.active_note_title = "Untitled Note".to_string();
+                        self.ed.clear();
+                        self.mode = Mode::Normal;
+                        self.is_dirty = false;
+                        self.scroll_y = 0.0;
+                        self.set_status("Created new note", now);
+                    }
+                    SidebarAction::DeleteNote(id) => {
+                        let _ = self.db_tx.send(DbMsg::DeleteNote { id });
+                        if self.active_note_id == Some(id) {
+                            self.active_note_id = None;
+                            self.active_note_title = "Untitled Note".to_string();
+                            self.ed.clear();
+                            self.is_dirty = false;
+                        }
+                        self.set_status("Deleted", now);
+                        self.reload_db_state();
+                    }
+                    SidebarAction::ToggleNotesLimit => {
+                        self.sidebar_notes_limit = if self.sidebar_notes_limit >= 100 { 50 } else { 100 };
+                        self.reload_db_state();
+                    }
+                    SidebarAction::OpenSettings => {
+                        self.settings_open = true;
+                        self.sidebar_open = false;
+                    }
+                }
+            }
+        }
+
+        // Preferences Modal (Ctrl+,)
+        if self.settings_open {
+            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.settings_open = false;
+            }
+            painter.rect_filled(bounds, 0.0, Color32::from_black_alpha(175));
+
+            let modal_w = 680.0;
+            let modal_h = 520.0;
+            let modal_rect = Rect::from_center_size(bounds.center(), eframe::egui::vec2(modal_w, modal_h));
+
+            painter.rect(
+                modal_rect,
+                5.0,
+                Color32::from_rgb(14, 15, 18),
+                eframe::egui::Stroke::new(1.0, Color32::from_rgb(32, 34, 40)),
+                eframe::egui::StrokeKind::Inside,
+            );
+
+            let tab_w = 170.0;
+            let tabs_rect = Rect::from_min_max(modal_rect.min, pos2(modal_rect.min.x + tab_w, modal_rect.max.y));
+            let panel_rect = Rect::from_min_max(pos2(modal_rect.min.x + tab_w, modal_rect.min.y), modal_rect.max);
+
+            render_setting_tabs(ui, &painter, tabs_rect, &mut self.active_setting_tab, self.theme.accent);
+
+            // Consume scroll events inside the modal so they never reach the editor
+            let scroll_consumed = ui.input(|i| i.raw_scroll_delta.y);
+            let _ = scroll_consumed; // acknowledged
+
+            let db_tx = self.db_tx.clone();
+            let mut on_save = |key: &str, val: &str| {
+                let _ = db_tx.send(DbMsg::SaveSetting {
+                    key: key.to_string(),
+                    val: val.to_string(),
+                });
+            };
+            render_setting_panel(
+                ui,
+                &painter,
+                panel_rect,
+                self.active_setting_tab,
+                &mut self.caret,
+                &mut self.sound,
+                &mut self.theme,
+                &mut on_save,
+            );
+        }
+
+        // Fuzzy Search Modal (Ctrl+P)
+        if self.search_open {
+            let action = render_search_modal(
+                ui,
+                &painter,
+                bounds,
+                &mut self.search_query,
+                &self.search_results,
+                &mut self.search_selected,
+                self.theme.accent,
+                self.search_just_opened,
+            );
+            self.search_just_opened = false;
+
+            if let Some(item) = action.selected_item {
+                match item.kind {
+                    SearchResultKind::Document => {
+                        if let Some(note) = self.notes_list.iter().find(|n| n.id == item.id) {
+                            self.active_note_id = Some(note.id);
+                            self.active_note_title = note.topic.clone();
+                            self.ed.set_text(&note.body);
+                            self.mode = Mode::Normal;
+                            self.is_dirty = false;
+                            self.scroll_y = 0.0;
+                            self.set_status("Opened note", now);
+                        }
+                    }
+                }
+            }
+            if action.should_close {
+                self.search_open = false;
+            }
+        }
+
+        // Rename Modal (Ctrl+R)
+        if self.rename_open {
+            let action = render_rename_modal(
+                ui,
+                &painter,
+                bounds,
+                &mut self.rename_input,
+                self.theme.accent,
+                self.rename_just_opened,
+            );
+            self.rename_just_opened = false;
+
+            if let Some(new_title) = action.confirmed_title {
+                self.rename_active_note(&new_title, now);
+            }
+            if action.should_close {
+                self.rename_open = false;
+            }
+        }
+
+        // Delete Confirmation Modal (Ctrl+D)
+        if self.delete_confirm_open {
+            let action = render_delete_confirm_modal(
+                ui,
+                &painter,
+                bounds,
+                &self.active_note_title,
+            );
+            if action.confirmed {
+                self.delete_active_note(now);
+                self.delete_confirm_open = false;
+            } else if action.should_close {
+                self.delete_confirm_open = false;
+            }
+        }
+    }
+}
+
+impl eframe::App for App {
+    fn clear_color(&self, _v: &egui::Visuals) -> [f32; 4] {
+        [0.0, 0.0, 0.0, 0.0]
+    }
+
+    fn update(&mut self, ctx: &egui::Context, _f: &mut eframe::Frame) {
+        if self.first_frame {
+            self.first_frame = false;
+            if let Some(cmd) = egui::ViewportCommand::center_on_screen(ctx) {
+                ctx.send_viewport_cmd(cmd);
+            }
+        }
+
+        let now = ctx.input(|i| i.time);
+        let dt = ctx.input(|i| i.unstable_dt).clamp(0.0, 0.05);
+
+        let typed = handle_input(self, ctx, now);
+
+        // Activity tracking: if user interacted in the last 60s, count dt towards active editor time
+        if (now - self.last_char_time) < 60.0 {
+            self.pending_secs += dt;
+        }
+        if typed {
+            self.pending_keys += 1;
+            // Track completed word if space or newline typed
+            if let Some(&last_ch) = self.ed.buf.get(self.ed.cur.saturating_sub(1)) {
+                if last_ch.is_whitespace() {
+                    self.pending_words += 1;
+                }
+            }
+        }
+
+        // Periodic auto-flush of activity stats to database every 10 seconds
+        if (now - self.last_flush_time) > 10.0 {
+            self.flush_activity(now);
+        }
+
+        // Auto-save when idle for 1.2s in Normal mode
+        if self.is_dirty && (now - self.last_char_time) > 1.2 && self.mode == Mode::Normal {
+            self.quick_save_active_note(now);
+        }
+
+        // Live fuzzy search filter update
+        if self.search_open {
+            self.update_search_results();
+        }
+
+        window_shortcuts(ctx);
+
+        egui::CentralPanel::default()
+            .frame(egui::Frame::NONE)
+            .show(ctx, |ui| {
+                self.draw(ui, dt, now, typed);
+            });
+
+        // Silky smooth repaint: 120Hz/144Hz while typing, sliding, or animating; idle 100ms when resting
+        let focused = ctx.input(|i| i.focused);
+        if focused
+            && (self.caret.is_animating(now)
+                || self.search_open
+                || self.settings_open
+                || self.rename_open
+                || self.delete_confirm_open)
+        {
+            ctx.request_repaint();
+        } else {
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
+    }
+}

@@ -1,0 +1,13 @@
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+core = { path = "../core" }
+eframe = { version = "0.31", default-features = true }
+fastrand = "2"
+chrono = "0.4"
+anyhow = "1.0"
+directories = "5"
+rfd = "0.15"
