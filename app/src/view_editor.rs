@@ -157,15 +157,30 @@ pub fn render_editor_body(
 
         // Render selection highlight background behind text on this line
         if let Some((sel_start, sel_end)) = sel_range {
-            let intersect_start = sel_start.max(line.char_start);
-            let intersect_end = sel_end.min(line.char_end);
-            if intersect_start < intersect_end {
-                let start_col = intersect_start - line.char_start;
-                let end_col = intersect_end - line.char_start;
-                let sel_x = ed_origin.x + start_col as f32 * cw;
-                let sel_w = (end_col - start_col) as f32 * cw;
-                let highlight_rect = Rect::from_min_size(pos2(sel_x, line_y), vec2(sel_w, lh));
-                editor_painter.rect_filled(highlight_rect, 2.0, sel_color);
+            if line.char_start == line.char_end {
+                // Empty line gap between paragraphs (\n\n):
+                // Highlight a visible block when this empty line falls within the active selection.
+                if sel_start <= line.char_start && sel_end >= line.char_end {
+                    let sel_w = cw.max(12.0);
+                    let highlight_rect = Rect::from_min_size(pos2(ed_origin.x, line_y), vec2(sel_w, lh));
+                    editor_painter.rect_filled(highlight_rect, 2.0, sel_color);
+                }
+            } else {
+                let intersect_start = sel_start.max(line.char_start);
+                let intersect_end = sel_end.min(line.char_end);
+                if intersect_start < intersect_end {
+                    let start_col = intersect_start - line.char_start;
+                    let end_col = intersect_end - line.char_start;
+                    let sel_x = ed_origin.x + start_col as f32 * cw;
+                    let mut sel_w = (end_col - start_col) as f32 * cw;
+                    // If selection extends past this line's content (e.g. across newline to subsequent lines),
+                    // extend the highlight to visually show that the newline / trailing whitespace is selected.
+                    if sel_end > line.char_end {
+                        sel_w += cw.max(10.0);
+                    }
+                    let highlight_rect = Rect::from_min_size(pos2(sel_x, line_y), vec2(sel_w, lh));
+                    editor_painter.rect_filled(highlight_rect, 2.0, sel_color);
+                }
             }
         }
 

@@ -11,16 +11,21 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
     let mut typed = false;
 
     // Global Keyboard Shortcuts
-    let (ctrl_s, ctrl_n, ctrl_r, ctrl_d, ctrl_p, ctrl_comma, ctrl_b, escape) = ctx.input(|i| (
-        i.modifiers.ctrl && i.key_pressed(egui::Key::S),
-        i.modifiers.ctrl && i.key_pressed(egui::Key::N),
-        i.modifiers.ctrl && i.key_pressed(egui::Key::R),
-        i.modifiers.ctrl && i.key_pressed(egui::Key::D),
-        i.modifiers.ctrl && (i.key_pressed(egui::Key::P) || i.key_pressed(egui::Key::F)),
-        i.modifiers.ctrl && i.key_pressed(egui::Key::Comma),
-        i.modifiers.ctrl && i.key_pressed(egui::Key::B),
+    let (ctrl_s, ctrl_n, ctrl_r, ctrl_p, ctrl_comma, ctrl_b, escape) = ctx.input(|i| (
+        i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::S),
+        i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::N),
+        i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::R),
+        i.modifiers.ctrl && !i.modifiers.shift && (i.key_pressed(egui::Key::P) || i.key_pressed(egui::Key::F)),
+        i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::Comma),
+        i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::B),
         i.key_pressed(egui::Key::Escape),
     ));
+
+    // Delete Note (Ctrl+Shift+D or Ctrl+Shift+Delete)
+    let ctrl_shift_d = ctx.input(|i| {
+        (i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(egui::Key::D))
+            || (i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(egui::Key::Delete))
+    });
 
     let ctrl_close = ctx.input(|i| {
         (i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(egui::Key::W))
@@ -143,7 +148,7 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
         return false;
     }
 
-    if ctrl_d {
+    if ctrl_shift_d {
         app.delete_confirm_open = true;
         return false;
     }
@@ -259,7 +264,7 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                                 if c == '\r' || c == '\n' {
                                     continue;
                                 }
-                                if app.vim.handle_char(&mut app.ed, c) {
+                                if app.vim.handle_char(&mut app.ed, &app.visual_lines, c) {
                                     typed = true;
                                     app.sound.play();
                                     app.last_char_time = now;
@@ -305,7 +310,7 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                 } => {
                     if !app.in_command && app.mode == Mode::Normal {
                         if app.editor_input_mode == crate::app::EditorInputMode::Vim {
-                            if app.vim.handle_key(&mut app.ed, *key, *modifiers) {
+                            if app.vim.handle_key(&mut app.ed, &app.visual_lines, *key, *modifiers) {
                                 typed = true;
                                 app.sound.play();
                                 app.last_char_time = now;

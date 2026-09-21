@@ -328,11 +328,11 @@ pub fn render_delete_confirm_modal(
     bounds: Rect,
     doc_title: &str,
 ) -> DeleteModalAction {
-    // Dimmed background
+    // Dimmed background overlay
     painter.rect_filled(bounds, 0.0, Color32::from_black_alpha(175));
 
-    let modal_w = 420.0;
-    let modal_h = 160.0;
+    let modal_w = 460.0;
+    let modal_h = 175.0;
     let modal_rect = Rect::from_center_size(bounds.center(), vec2(modal_w, modal_h));
 
     // Obsidian container with subtle warm charcoal border
@@ -344,63 +344,73 @@ pub fn render_delete_confirm_modal(
         egui::StrokeKind::Inside,
     );
 
-    let m_origin = modal_rect.min + vec2(24.0, 20.0);
+    let m_origin = modal_rect.min + vec2(24.0, 22.0);
 
     // Red warning pill badge
-    let badge_rect = Rect::from_min_size(m_origin, vec2(58.0, 20.0));
+    let badge_rect = Rect::from_min_size(m_origin, vec2(54.0, 20.0));
     painter.rect_filled(badge_rect, 4.0, Color32::from_rgb(48, 20, 24));
     painter.text(
         badge_rect.center(),
         Align2::CENTER_CENTER,
         "DELETE",
-        FontId::monospace(10.5),
+        FontId::monospace(10.0),
         Color32::from_rgb(255, 100, 110),
     );
 
     // Modal Title
     painter.text(
-        m_origin + vec2(68.0, 1.0),
+        m_origin + vec2(64.0, 1.0),
         Align2::LEFT_TOP,
-        "Delete Document?",
-        FontId::monospace(15.0),
+        "Delete Note",
+        FontId::monospace(14.5),
         Color32::WHITE,
     );
 
-    // Truncate document title cleanly if long to prevent any offset/overflow
-    let safe_title = if doc_title.len() > 30 {
-        format!("{}...", &doc_title[..30])
-    } else if doc_title.trim().is_empty() {
-        "Untitled".to_string()
+    // Truncate note title cleanly if long so it never overflows the container
+    let safe_title = if doc_title.trim().is_empty() {
+        "Untitled Note".to_string()
+    } else if doc_title.chars().count() > 36 {
+        let truncated: String = doc_title.chars().take(36).collect();
+        format!("{}...", truncated)
     } else {
         doc_title.to_string()
     };
 
+    // Body text - cleanly spaced across dedicated rows
     painter.text(
         m_origin + vec2(0.0, 32.0),
         Align2::LEFT_TOP,
-        format!("Permanently delete \"{}\"?", safe_title),
+        "Permanently delete this document?",
         FontId::monospace(12.5),
-        Color32::from_gray(210),
+        Color32::from_gray(215),
     );
 
     painter.text(
         m_origin + vec2(0.0, 52.0),
         Align2::LEFT_TOP,
+        format!("\"{}\"", safe_title),
+        FontId::monospace(12.0),
+        Color32::from_rgb(255, 130, 140),
+    );
+
+    painter.text(
+        m_origin + vec2(0.0, 72.0),
+        Align2::LEFT_TOP,
         "This action cannot be undone.",
-        FontId::monospace(11.5),
-        Color32::from_gray(130),
+        FontId::monospace(11.0),
+        Color32::from_gray(120),
     );
 
     // Buttons: Cancel (Esc) & Delete (Enter)
     let btn_h = 32.0;
     let btn_y = modal_rect.max.y - btn_h - 18.0;
 
+    let delete_w = 125.0;
     let cancel_w = 110.0;
-    let cancel_rect = Rect::from_min_size(pos2(modal_rect.max.x - 24.0 - cancel_w - 12.0 - 130.0, btn_y), vec2(cancel_w, btn_h));
-    let cancel_hover = ui.rect_contains_pointer(cancel_rect);
-
-    let delete_w = 130.0;
     let delete_rect = Rect::from_min_size(pos2(modal_rect.max.x - 24.0 - delete_w, btn_y), vec2(delete_w, btn_h));
+    let cancel_rect = Rect::from_min_size(pos2(modal_rect.max.x - 24.0 - delete_w - 12.0 - cancel_w, btn_y), vec2(cancel_w, btn_h));
+
+    let cancel_hover = ui.rect_contains_pointer(cancel_rect);
     let delete_hover = ui.rect_contains_pointer(delete_rect);
 
     let (enter, esc) = ui.input(|i| (

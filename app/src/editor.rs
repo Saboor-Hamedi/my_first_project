@@ -222,6 +222,19 @@ impl Editor {
         self.set_row_col(target_row, col);
     }
 
+    /// Moves cursor one line up, expanding or creating selection
+    pub fn up_select(&mut self) {
+        if self.selection.is_none() {
+            self.selection = Some(self.cur);
+        }
+        let (row, col) = self.row_col();
+        if row == 0 {
+            return;
+        }
+        let target_row = row - 1;
+        self.set_row_col(target_row, col);
+    }
+
     /// Moves cursor one line down, preserving column if possible
     #[allow(dead_code)]
     pub fn down(&mut self) {
@@ -230,8 +243,17 @@ impl Editor {
         self.set_row_col(target_row, col);
     }
 
-    #[allow(dead_code)]
-    fn set_row_col(&mut self, target_row: usize, target_col: usize) {
+    /// Moves cursor one line down, expanding or creating selection
+    pub fn down_select(&mut self) {
+        if self.selection.is_none() {
+            self.selection = Some(self.cur);
+        }
+        let (row, col) = self.row_col();
+        let target_row = row + 1;
+        self.set_row_col(target_row, col);
+    }
+
+    pub fn set_row_col(&mut self, target_row: usize, target_col: usize) {
         let mut cur_row = 0;
         let mut line_start = 0;
         for (i, &c) in self.buf.iter().enumerate() {
@@ -655,6 +677,10 @@ impl Editor {
     }
 
     pub fn up_visual(&mut self, lines: &[VisualLine]) {
+        if lines.is_empty() {
+            self.up();
+            return;
+        }
         self.selection = None;
         let (row, col) = self.visual_row_col(lines);
         if row == 0 {
@@ -666,6 +692,10 @@ impl Editor {
     }
 
     pub fn up_visual_select(&mut self, lines: &[VisualLine]) {
+        if lines.is_empty() {
+            self.up_select();
+            return;
+        }
         if self.selection.is_none() {
             self.selection = Some(self.cur);
         }
@@ -679,6 +709,10 @@ impl Editor {
     }
 
     pub fn down_visual(&mut self, lines: &[VisualLine]) {
+        if lines.is_empty() {
+            self.down();
+            return;
+        }
         self.selection = None;
         let (row, col) = self.visual_row_col(lines);
         if row + 1 >= lines.len() {
@@ -690,6 +724,10 @@ impl Editor {
     }
 
     pub fn down_visual_select(&mut self, lines: &[VisualLine]) {
+        if lines.is_empty() {
+            self.down_select();
+            return;
+        }
         if self.selection.is_none() {
             self.selection = Some(self.cur);
         }

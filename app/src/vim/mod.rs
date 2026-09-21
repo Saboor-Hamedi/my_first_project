@@ -1,7 +1,7 @@
 //! Vim modal engine — object-oriented, clean state machine supporting
 //! Normal, Insert, Visual, and VisualLine modes with motions, operators, and registers.
 
-use crate::editor::Editor;
+use crate::editor::{Editor, VisualLine};
 use eframe::egui::{Key, Modifiers};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,12 +36,23 @@ impl VimEngine {
         }
     }
 
+    #[allow(dead_code)]
     pub fn mode_label(&self) -> &'static str {
         match self.mode {
             VimSubMode::Normal => "-- NORMAL --",
             VimSubMode::Insert => "-- INSERT --",
             VimSubMode::Visual => "-- VISUAL --",
             VimSubMode::VisualLine => "-- VISUAL LINE --",
+        }
+    }
+
+    /// Sleek, subtle compact badge label for status bar.
+    pub fn compact_label(&self) -> &'static str {
+        match self.mode {
+            VimSubMode::Normal => "NORMAL",
+            VimSubMode::Insert => "INSERT",
+            VimSubMode::Visual => "VISUAL",
+            VimSubMode::VisualLine => "V-LINE",
         }
     }
 
@@ -69,7 +80,13 @@ impl VimEngine {
 
     /// Handles keyboard events according to active Vim mode.
     /// Returns `true` if consumed, `false` otherwise.
-    pub fn handle_key(&mut self, ed: &mut Editor, key: Key, modifiers: Modifiers) -> bool {
+    pub fn handle_key(
+        &mut self,
+        ed: &mut Editor,
+        lines: &[VisualLine],
+        key: Key,
+        modifiers: Modifiers,
+    ) -> bool {
         let ctrl = modifiers.ctrl || modifiers.command;
 
         // Escape always cancels pending operations and returns to Normal mode
@@ -80,7 +97,10 @@ impl VimEngine {
 
         match self.mode {
             VimSubMode::Insert => {
-                // In insert mode, default editor behavior handles keys
+                if ctrl && key == Key::D {
+                    ed.duplicate_line();
+                    return true;
+                }
                 false
             }
             VimSubMode::Normal => {
@@ -100,6 +120,34 @@ impl VimEngine {
                         }
                         _ => {}
                     }
+                } else {
+                    match key {
+                        Key::ArrowDown => {
+                            ed.down_visual(lines);
+                            return true;
+                        }
+                        Key::ArrowUp => {
+                            ed.up_visual(lines);
+                            return true;
+                        }
+                        Key::ArrowLeft => {
+                            ed.left();
+                            return true;
+                        }
+                        Key::ArrowRight => {
+                            ed.right();
+                            return true;
+                        }
+                        Key::Home => {
+                            ed.home_visual(lines);
+                            return true;
+                        }
+                        Key::End => {
+                            ed.end_visual(lines);
+                            return true;
+                        }
+                        _ => {}
+                    }
                 }
                 false
             }
@@ -113,22 +161,40 @@ impl VimEngine {
                     self.set_mode(VimSubMode::Normal, ed);
                     return true;
                 }
-                false
+                match key {
+                    Key::ArrowDown => {
+                        ed.down_visual_select(lines);
+                        true
+                    }
+                    Key::ArrowUp => {
+                        ed.up_visual_select(lines);
+                        true
+                    }
+                    Key::ArrowLeft => {
+                        ed.left_select();
+                        true
+                    }
+                    Key::ArrowRight => {
+                        ed.right_select();
+                        true
+                    }
+                    _ => false,
+                }
             }
         }
     }
 
     /// Handles typed character commands in Normal and Visual modes.
     /// Returns `true` if handled, `false` to pass through to normal text insertion.
-    pub fn handle_char(&mut self, ed: &mut Editor, c: char) -> bool {
+    pub fn handle_char(&mut self, ed: &mut Editor, lines: &[VisualLine], c: char) -> bool {
         match self.mode {
             VimSubMode::Insert => false, // Handled as normal text typing
-            VimSubMode::Normal => self.handle_normal_char(ed, c),
-            VimSubMode::Visual | VimSubMode::VisualLine => self.handle_visual_char(ed, c),
+            VimSubMode::Normal => self.handle_normal_char(ed, lines, c),
+            VimSubMode::Visual | VimSubMode::VisualLine => self.handle_visual_char(ed, lines, c),
         }
     }
 
-    fn handle_normal_char(&mut self, ed: &mut Editor, c: char) -> bool {
+    fn handle_normal_char(&mut self, ed: &mut Editor, lines: &[VisualLine], c: char) -> bool {
         // Handle pending two-key operators
         if let Some(op) = self.pending_op.take() {
             match (op, c) {
@@ -206,11 +272,11 @@ impl VimEngine {
                 true
             }
             'j' => {
-                ed.down();
+                ed.down_visual(lines);
                 true
             }
             'k' => {
-                ed.up();
+                ed.up_visual(lines);
                 true
             }
             'w' => {
@@ -222,11 +288,11 @@ impl VimEngine {
                 true
             }
             '0' => {
-                ed.home();
+                ed.home_visual(lines);
                 true
             }
             '$' => {
-                ed.end();
+                ed.end_visual(lines);
                 true
             }
             'G' => {
@@ -319,7 +385,7 @@ impl VimEngine {
         }
     }
 
-    fn handle_visual_char(&mut self, ed: &mut Editor, c: char) -> bool {
+    fn handle_visual_char(&mut self, ed: &mut Editor, lines: &[VisualLine], c: char) -> bool {
         match c {
             // Motions in visual mode
             'h' => {
@@ -331,14 +397,23 @@ impl VimEngine {
                 true
             }
             'j' => {
-                let (row, col) = ed.row_col();
-                ed.down();
-                let (_, new_col) = ed.row_col();
-                let _ = (row, col, new_col);
+                if self.mode == VimSubMode::VisualLine {
+                    ed.down_visual_select(lines);
+                    let (_, end) = ed.current_line_span();
+                    ed.cur = end;
+                } else {
+                    ed.down_visual_select(lines);
+                }
                 true
             }
             'k' => {
-                ed.up();
+                if self.mode == VimSubMode::VisualLine {
+                    ed.up_visual_select(lines);
+                    let (start, _) = ed.current_line_span();
+                    ed.cur = start;
+                } else {
+                    ed.up_visual_select(lines);
+                }
                 true
             }
             'w' => {
@@ -350,19 +425,11 @@ impl VimEngine {
                 true
             }
             '0' => {
-                let cur = ed.cur;
-                ed.home();
-                if ed.selection.is_none() {
-                    ed.selection = Some(cur);
-                }
+                ed.home_visual_select(lines);
                 true
             }
             '$' => {
-                let cur = ed.cur;
-                ed.end();
-                if ed.selection.is_none() {
-                    ed.selection = Some(cur);
-                }
+                ed.end_visual_select(lines);
                 true
             }
             // Actions on selection
@@ -410,24 +477,24 @@ mod tests {
         assert_eq!(vim.mode, VimSubMode::Normal);
 
         // 'i' -> Insert
-        assert!(vim.handle_char(&mut ed, 'i'));
+        assert!(vim.handle_char(&mut ed, &[], 'i'));
         assert_eq!(vim.mode, VimSubMode::Insert);
 
         // Esc -> Normal
-        assert!(vim.handle_key(&mut ed, Key::Escape, Modifiers::default()));
+        assert!(vim.handle_key(&mut ed, &[], Key::Escape, Modifiers::default()));
         assert_eq!(vim.mode, VimSubMode::Normal);
 
         // 'v' -> Visual
-        assert!(vim.handle_char(&mut ed, 'v'));
+        assert!(vim.handle_char(&mut ed, &[], 'v'));
         assert_eq!(vim.mode, VimSubMode::Visual);
         assert!(ed.selection.is_some());
 
         // 'w' -> move in visual mode, expanding selection
-        assert!(vim.handle_char(&mut ed, 'w'));
+        assert!(vim.handle_char(&mut ed, &[], 'w'));
         assert!(ed.has_selection());
 
         // Esc -> Normal
-        assert!(vim.handle_key(&mut ed, Key::Escape, Modifiers::default()));
+        assert!(vim.handle_key(&mut ed, &[], Key::Escape, Modifiers::default()));
         assert_eq!(vim.mode, VimSubMode::Normal);
         assert!(!ed.has_selection());
     }
@@ -440,14 +507,14 @@ mod tests {
         let mut vim = VimEngine::new();
 
         // dd on first line
-        assert!(vim.handle_char(&mut ed, 'd'));
+        assert!(vim.handle_char(&mut ed, &[], 'd'));
         assert_eq!(vim.pending_op, Some('d'));
-        assert!(vim.handle_char(&mut ed, 'd'));
+        assert!(vim.handle_char(&mut ed, &[], 'd'));
         assert_eq!(vim.register, "first line\n");
         assert_eq!(ed.text(), "second line\nthird line");
 
         // u -> undo
-        assert!(vim.handle_char(&mut ed, 'u'));
+        assert!(vim.handle_char(&mut ed, &[], 'u'));
         assert_eq!(ed.text(), "first line\nsecond line\nthird line");
     }
 
@@ -459,15 +526,84 @@ mod tests {
         let mut vim = VimEngine::new();
 
         // w -> word right
-        assert!(vim.handle_char(&mut ed, 'w'));
+        assert!(vim.handle_char(&mut ed, &[], 'w'));
         assert_eq!(ed.cur, 4);
 
         // w -> word right
-        assert!(vim.handle_char(&mut ed, 'w'));
+        assert!(vim.handle_char(&mut ed, &[], 'w'));
         assert_eq!(ed.cur, 8);
 
         // b -> word left
-        assert!(vim.handle_char(&mut ed, 'b'));
+        assert!(vim.handle_char(&mut ed, &[], 'b'));
         assert_eq!(ed.cur, 4);
+    }
+
+    #[test]
+    fn test_vim_visual_navigation_and_gap_selection() {
+        let mut ed = Editor::new();
+        // Line 0: "first" (0..5), newline at 5
+        // Line 1: empty line gap, newline at 6
+        // Line 2: "third" (7..12)
+        ed.insert_str("first\n\nthird");
+        ed.cur = 0;
+        let mut vim = VimEngine::new();
+
+        // Start visual mode
+        assert!(vim.handle_char(&mut ed, &[], 'v'));
+        assert_eq!(vim.mode, VimSubMode::Visual);
+        assert_eq!(ed.selection, Some(0));
+
+        // 'j' moves down to empty line gap (line 1), maintaining selection
+        assert!(vim.handle_char(&mut ed, &[], 'j'));
+        assert_eq!(ed.selection, Some(0));
+        let (row, _) = ed.row_col();
+        assert_eq!(row, 1);
+        assert!(ed.has_selection());
+
+        // 'j' moves down to line 2 ("third"), selection now spans line 0, gap line 1, and line 2
+        assert!(vim.handle_char(&mut ed, &[], 'j'));
+        assert_eq!(ed.selection, Some(0));
+        let (row, _) = ed.row_col();
+        assert_eq!(row, 2);
+        assert!(ed.has_selection());
+
+        // 'k' moves back up to empty line gap, still maintaining selection
+        assert!(vim.handle_char(&mut ed, &[], 'k'));
+        assert_eq!(ed.selection, Some(0));
+        let (row, _) = ed.row_col();
+        assert_eq!(row, 1);
+        assert!(ed.has_selection());
+    }
+
+    #[test]
+    fn test_vim_single_paragraph_soft_wrap_navigation() {
+        let mut ed = Editor::new();
+        // A single long paragraph with NO newline characters (\n)
+        ed.insert_str("The quick brown fox jumps over the lazy dog and runs through the forest");
+        ed.cur = 0;
+        let mut vim = VimEngine::new();
+
+        // Compute soft wrapped lines at max_cols = 16
+        let lines = ed.compute_visual_lines(16);
+        assert!(lines.len() >= 4);
+
+        // Initially at visual row 0
+        let (r0, _) = ed.visual_row_col(&lines);
+        assert_eq!(r0, 0);
+
+        // In Vim normal mode, pressing 'j' MUST advance to visual line 1, NOT jump over the whole paragraph!
+        assert!(vim.handle_char(&mut ed, &lines, 'j'));
+        let (r1, _) = ed.visual_row_col(&lines);
+        assert_eq!(r1, 1);
+
+        // Pressing 'j' again advances to visual line 2
+        assert!(vim.handle_char(&mut ed, &lines, 'j'));
+        let (r2, _) = ed.visual_row_col(&lines);
+        assert_eq!(r2, 2);
+
+        // Pressing 'k' moves back up to visual line 1
+        assert!(vim.handle_char(&mut ed, &lines, 'k'));
+        let (r3, _) = ed.visual_row_col(&lines);
+        assert_eq!(r3, 1);
     }
 }

@@ -457,7 +457,7 @@ impl App {
         // Bottom Dock (Shows active editing mode badge, status feedback, and word stats)
         let (row, col) = self.ed.visual_row_col(&self.visual_lines);
         let mode_badge = match self.editor_input_mode {
-            EditorInputMode::Vim => Some(self.vim.mode_label()),
+            EditorInputMode::Vim => Some(self.vim.compact_label()),
             EditorInputMode::Hybrid => Some("HYBRID"),
         };
         render_bottom_dock(
@@ -662,7 +662,7 @@ impl App {
             }
         }
 
-        // Delete Confirmation Modal (Ctrl+D)
+        // Delete Confirmation Modal (Ctrl+Shift+D)
         if self.delete_confirm_open {
             let action = render_delete_confirm_modal(
                 ui,

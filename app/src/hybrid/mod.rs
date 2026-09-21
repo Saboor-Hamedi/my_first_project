@@ -178,4 +178,15 @@ mod tests {
         assert!(hybrid.handle_char(&mut ed, '"'));
         assert_eq!(ed.text(), "\"hello\"");
     }
+
+    #[test]
+    fn test_hybrid_ctrl_d_duplicate_line() {
+        let mut ed = Editor::new();
+        ed.insert_str("line 1\nline 2");
+        ed.cur = 2; // on line 1
+        let mut hybrid = HybridEngine::new();
+
+        assert!(hybrid.handle_key(&mut ed, Key::D, Modifiers::CTRL));
+        assert_eq!(ed.text(), "line 1\nline 1\nline 2");
+    }
 }

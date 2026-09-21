@@ -61,21 +61,23 @@ pub fn render_bottom_dock(
         );
     } else {
         if let Some(badge) = mode_badge {
-            let badge_w = 12.0 + badge.len() as f32 * 7.5;
-            let badge_rect = Rect::from_min_size(pos2(cmd_x, cmd_y - 2.0), vec2(badge_w, 20.0));
+            let badge_w = 10.0 + badge.len() as f32 * 6.5;
+            let badge_rect = Rect::from_min_size(pos2(cmd_x, cmd_y - 0.5), vec2(badge_w, 16.0));
+            let pill_bg = Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 18);
+            let pill_border = Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 45);
             painter.rect(
                 badge_rect,
                 3.0,
-                Color32::from_rgb(18, 24, 20),
-                Stroke::new(1.0, accent),
+                pill_bg,
+                Stroke::new(1.0, pill_border),
                 egui::StrokeKind::Inside,
             );
             painter.text(
                 badge_rect.center(),
                 Align2::CENTER_CENTER,
                 badge,
-                FontId::monospace(10.5),
-                accent,
+                FontId::monospace(9.5),
+                Color32::from_gray(190),
             );
             text_x += badge_w + 10.0;
         }
