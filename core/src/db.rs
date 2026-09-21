@@ -32,9 +32,30 @@ impl Database {
     pub fn open(path: &PathBuf) -> Result<Self> {
         let conn = Connection::open(path)
             .with_context(|| format!("Failed to open SQLite database at {:?}", path))?;
+        conn.execute_batch(
+            "PRAGMA journal_mode = WAL;
+             PRAGMA synchronous = NORMAL;
+             PRAGMA busy_timeout = 5000;",
+        )?;
         let db = Self { conn };
         db.migrate()?;
         Ok(db)
+    }
+
+    /// Creates an atomic, non-blocking timestamped snapshot of the database using VACUUM INTO.
+    pub fn backup(&self, target_dir: &std::path::Path) -> Result<PathBuf> {
+        if !target_dir.exists() {
+            std::fs::create_dir_all(target_dir)?;
+        }
+        let now = chrono::Local::now();
+        let filename = format!("mindforge_backup_{}.db", now.format("%Y%m%d_%H%M%S"));
+        let target_path = target_dir.join(filename);
+        let target_str = target_path.to_str().context("Invalid target backup path")?;
+
+        self.conn
+            .execute("VACUUM INTO ?1", params![target_str])
+            .with_context(|| format!("Failed to create backup at {}", target_str))?;
+        Ok(target_path)
     }
 
     /// Opens an in-memory SQLite database (ideal for unit testing).
@@ -613,6 +634,13 @@ mod tests {
         assert_eq!(total_k, 700);
         assert_eq!(total_w, 110);
         assert_eq!(days, 1);
+
+        // 5. Test Backup
+        let tmp_backup_dir = std::env::temp_dir().join("mindforge_test_backup");
+        let backup_file = db.backup(&tmp_backup_dir)?;
+        assert!(backup_file.exists());
+        let _ = std::fs::remove_file(&backup_file);
+        let _ = std::fs::remove_dir(&tmp_backup_dir);
 
         Ok(())
     }

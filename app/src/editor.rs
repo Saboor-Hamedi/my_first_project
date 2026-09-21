@@ -1,7 +1,16 @@
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EditorSnapshot {
+    pub buf: Vec<char>,
+    pub cur: usize,
+}
+
 #[derive(Default, Clone)]
 pub struct Editor {
     pub buf: Vec<char>, // chars, not bytes: safe with Unicode, easy cursor math
     pub cur: usize,     // cursor position as char index
+    pub selection: Option<usize>, // selection anchor
+    pub undo_stack: Vec<EditorSnapshot>,
+    pub redo_stack: Vec<EditorSnapshot>,
 }
 
 impl Editor {
@@ -9,37 +18,173 @@ impl Editor {
         Self::default()
     }
 
+    /// Saves the current editor state into the undo history.
+    pub fn save_undo_snapshot(&mut self) {
+        let snap = EditorSnapshot {
+            buf: self.buf.clone(),
+            cur: self.cur,
+        };
+        if self.undo_stack.last() != Some(&snap) {
+            self.undo_stack.push(snap);
+            if self.undo_stack.len() > 300 {
+                self.undo_stack.remove(0);
+            }
+        }
+        self.redo_stack.clear();
+    }
+
+    /// Undos the last text modification.
+    pub fn undo(&mut self) -> bool {
+        if let Some(prev) = self.undo_stack.pop() {
+            self.redo_stack.push(EditorSnapshot {
+                buf: self.buf.clone(),
+                cur: self.cur,
+            });
+            self.buf = prev.buf;
+            self.cur = prev.cur.min(self.buf.len());
+            self.selection = None;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Redos the previously undone modification.
+    pub fn redo(&mut self) -> bool {
+        if let Some(next) = self.redo_stack.pop() {
+            self.undo_stack.push(EditorSnapshot {
+                buf: self.buf.clone(),
+                cur: self.cur,
+            });
+            self.buf = next.buf;
+            self.cur = next.cur.min(self.buf.len());
+            self.selection = None;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Returns the active selection as `(start, end)` char indices, if any.
+    pub fn selected_range(&self) -> Option<(usize, usize)> {
+        if let Some(anchor) = self.selection {
+            if anchor != self.cur {
+                return Some((self.cur.min(anchor), self.cur.max(anchor)));
+            }
+        }
+        None
+    }
+
+    pub fn has_selection(&self) -> bool {
+        self.selected_range().is_some()
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.selection = None;
+    }
+
+    pub fn select_all(&mut self) {
+        if !self.buf.is_empty() {
+            self.selection = Some(0);
+            self.cur = self.buf.len();
+        }
+    }
+
+    pub fn selected_text(&self) -> Option<String> {
+        self.selected_range().map(|(s, e)| self.buf[s..e].iter().collect())
+    }
+
+    pub fn delete_selection(&mut self) -> bool {
+        if let Some((s, e)) = self.selected_range() {
+            self.save_undo_snapshot();
+            self.buf.drain(s..e);
+            self.cur = s;
+            self.selection = None;
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn insert(&mut self, c: char) {
+        if self.has_selection() {
+            self.delete_selection();
+        } else if c.is_whitespace() || self.undo_stack.is_empty() {
+            self.save_undo_snapshot();
+        }
         self.buf.insert(self.cur, c);
         self.cur += 1;
+        self.selection = None;
     }
 
     #[allow(dead_code)]
     pub fn insert_str(&mut self, s: &str) {
-        for c in s.chars() {
-            self.insert(c);
+        if self.has_selection() {
+            self.delete_selection();
         }
+        self.save_undo_snapshot();
+        for c in s.chars() {
+            self.buf.insert(self.cur, c);
+            self.cur += 1;
+        }
+        self.selection = None;
     }
 
     pub fn backspace(&mut self) {
+        if self.delete_selection() {
+            return;
+        }
         if self.cur > 0 {
+            self.save_undo_snapshot();
             self.cur -= 1;
             self.buf.remove(self.cur);
+            self.selection = None;
         }
     }
 
     #[allow(dead_code)]
     pub fn delete(&mut self) {
+        if self.delete_selection() {
+            return;
+        }
         if self.cur < self.buf.len() {
+            self.save_undo_snapshot();
             self.buf.remove(self.cur);
+            self.selection = None;
         }
     }
 
     pub fn left(&mut self) {
-        self.cur = self.cur.saturating_sub(1);
+        if let Some((start, _)) = self.selected_range() {
+            self.cur = start;
+            self.selection = None;
+        } else {
+            self.cur = self.cur.saturating_sub(1);
+            self.selection = None;
+        }
     }
 
     pub fn right(&mut self) {
+        if let Some((_, end)) = self.selected_range() {
+            self.cur = end;
+            self.selection = None;
+        } else {
+            self.cur = (self.cur + 1).min(self.buf.len());
+            self.selection = None;
+        }
+    }
+
+    pub fn left_select(&mut self) {
+        if self.selection.is_none() {
+            self.selection = Some(self.cur);
+        }
+        self.cur = self.cur.saturating_sub(1);
+    }
+
+    pub fn right_select(&mut self) {
+        if self.selection.is_none() {
+            self.selection = Some(self.cur);
+        }
         self.cur = (self.cur + 1).min(self.buf.len());
     }
 
@@ -128,8 +273,12 @@ impl Editor {
     }
 
     pub fn clear(&mut self) {
+        if !self.buf.is_empty() {
+            self.save_undo_snapshot();
+        }
         self.buf.clear();
         self.cur = 0;
+        self.selection = None;
     }
 
     pub fn set_text(&mut self, s: &str) {
@@ -259,6 +408,20 @@ impl Editor {
     }
 
     pub fn up_visual(&mut self, lines: &[VisualLine]) {
+        self.selection = None;
+        let (row, col) = self.visual_row_col(lines);
+        if row == 0 {
+            return;
+        }
+        let target_line = &lines[row - 1];
+        let line_len = target_line.char_end.saturating_sub(target_line.char_start);
+        self.cur = target_line.char_start + col.min(line_len);
+    }
+
+    pub fn up_visual_select(&mut self, lines: &[VisualLine]) {
+        if self.selection.is_none() {
+            self.selection = Some(self.cur);
+        }
         let (row, col) = self.visual_row_col(lines);
         if row == 0 {
             return;
@@ -269,6 +432,20 @@ impl Editor {
     }
 
     pub fn down_visual(&mut self, lines: &[VisualLine]) {
+        self.selection = None;
+        let (row, col) = self.visual_row_col(lines);
+        if row + 1 >= lines.len() {
+            return;
+        }
+        let target_line = &lines[row + 1];
+        let line_len = target_line.char_end.saturating_sub(target_line.char_start);
+        self.cur = target_line.char_start + col.min(line_len);
+    }
+
+    pub fn down_visual_select(&mut self, lines: &[VisualLine]) {
+        if self.selection.is_none() {
+            self.selection = Some(self.cur);
+        }
         let (row, col) = self.visual_row_col(lines);
         if row + 1 >= lines.len() {
             return;
@@ -279,6 +456,17 @@ impl Editor {
     }
 
     pub fn home_visual(&mut self, lines: &[VisualLine]) {
+        self.selection = None;
+        let (row, _) = self.visual_row_col(lines);
+        if let Some(line) = lines.get(row) {
+            self.cur = line.char_start;
+        }
+    }
+
+    pub fn home_visual_select(&mut self, lines: &[VisualLine]) {
+        if self.selection.is_none() {
+            self.selection = Some(self.cur);
+        }
         let (row, _) = self.visual_row_col(lines);
         if let Some(line) = lines.get(row) {
             self.cur = line.char_start;
@@ -286,6 +474,17 @@ impl Editor {
     }
 
     pub fn end_visual(&mut self, lines: &[VisualLine]) {
+        self.selection = None;
+        let (row, _) = self.visual_row_col(lines);
+        if let Some(line) = lines.get(row) {
+            self.cur = line.char_end;
+        }
+    }
+
+    pub fn end_visual_select(&mut self, lines: &[VisualLine]) {
+        if self.selection.is_none() {
+            self.selection = Some(self.cur);
+        }
         let (row, _) = self.visual_row_col(lines);
         if let Some(line) = lines.get(row) {
             self.cur = line.char_end;
@@ -293,6 +492,19 @@ impl Editor {
     }
 
     pub fn page_up_visual(&mut self, lines: &[VisualLine], count: usize) {
+        self.selection = None;
+        let (row, col) = self.visual_row_col(lines);
+        let target_row = row.saturating_sub(count);
+        if let Some(target_line) = lines.get(target_row) {
+            let line_len = target_line.char_end.saturating_sub(target_line.char_start);
+            self.cur = target_line.char_start + col.min(line_len);
+        }
+    }
+
+    pub fn page_up_visual_select(&mut self, lines: &[VisualLine], count: usize) {
+        if self.selection.is_none() {
+            self.selection = Some(self.cur);
+        }
         let (row, col) = self.visual_row_col(lines);
         let target_row = row.saturating_sub(count);
         if let Some(target_line) = lines.get(target_row) {
@@ -302,6 +514,19 @@ impl Editor {
     }
 
     pub fn page_down_visual(&mut self, lines: &[VisualLine], count: usize) {
+        self.selection = None;
+        let (row, col) = self.visual_row_col(lines);
+        let target_row = (row + count).min(lines.len().saturating_sub(1));
+        if let Some(target_line) = lines.get(target_row) {
+            let line_len = target_line.char_end.saturating_sub(target_line.char_start);
+            self.cur = target_line.char_start + col.min(line_len);
+        }
+    }
+
+    pub fn page_down_visual_select(&mut self, lines: &[VisualLine], count: usize) {
+        if self.selection.is_none() {
+            self.selection = Some(self.cur);
+        }
         let (row, col) = self.visual_row_col(lines);
         let target_row = (row + count).min(lines.len().saturating_sub(1));
         if let Some(target_line) = lines.get(target_row) {
@@ -377,5 +602,50 @@ mod tests {
         ed.up_visual(&lines);
         let (r_back, _) = ed.visual_row_col(&lines);
         assert_eq!(r_back, 0);
+    }
+
+    #[test]
+    fn test_editor_undo_redo() {
+        let mut ed = Editor::new();
+        ed.insert_str("First");
+        ed.insert_str(" Second");
+        assert_eq!(ed.text(), "First Second");
+
+        // Undo
+        assert!(ed.undo());
+        assert_eq!(ed.text(), "First");
+
+        // Redo
+        assert!(ed.redo());
+        assert_eq!(ed.text(), "First Second");
+
+        // Clear and undo
+        ed.clear();
+        assert_eq!(ed.text(), "");
+        assert!(ed.undo());
+        assert_eq!(ed.text(), "First Second");
+    }
+
+    #[test]
+    fn test_editor_selection_and_replace() {
+        let mut ed = Editor::new();
+        ed.insert_str("Hello beautiful world");
+        // Select "beautiful "
+        ed.cur = 6;
+        ed.selection = Some(16);
+        assert_eq!(ed.selected_text(), Some("beautiful ".to_string()));
+
+        // Typing replaces selection
+        ed.insert_str("brave ");
+        assert_eq!(ed.text(), "Hello brave world");
+
+        // Select all and delete
+        ed.select_all();
+        assert!(ed.delete_selection());
+        assert_eq!(ed.text(), "");
+
+        // Undo brings it back
+        assert!(ed.undo());
+        assert_eq!(ed.text(), "Hello brave world");
     }
 }

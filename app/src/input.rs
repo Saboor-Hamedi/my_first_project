@@ -34,6 +34,89 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
         return false;
     }
 
+    // Undo / Redo
+    let ctrl_z = ctx.input(|i| i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::Z));
+    let ctrl_redo = ctx.input(|i| {
+        (i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(egui::Key::Z))
+            || (i.modifiers.ctrl && i.key_pressed(egui::Key::Y))
+    });
+    if ctrl_z {
+        if app.in_command {
+            app.cmd_ed.undo();
+        } else {
+            if app.ed.undo() {
+                app.is_dirty = true;
+                app.sound.play();
+                app.set_status("Undo", now);
+                return true;
+            }
+        }
+        return false;
+    }
+    if ctrl_redo {
+        if app.in_command {
+            app.cmd_ed.redo();
+        } else {
+            if app.ed.redo() {
+                app.is_dirty = true;
+                app.sound.play();
+                app.set_status("Redo", now);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Select All (Ctrl+A)
+    let ctrl_a = ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::A));
+    if ctrl_a {
+        if app.in_command {
+            app.cmd_ed.select_all();
+        } else {
+            app.ed.select_all();
+            return true;
+        }
+        return false;
+    }
+
+    // Clipboard Copy (Ctrl+C)
+    let ctrl_c = ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::C));
+    if ctrl_c {
+        let text = if app.in_command {
+            app.cmd_ed.selected_text()
+        } else {
+            app.ed.selected_text()
+        };
+        if let Some(t) = text {
+            ctx.copy_text(t);
+            app.set_status("Copied selection", now);
+        }
+        return false;
+    }
+
+    // Clipboard Cut (Ctrl+X)
+    let ctrl_x = ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::X));
+    if ctrl_x {
+        let text = if app.in_command {
+            let t = app.cmd_ed.selected_text();
+            app.cmd_ed.delete_selection();
+            t
+        } else {
+            let t = app.ed.selected_text();
+            if app.ed.delete_selection() {
+                app.is_dirty = true;
+                app.sound.play();
+                app.set_status("Cut selection", now);
+            }
+            t
+        };
+        if let Some(t) = text {
+            ctx.copy_text(t);
+            return true;
+        }
+        return false;
+    }
+
     if ctrl_s {
         app.quick_save_active_note(now);
         return false;
@@ -113,6 +196,10 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
     }
 
     if escape {
+        if app.ed.has_selection() {
+            app.ed.clear_selection();
+            return true;
+        }
         if app.sidebar_open {
             app.sidebar_open = false;
             return false;
@@ -237,11 +324,39 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                                 typed = true;
                             }
                         }
+                        Delete => {
+                            if app.in_command {
+                                app.cmd_ed.delete();
+                            } else {
+                                app.ed.delete();
+                                app.is_dirty = true;
+                                if app.mode == Mode::Normal {
+                                    app.sound.play();
+                                }
+                                typed = true;
+                            }
+                        }
+                        ArrowLeft if modifiers.shift => {
+                            if app.in_command {
+                                app.cmd_ed.left_select();
+                            } else {
+                                app.ed.left_select();
+                                typed = true;
+                            }
+                        }
                         ArrowLeft => {
                             if app.in_command {
                                 app.cmd_ed.left();
                             } else {
                                 app.ed.left();
+                                typed = true;
+                            }
+                        }
+                        ArrowRight if modifiers.shift => {
+                            if app.in_command {
+                                app.cmd_ed.right_select();
+                            } else {
+                                app.ed.right_select();
                                 typed = true;
                             }
                         }
@@ -253,24 +368,48 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                                 typed = true;
                             }
                         }
+                        ArrowUp if modifiers.shift => {
+                            app.ed.up_visual_select(&app.visual_lines);
+                            typed = true;
+                        }
                         ArrowUp => {
                             app.ed.up_visual(&app.visual_lines);
+                            typed = true;
+                        }
+                        ArrowDown if modifiers.shift => {
+                            app.ed.down_visual_select(&app.visual_lines);
                             typed = true;
                         }
                         ArrowDown => {
                             app.ed.down_visual(&app.visual_lines);
                             typed = true;
                         }
+                        Home if modifiers.shift => {
+                            app.ed.home_visual_select(&app.visual_lines);
+                            typed = true;
+                        }
                         Home => {
                             app.ed.home_visual(&app.visual_lines);
+                            typed = true;
+                        }
+                        End if modifiers.shift => {
+                            app.ed.end_visual_select(&app.visual_lines);
                             typed = true;
                         }
                         End => {
                             app.ed.end_visual(&app.visual_lines);
                             typed = true;
                         }
+                        PageUp if modifiers.shift => {
+                            app.ed.page_up_visual_select(&app.visual_lines, 10);
+                            typed = true;
+                        }
                         PageUp => {
                             app.ed.page_up_visual(&app.visual_lines, 10);
+                            typed = true;
+                        }
+                        PageDown if modifiers.shift => {
+                            app.ed.page_down_visual_select(&app.visual_lines, 10);
                             typed = true;
                         }
                         PageDown => {

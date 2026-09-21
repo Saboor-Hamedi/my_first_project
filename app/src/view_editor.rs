@@ -140,12 +140,35 @@ pub fn render_editor_body(
     // Clip drawing strictly to editor bounds
     let editor_painter = painter.with_clip_rect(editor_rect);
 
+    let sel_range = ed.selected_range();
+    let sel_color = Color32::from_rgba_unmultiplied(
+        theme.accent.r(),
+        theme.accent.g(),
+        theme.accent.b(),
+        65,
+    );
+
     // Frustum culling: render only lines intersecting the visible viewport
     for (r, line) in visual_lines.iter().enumerate() {
         let line_y = ed_origin.y + r as f32 * lh;
         if line_y + lh < editor_rect.min.y || line_y > editor_rect.max.y {
             continue;
         }
+
+        // Render selection highlight background behind text on this line
+        if let Some((sel_start, sel_end)) = sel_range {
+            let intersect_start = sel_start.max(line.char_start);
+            let intersect_end = sel_end.min(line.char_end);
+            if intersect_start < intersect_end {
+                let start_col = intersect_start - line.char_start;
+                let end_col = intersect_end - line.char_start;
+                let sel_x = ed_origin.x + start_col as f32 * cw;
+                let sel_w = (end_col - start_col) as f32 * cw;
+                let highlight_rect = Rect::from_min_size(pos2(sel_x, line_y), vec2(sel_w, lh));
+                editor_painter.rect_filled(highlight_rect, 2.0, sel_color);
+            }
+        }
+
         let line_text: String = ed.buf[line.char_start..line.char_end].iter().collect();
         editor_painter.text(
             pos2(ed_origin.x, line_y),

@@ -23,7 +23,7 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
     match cmd.as_str() {
         "help" => {
             app.set_status(
-                ":w (save) | :r (rename) | :d (delete) | :export [file] | :import <file.md|.txt> | :stats | :sound",
+                ":w (save) | :clear | :backup | :export [file] | :import <file> | :r (rename) | :d (delete)",
                 now,
             );
         }
@@ -135,18 +135,32 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
                             .and_then(|s| s.to_str())
                             .unwrap_or("txt");
                         let clean_content = content.replace("\r\n", "\n").replace('\r', "\n");
-                        let _ = app.db_tx.send(DbMsg::SaveNote {
-                            topic: title.clone(),
-                            body: clean_content.clone(),
-                            struggled: None,
-                        });
+                        let now_dt = chrono::Local::now().naive_local();
+                        if let Some(ref db) = app.db {
+                            if let Ok(new_id) = db.add_note(&title, &clean_content, None, now_dt) {
+                                app.active_note_id = Some(new_id);
+                                app.notes_list.insert(0, core::Note {
+                                    id: new_id,
+                                    topic: title.clone(),
+                                    body: clean_content.clone(),
+                                    struggled_with: None,
+                                    created_at: now_dt,
+                                });
+                                app.total_notes_count += 1;
+                            }
+                        } else {
+                            let _ = app.db_tx.send(DbMsg::SaveNote {
+                                topic: title.clone(),
+                                body: clean_content.clone(),
+                                struggled: None,
+                            });
+                        }
                         app.active_note_title = title.clone();
                         app.ed.set_text(&clean_content);
                         app.ed.cur = 0;
                         app.is_dirty = false;
                         app.scroll_y = 0.0;
                         app.pending_created += 1;
-                        app.reload_db_state();
                         app.set_status(format!("Imported: \"{}\" (.{})", title, ext), now);
                     }
                     Err(e) => {
@@ -194,6 +208,18 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
         }
         "stats" => {
             app.mode = Mode::Stats;
+        }
+        "clear" => {
+            app.ed.clear();
+            app.is_dirty = true;
+            app.scroll_y = 0.0;
+            app.set_status("Editor cleared", now);
+        }
+        "backup" | "snapshot" => {
+            if !args.is_empty() {
+                app.backup_dir = args.to_string();
+            }
+            app.trigger_backup(now);
         }
         "quit" | "q" => {
             std::process::exit(0);

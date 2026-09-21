@@ -8,14 +8,16 @@ pub enum SettingTab {
     Sounds,
     Theme,
     Shortcuts,
+    Backup,
 }
 
 impl SettingTab {
-    pub const ALL: [SettingTab; 4] = [
+    pub const ALL: [SettingTab; 5] = [
         SettingTab::Carets,
         SettingTab::Sounds,
         SettingTab::Theme,
         SettingTab::Shortcuts,
+        SettingTab::Backup,
     ];
 
     pub fn title(&self) -> &'static str {
@@ -24,6 +26,7 @@ impl SettingTab {
             SettingTab::Sounds => "Sounds",
             SettingTab::Theme => "Theme",
             SettingTab::Shortcuts => "Shortcuts",
+            SettingTab::Backup => "Backup",
         }
     }
 
@@ -33,6 +36,7 @@ impl SettingTab {
             SettingTab::Sounds => "♪",
             SettingTab::Theme => "◐",
             SettingTab::Shortcuts => "⌨",
+            SettingTab::Backup => "💾",
         }
     }
 }

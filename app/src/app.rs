@@ -9,7 +9,7 @@ use crate::input::{handle_input, window_shortcuts};
 use crate::modals::{render_delete_confirm_modal, render_rename_modal, render_search_modal};
 use crate::mode::Mode;
 use crate::notes::{delete_active_note, quick_save_active_note, rename_active_note, update_search_results};
-use crate::settingpanel::render_setting_panel;
+use crate::settingpanel::{render_setting_panel, SettingPanelAction};
 use crate::settingtabs::{render_setting_tabs, SettingTab};
 use crate::sidebar::{render_sidebar, SidebarAction};
 use crate::sound::{SoundEngine, SoundProfile};
@@ -22,6 +22,14 @@ use core::{DailyActivity, Database, Note};
 use eframe::egui::{self, pos2, Color32, FontId, Rect};
 use std::sync::mpsc::Sender;
 use std::time::Duration;
+
+pub fn default_backup_dir() -> std::path::PathBuf {
+    if let Some(proj) = directories::ProjectDirs::from("com", "mindforge", "mindforge") {
+        proj.data_local_dir().join("mindforge_backup")
+    } else {
+        std::path::PathBuf::from("mindforge_backup")
+    }
+}
 
 pub struct App {
     pub ed: Editor,
@@ -47,6 +55,8 @@ pub struct App {
     // Two-column Preferences modal (Ctrl+,)
     pub settings_open: bool,
     pub active_setting_tab: SettingTab,
+    pub backup_dir: String,
+    pub last_backup_status: Option<String>,
 
     // Fuzzy search modal (Ctrl+P)
     pub search_open: bool,
@@ -93,8 +103,9 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
-        let tx = spawn_db_worker();
+        // Open SQLite connection on the main thread first to safely apply any pending migrations
         let db = Database::open_default().ok();
+        let tx = spawn_db_worker();
 
         let mut app = Self {
             ed: Editor::new(),
@@ -115,6 +126,8 @@ impl App {
             sidebar_open: false,
             settings_open: false,
             active_setting_tab: SettingTab::Carets,
+            backup_dir: default_backup_dir().to_string_lossy().to_string(),
+            last_backup_status: None,
             search_open: false,
             search_query: String::new(),
             search_results: Vec::new(),
@@ -185,10 +198,16 @@ impl App {
                     self.font_size = val.clamp(12.0, 48.0);
                 }
             }
+            if let Ok(Some(b)) = db.get_setting("backup_dir") {
+                self.backup_dir = b;
+            }
         }
     }
 
     pub fn reload_db_state(&mut self) {
+        if self.db.is_none() {
+            self.db = Database::open_default().ok();
+        }
         if let Some(db) = &self.db {
             if let Ok(count) = db.get_notes_count() {
                 self.total_notes_count = count;
@@ -280,6 +299,36 @@ impl App {
     pub fn set_status(&mut self, msg: impl Into<String>, now: f64) {
         self.status_msg = msg.into();
         self.status_time = now;
+    }
+
+    pub fn trigger_backup(&mut self, now: f64) {
+        let target = if !self.backup_dir.is_empty() {
+            let p = std::path::PathBuf::from(&self.backup_dir);
+            if p.file_name().and_then(|s| s.to_str()) == Some("mindforge_backup") {
+                p
+            } else {
+                p.join("mindforge_backup")
+            }
+        } else {
+            default_backup_dir()
+        };
+        if let Some(ref db) = self.db {
+            match db.backup(&target) {
+                Ok(p) => {
+                    self.last_backup_status = Some(format!(
+                        "Success ({})",
+                        chrono::Local::now().format("%H:%M:%S")
+                    ));
+                    self.set_status(format!("Backup saved: {}", p.display()), now);
+                }
+                Err(e) => {
+                    self.last_backup_status = Some(format!("Failed: {}", e));
+                    self.set_status(format!("Backup failed: {}", e), now);
+                }
+            }
+        } else {
+            self.set_status("Database not available for backup", now);
+        }
     }
 
     pub fn draw(&mut self, ui: &mut egui::Ui, dt: f32, now: f64, typed: bool) {
@@ -505,7 +554,7 @@ impl App {
                     val: val.to_string(),
                 });
             };
-            render_setting_panel(
+            let panel_action = render_setting_panel(
                 ui,
                 &painter,
                 panel_rect,
@@ -513,8 +562,14 @@ impl App {
                 &mut self.caret,
                 &mut self.sound,
                 &mut self.theme,
+                &mut self.backup_dir,
+                self.last_backup_status.as_deref(),
                 &mut on_save,
             );
+
+            if let Some(SettingPanelAction::TriggerBackup) = panel_action {
+                self.trigger_backup(now);
+            }
         }
 
         // Fuzzy Search Modal (Ctrl+P)
