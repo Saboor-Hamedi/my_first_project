@@ -44,6 +44,7 @@ impl Editor {
     }
 
     /// Moves cursor to start of current line
+    #[allow(dead_code)]
     pub fn home(&mut self) {
         while self.cur > 0 && self.buf[self.cur - 1] != '\n' {
             self.cur -= 1;
@@ -51,6 +52,7 @@ impl Editor {
     }
 
     /// Moves cursor to end of current line
+    #[allow(dead_code)]
     pub fn end(&mut self) {
         while self.cur < self.buf.len() && self.buf[self.cur] != '\n' {
             self.cur += 1;
@@ -65,6 +67,7 @@ impl Editor {
     }
 
     /// Moves cursor one line up, preserving column if possible
+    #[allow(dead_code)]
     pub fn up(&mut self) {
         let (row, col) = self.row_col();
         if row == 0 {
@@ -75,12 +78,14 @@ impl Editor {
     }
 
     /// Moves cursor one line down, preserving column if possible
+    #[allow(dead_code)]
     pub fn down(&mut self) {
         let (row, col) = self.row_col();
         let target_row = row + 1;
         self.set_row_col(target_row, col);
     }
 
+    #[allow(dead_code)]
     fn set_row_col(&mut self, target_row: usize, target_col: usize) {
         let mut cur_row = 0;
         let mut line_start = 0;
@@ -127,10 +132,9 @@ impl Editor {
         self.cur = 0;
     }
 
-    #[allow(dead_code)]
     pub fn set_text(&mut self, s: &str) {
         self.buf = s.chars().collect();
-        self.cur = self.buf.len();
+        self.cur = 0;
     }
 
     pub fn text(&self) -> String {
@@ -154,6 +158,163 @@ impl Editor {
         }
         (row, col)
     }
+
+    /// Computes soft-wrapped visual lines for smooth rendering and multi-line navigation.
+    pub fn compute_visual_lines(&self, max_cols: usize) -> Vec<VisualLine> {
+        if self.buf.is_empty() {
+            return vec![VisualLine { char_start: 0, char_end: 0 }];
+        }
+
+        let max_cols = max_cols.max(15);
+        let mut lines = Vec::new();
+        let mut line_start = 0;
+
+        while line_start <= self.buf.len() {
+            let mut line_end = line_start;
+            while line_end < self.buf.len() && self.buf[line_end] != '\n' {
+                line_end += 1;
+            }
+
+            let physical_len = line_end - line_start;
+            if physical_len == 0 {
+                lines.push(VisualLine {
+                    char_start: line_start,
+                    char_end: line_end,
+                });
+            } else {
+                let mut chunk_start = line_start;
+                while chunk_start < line_end {
+                    let remaining = line_end - chunk_start;
+                    if remaining <= max_cols {
+                        lines.push(VisualLine {
+                            char_start: chunk_start,
+                            char_end: line_end,
+                        });
+                        break;
+                    }
+
+                    // Look for whitespace wrap point within max_cols
+                    let limit = chunk_start + max_cols;
+                    let mut wrap_at = None;
+                    for idx in (chunk_start + 1..=limit).rev() {
+                        if self.buf[idx - 1].is_whitespace() {
+                            wrap_at = Some(idx);
+                            break;
+                        }
+                    }
+
+                    let chunk_end = wrap_at.unwrap_or(limit);
+                    lines.push(VisualLine {
+                        char_start: chunk_start,
+                        char_end: chunk_end,
+                    });
+
+                    chunk_start = chunk_end;
+                    while chunk_start < line_end && self.buf[chunk_start] == ' ' {
+                        chunk_start += 1;
+                    }
+                }
+            }
+
+            if line_end >= self.buf.len() {
+                if line_end > 0 && self.buf[line_end - 1] == '\n' {
+                    lines.push(VisualLine {
+                        char_start: line_end,
+                        char_end: line_end,
+                    });
+                }
+                break;
+            }
+            line_start = line_end + 1;
+        }
+
+        if lines.is_empty() {
+            lines.push(VisualLine { char_start: 0, char_end: 0 });
+        }
+
+        lines
+    }
+
+    /// Finds the visual row and column of a given character index.
+    pub fn visual_row_col(&self, lines: &[VisualLine]) -> (usize, usize) {
+        if lines.is_empty() {
+            return (0, 0);
+        }
+        for (i, line) in lines.iter().enumerate() {
+            if self.cur >= line.char_start && self.cur < line.char_end {
+                return (i, self.cur - line.char_start);
+            }
+            if self.cur == line.char_end {
+                if i + 1 == lines.len() || lines[i + 1].char_start > line.char_end {
+                    return (i, self.cur - line.char_start);
+                }
+            }
+            if i + 1 < lines.len() && self.cur >= line.char_end && self.cur < lines[i + 1].char_start {
+                return (i, self.cur - line.char_start);
+            }
+        }
+        let last_idx = lines.len() - 1;
+        let last = &lines[last_idx];
+        (last_idx, self.cur.saturating_sub(last.char_start))
+    }
+
+    pub fn up_visual(&mut self, lines: &[VisualLine]) {
+        let (row, col) = self.visual_row_col(lines);
+        if row == 0 {
+            return;
+        }
+        let target_line = &lines[row - 1];
+        let line_len = target_line.char_end.saturating_sub(target_line.char_start);
+        self.cur = target_line.char_start + col.min(line_len);
+    }
+
+    pub fn down_visual(&mut self, lines: &[VisualLine]) {
+        let (row, col) = self.visual_row_col(lines);
+        if row + 1 >= lines.len() {
+            return;
+        }
+        let target_line = &lines[row + 1];
+        let line_len = target_line.char_end.saturating_sub(target_line.char_start);
+        self.cur = target_line.char_start + col.min(line_len);
+    }
+
+    pub fn home_visual(&mut self, lines: &[VisualLine]) {
+        let (row, _) = self.visual_row_col(lines);
+        if let Some(line) = lines.get(row) {
+            self.cur = line.char_start;
+        }
+    }
+
+    pub fn end_visual(&mut self, lines: &[VisualLine]) {
+        let (row, _) = self.visual_row_col(lines);
+        if let Some(line) = lines.get(row) {
+            self.cur = line.char_end;
+        }
+    }
+
+    pub fn page_up_visual(&mut self, lines: &[VisualLine], count: usize) {
+        let (row, col) = self.visual_row_col(lines);
+        let target_row = row.saturating_sub(count);
+        if let Some(target_line) = lines.get(target_row) {
+            let line_len = target_line.char_end.saturating_sub(target_line.char_start);
+            self.cur = target_line.char_start + col.min(line_len);
+        }
+    }
+
+    pub fn page_down_visual(&mut self, lines: &[VisualLine], count: usize) {
+        let (row, col) = self.visual_row_col(lines);
+        let target_row = (row + count).min(lines.len().saturating_sub(1));
+        if let Some(target_line) = lines.get(target_row) {
+            let line_len = target_line.char_end.saturating_sub(target_line.char_start);
+            self.cur = target_line.char_start + col.min(line_len);
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VisualLine {
+    pub char_start: usize,
+    pub char_end: usize,
 }
 
 #[cfg(test)]
@@ -191,5 +352,30 @@ mod tests {
         ed.cur = 2; // in the middle of "first line" ("fi|rst line")
         ed.insert_line_below();
         assert_eq!(ed.text(), "first line\n\nsecond line");
+    }
+
+    #[test]
+    fn test_visual_line_wrapping() {
+        let mut ed = Editor::new();
+        ed.insert_str("The quick brown fox jumps over the lazy dog");
+        // max_cols = 16
+        let lines = ed.compute_visual_lines(16);
+        assert!(lines.len() >= 3);
+        let first_line: String = ed.buf[lines[0].char_start..lines[0].char_end].iter().collect();
+        assert_eq!(first_line, "The quick brown ");
+
+        ed.cur = 0;
+        let (r0, c0) = ed.visual_row_col(&lines);
+        assert_eq!((r0, c0), (0, 0));
+
+        // Move visual down
+        ed.down_visual(&lines);
+        let (r1, _) = ed.visual_row_col(&lines);
+        assert_eq!(r1, 1);
+
+        // Move visual up
+        ed.up_visual(&lines);
+        let (r_back, _) = ed.visual_row_col(&lines);
+        assert_eq!(r_back, 0);
     }
 }

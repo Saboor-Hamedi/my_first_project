@@ -134,13 +134,15 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
                             .extension()
                             .and_then(|s| s.to_str())
                             .unwrap_or("txt");
+                        let clean_content = content.replace("\r\n", "\n").replace('\r', "\n");
                         let _ = app.db_tx.send(DbMsg::SaveNote {
                             topic: title.clone(),
-                            body: content.clone(),
+                            body: clean_content.clone(),
                             struggled: None,
                         });
                         app.active_note_title = title.clone();
-                        app.ed.set_text(&content);
+                        app.ed.set_text(&clean_content);
+                        app.ed.cur = 0;
                         app.is_dirty = false;
                         app.scroll_y = 0.0;
                         app.pending_created += 1;

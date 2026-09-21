@@ -1,7 +1,7 @@
 //! Main text editor view: header, text canvas, smooth scrolling, and caret rendering.
 
 use crate::caret::Caret;
-use crate::editor::Editor;
+use crate::editor::{Editor, VisualLine};
 use crate::theme::Theme;
 use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, Stroke};
 
@@ -11,6 +11,7 @@ pub fn render_editor_header(
     painter: &egui::Painter,
     bounds: Rect,
     content_left_margin: f32,
+    content_right_margin: f32,
     active_title: &str,
     theme: &Theme,
 ) {
@@ -54,22 +55,24 @@ pub fn render_editor_header(
         }
     }
 
-    // Subtle divider line under header
+    // Subtle divider line under header, symmetrically aligned with content margins
     painter.line_segment(
         [
             pos2(bounds.min.x + content_left_margin, bounds.min.y + 38.0),
-            pos2(bounds.max.x - 24.0, bounds.min.y + 38.0),
+            pos2(bounds.max.x - content_right_margin, bounds.min.y + 38.0),
         ],
         Stroke::new(1.0, Color32::from_gray(24)),
     );
 }
 
-/// Renders the editor body with smooth pinned scrolling (no jumps on Enter!) and caret animation.
+/// Renders the editor body with soft-wrapped visual lines, smooth scrolling, caret animation, and interactive scrollbar.
 pub fn render_editor_body(
     ui: &egui::Ui,
     painter: &egui::Painter,
+    window_bounds: Rect,
     editor_rect: Rect,
-    ed: &Editor,
+    ed: &mut Editor,
+    visual_lines: &[VisualLine],
     caret: &mut Caret,
     scroll_y: &mut f32,
     theme: &Theme,
@@ -78,30 +81,53 @@ pub fn render_editor_body(
     lh: f32,
     dt: f32,
     now: f64,
-    typed: bool,
+    mut typed: bool,
     block_scroll: bool,
 ) {
     let font = FontId::monospace(font_size);
-    let (row, col) = ed.row_col();
-    let caret_y_in_content = row as f32 * lh;
     let visible_h = editor_rect.height();
 
-    let text = ed.text();
-    let total_lines = text.split('\n').count();
-    let total_content_h = total_lines as f32 * lh;
+    let total_content_h = visual_lines.len() as f32 * lh;
     let max_scroll = (total_content_h - visible_h + lh * 4.0).max(0.0);
 
-    // Mouse wheel scrolling — smooth and completely decoupled from caret snapping!
+    // Mouse wheel scrolling: prioritize smooth scroll delta, fallback to scaled raw delta
     if !block_scroll {
-        let scroll_delta = ui.input(|i| i.raw_scroll_delta.y);
+        let scroll_delta = ui.input(|i| {
+            if i.smooth_scroll_delta.y.abs() > 0.001 {
+                i.smooth_scroll_delta.y
+            } else {
+                i.raw_scroll_delta.y * 0.5
+            }
+        });
         if scroll_delta != 0.0 && ui.rect_contains_pointer(editor_rect) {
             *scroll_y = (*scroll_y - scroll_delta).clamp(0.0, max_scroll);
         }
     }
 
-    // Caret follow / auto-scroll: ONLY when the user is actively typing or moving by keyboard!
+    let ed_origin = editor_rect.min - vec2(0.0, *scroll_y);
+
+    // Direct mouse click in editor moves cursor to clicked visual row and col
+    if !block_scroll && ui.rect_contains_pointer(editor_rect) && ui.input(|i| i.pointer.primary_clicked()) {
+        if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+            let clicked_row = ((pos.y - ed_origin.y) / lh).floor() as isize;
+            if clicked_row >= 0 && (clicked_row as usize) < visual_lines.len() {
+                let r = clicked_row as usize;
+                let line = &visual_lines[r];
+                let clicked_col = (((pos.x - ed_origin.x).max(0.0)) / cw).round() as usize;
+                let line_len = line.char_end.saturating_sub(line.char_start);
+                ed.cur = line.char_start + clicked_col.min(line_len);
+                typed = true;
+            }
+        }
+    }
+
+    // Caret position in visual lines
+    let (row, col) = ed.visual_row_col(visual_lines);
+    let caret_y_in_content = row as f32 * lh;
+
+    // Auto-scroll / caret follow: ONLY when user is typing or navigating by keyboard!
     if typed {
-        // Pin smoothly at bottom edge when moving downwards (zero jump overshoot)
+        // Pin smoothly at bottom edge when moving downwards
         if caret_y_in_content + lh > *scroll_y + visible_h {
             *scroll_y = (caret_y_in_content + lh - visible_h).clamp(0.0, max_scroll);
         }
@@ -113,44 +139,54 @@ pub fn render_editor_body(
 
     // Clip drawing strictly to editor bounds
     let editor_painter = painter.with_clip_rect(editor_rect);
-    let ed_origin = editor_rect.min - vec2(0.0, *scroll_y);
 
-    for (r, line) in text.split('\n').enumerate() {
+    // Frustum culling: render only lines intersecting the visible viewport
+    for (r, line) in visual_lines.iter().enumerate() {
         let line_y = ed_origin.y + r as f32 * lh;
         if line_y + lh < editor_rect.min.y || line_y > editor_rect.max.y {
             continue;
         }
+        let line_text: String = ed.buf[line.char_start..line.char_end].iter().collect();
         editor_painter.text(
             pos2(ed_origin.x, line_y),
             Align2::LEFT_TOP,
-            line,
+            line_text,
             font.clone(),
             theme.text,
         );
     }
 
     // Caret placement and animation
-    let lines: Vec<&str> = text.split('\n').collect();
-    let current_line = lines.get(row).copied().unwrap_or("");
-    let current_line_prefix: String = current_line.chars().take(col).collect();
-
-    let caret_x = if current_line_prefix.is_empty() {
-        ed_origin.x
-    } else {
-        let galley = editor_painter.layout_no_wrap(current_line_prefix, font.clone(), Color32::WHITE);
-        ed_origin.x + galley.size().x
-    };
+    let caret_x = ed_origin.x + col as f32 * cw;
     let target = pos2(caret_x, ed_origin.y + row as f32 * lh);
     caret.update(dt, target, typed, now, cw, lh);
     caret.paint(&editor_painter, cw, lh, now, theme.accent);
 
-    // Sleek scrollbar indicator when document exceeds viewport height
+    // Interactive scrollbar indicator in the right margin gutter
     if total_content_h > visible_h && max_scroll > 0.0 {
-        let thumb_h = ((visible_h / total_content_h) * visible_h).clamp(24.0, visible_h);
+        let thumb_h = ((visible_h / total_content_h) * visible_h).clamp(28.0, visible_h);
         let scroll_ratio = (*scroll_y / max_scroll).clamp(0.0, 1.0);
         let thumb_y = editor_rect.min.y + scroll_ratio * (visible_h - thumb_h);
-        let track_x = editor_rect.max.x - 4.0;
-        let thumb_rect = Rect::from_min_size(pos2(track_x, thumb_y), vec2(3.0, thumb_h));
-        editor_painter.rect_filled(thumb_rect, 1.5, Color32::from_rgba_unmultiplied(120, 125, 140, 60));
+        let track_x = window_bounds.max.x - 8.0;
+        let thumb_rect = Rect::from_min_size(pos2(track_x - 1.5, thumb_y), vec2(3.0, thumb_h));
+        let track_rect = Rect::from_min_max(
+            pos2(track_x - 8.0, editor_rect.min.y),
+            pos2(window_bounds.max.x, editor_rect.max.y),
+        );
+
+        let is_track_hovered = ui.rect_contains_pointer(track_rect);
+        if is_track_hovered && ui.input(|i| i.pointer.primary_down()) {
+            if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+                let ratio = ((pos.y - editor_rect.min.y - thumb_h * 0.5) / (visible_h - thumb_h)).clamp(0.0, 1.0);
+                *scroll_y = ratio * max_scroll;
+            }
+        }
+
+        let thumb_color = if is_track_hovered {
+            Color32::from_rgba_unmultiplied(180, 185, 200, 160)
+        } else {
+            Color32::from_rgba_unmultiplied(120, 125, 140, 70)
+        };
+        painter.rect_filled(thumb_rect, 1.5, thumb_color);
     }
 }

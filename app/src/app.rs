@@ -3,7 +3,7 @@
 use crate::bottom_bar::render_bottom_dock;
 use crate::caret::{Caret, CaretKind};
 use crate::db_worker::{spawn_db_worker, DbMsg};
-use crate::editor::Editor;
+use crate::editor::{Editor, VisualLine};
 use crate::fuzzy::{SearchItem, SearchResultKind};
 use crate::input::{handle_input, window_shortcuts};
 use crate::modals::{render_delete_confirm_modal, render_rename_modal, render_search_modal};
@@ -34,6 +34,7 @@ pub struct App {
     pub opacity: f32,
     pub last_char_time: f64,
     pub cell: Option<(f32, f32)>,
+    pub visual_lines: Vec<VisualLine>,
     pub mode: Mode,
     pub status_msg: String,
     pub status_time: f64,
@@ -106,6 +107,7 @@ impl App {
             opacity: 1.0,
             last_char_time: -10.0,
             cell: None,
+            visual_lines: vec![VisualLine { char_start: 0, char_end: 0 }],
             mode: Mode::Normal,
             status_msg: String::new(),
             status_time: 0.0,
@@ -195,10 +197,13 @@ impl App {
                 self.notes_list = notes;
                 if self.active_note_id.is_none() {
                     if let Some(first) = self.notes_list.first() {
+                        let clean = first.body.replace("\r\n", "\n").replace('\r', "\n");
                         self.active_note_id = Some(first.id);
                         self.active_note_title = first.topic.clone();
-                        self.ed.set_text(&first.body);
+                        self.ed.set_text(&clean);
+                        self.ed.cur = 0;
                         self.is_dirty = false;
+                        self.scroll_y = 0.0;
                     }
                 }
             }
@@ -298,6 +303,7 @@ impl App {
         );
 
         let content_left_margin = if self.sidebar_open { 280.0 } else { 48.0 };
+        let content_right_margin = 48.0;
 
         // Bottom dock rectangle
         let cmd_bar_height = 36.0;
@@ -310,8 +316,12 @@ impl App {
         let editor_bottom = cmd_bar_rect.min.y - 8.0;
         let editor_rect = Rect::from_min_max(
             pos2(bounds.min.x + content_left_margin, editor_top),
-            pos2(bounds.max.x - 24.0, editor_bottom),
+            pos2(bounds.max.x - content_right_margin, editor_bottom),
         );
+
+        // Keep visual lines updated to exact editor width
+        let max_cols = ((editor_rect.width() - 8.0) / cw).floor().max(20.0) as usize;
+        self.visual_lines = self.ed.compute_visual_lines(max_cols);
 
         // Clean Header (Zero Clunky Buttons! Purely keyboard shortcut driven with top-right drag gripper)
         if self.mode == Mode::Normal {
@@ -320,6 +330,7 @@ impl App {
                 &painter,
                 bounds,
                 content_left_margin,
+                content_right_margin,
                 &self.active_note_title,
                 &self.theme,
             );
@@ -331,8 +342,10 @@ impl App {
                 render_editor_body(
                     ui,
                     &painter,
+                    bounds,
                     editor_rect,
-                    &self.ed,
+                    &mut self.ed,
+                    &self.visual_lines,
                     &mut self.caret,
                     &mut self.scroll_y,
                     &self.theme,
@@ -365,7 +378,7 @@ impl App {
         }
 
         // Bottom Dock (No shortcut clutter! Just active status feedback and word stats)
-        let (row, col) = self.ed.row_col();
+        let (row, col) = self.ed.visual_row_col(&self.visual_lines);
         render_bottom_dock(
             &painter,
             cmd_bar_rect,
@@ -375,8 +388,8 @@ impl App {
             &self.status_msg,
             self.status_time,
             now,
-            row,
-            col,
+            row + 1,
+            col + 1,
             self.ed.text().split_whitespace().count(),
             self.theme.accent,
             self.theme.muted,
@@ -414,9 +427,11 @@ impl App {
                         }
                     }
                     SidebarAction::LoadNote { id, topic, body } => {
+                        let clean = body.replace("\r\n", "\n").replace('\r', "\n");
                         self.active_note_id = Some(id);
                         self.active_note_title = topic.clone();
-                        self.ed.set_text(&body);
+                        self.ed.set_text(&clean);
+                        self.ed.cur = 0;
                         self.mode = Mode::Normal;
                         self.is_dirty = false;
                         self.scroll_y = 0.0;
@@ -520,9 +535,11 @@ impl App {
                 match item.kind {
                     SearchResultKind::Document => {
                         if let Some(note) = self.notes_list.iter().find(|n| n.id == item.id) {
+                            let clean = note.body.replace("\r\n", "\n").replace('\r', "\n");
                             self.active_note_id = Some(note.id);
                             self.active_note_title = note.topic.clone();
-                            self.ed.set_text(&note.body);
+                            self.ed.set_text(&clean);
+                            self.ed.cur = 0;
                             self.mode = Mode::Normal;
                             self.is_dirty = false;
                             self.scroll_y = 0.0;
@@ -589,6 +606,18 @@ impl eframe::App for App {
 
         let now = ctx.input(|i| i.time);
         let dt = ctx.input(|i| i.unstable_dt).clamp(0.0, 0.05);
+
+        // Precompute visual lines so keyboard navigation (ArrowUp, ArrowDown, PageUp, PageDown) uses accurate visual layout
+        let (cw, _) = *self.cell.get_or_insert_with(|| {
+            let font = FontId::monospace(self.font_size);
+            let g = ctx.fonts(|f| f.layout_no_wrap("M".to_owned(), font, Color32::WHITE));
+            (g.size().x, g.size().y)
+        });
+        let screen_w = ctx.screen_rect().width();
+        let left_margin = if self.sidebar_open { 280.0 } else { 48.0 };
+        let editor_w = (screen_w - left_margin - 48.0).max(100.0);
+        let max_cols = ((editor_w - 8.0) / cw).floor().max(20.0) as usize;
+        self.visual_lines = self.ed.compute_visual_lines(max_cols);
 
         let typed = handle_input(self, ctx, now);
 

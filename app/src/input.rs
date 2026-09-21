@@ -254,31 +254,27 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                             }
                         }
                         ArrowUp => {
-                            app.ed.up();
+                            app.ed.up_visual(&app.visual_lines);
                             typed = true;
                         }
                         ArrowDown => {
-                            app.ed.down();
+                            app.ed.down_visual(&app.visual_lines);
                             typed = true;
                         }
                         Home => {
-                            app.ed.home();
+                            app.ed.home_visual(&app.visual_lines);
                             typed = true;
                         }
                         End => {
-                            app.ed.end();
+                            app.ed.end_visual(&app.visual_lines);
                             typed = true;
                         }
                         PageUp => {
-                            for _ in 0..10 {
-                                app.ed.up();
-                            }
+                            app.ed.page_up_visual(&app.visual_lines, 10);
                             typed = true;
                         }
                         PageDown => {
-                            for _ in 0..10 {
-                                app.ed.down();
-                            }
+                            app.ed.page_down_visual(&app.visual_lines, 10);
                             typed = true;
                         }
                         _ => {}
