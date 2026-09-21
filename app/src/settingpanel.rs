@@ -302,11 +302,11 @@ pub fn render_setting_panel(
             );
 
             let card_w = panel_rect.width() - 56.0;
-            let mut cur_y = p_origin.y + 54.0;
+            let mut cur_y = p_origin.y + 52.0;
 
             // ── Card 1: Hybrid Mode ──────────────────────────────────────────
             let is_hybrid = *editor_input_mode == EditorInputMode::Hybrid;
-            let hybrid_card = Rect::from_min_size(pos2(p_origin.x, cur_y), vec2(card_w, 142.0));
+            let hybrid_card = Rect::from_min_size(pos2(p_origin.x, cur_y), vec2(card_w, 128.0));
             let hybrid_hover = ui.rect_contains_pointer(hybrid_card);
 
             if hybrid_hover && ui.input(|i| i.pointer.primary_clicked()) {
@@ -330,40 +330,40 @@ pub fn render_setting_panel(
             );
 
             painter.text(
-                hybrid_card.min + vec2(14.0, 12.0),
+                hybrid_card.min + vec2(14.0, 11.0),
                 Align2::LEFT_TOP,
                 "⚡ Hybrid Mode (Modern Power IDE)",
-                FontId::monospace(13.0),
+                FontId::monospace(12.5),
                 if is_hybrid { theme.accent } else { theme.highlight },
             );
             if is_hybrid {
                 painter.text(
-                    pos2(hybrid_card.max.x - 14.0, hybrid_card.min.y + 12.0),
+                    pos2(hybrid_card.max.x - 14.0, hybrid_card.min.y + 11.0),
                     Align2::RIGHT_TOP,
                     "● ACTIVE",
-                    FontId::monospace(11.0),
+                    FontId::monospace(10.5),
                     theme.accent,
                 );
             }
 
             let hybrid_features = [
-                ("• Word Jumps", "Ctrl+Left/Right to jump; Ctrl+Shift for word selection"),
-                ("• Line Moving", "Alt+Up / Alt+Down swaps lines in place with zero cut/paste"),
-                ("• Duplication", "Ctrl+D duplicates current line or block directly below"),
-                ("• Auto-Pairing", "Auto-closes quotes and brackets \"\", (), [], {}, and wraps selection"),
-                ("• Smart Tab", "Tab indents 4 spaces; Shift+Tab dedents cleanly"),
+                ("• Word Jump", "Ctrl+Left/Right to jump; Shift to select"),
+                ("• Line Move", "Alt+Up/Down swaps lines in place smoothly"),
+                ("• Duplicate", "Ctrl+D duplicates current line or selection"),
+                ("• Auto-Pair", "Closes \"\", (), [], {} and wraps selected text"),
+                ("• Smart Tab", "Tab indents 4 spaces; Shift+Tab dedents"),
             ];
             for (idx, (label, desc)) in hybrid_features.iter().enumerate() {
-                let y = hybrid_card.min.y + 36.0 + idx as f32 * 20.0;
-                painter.text(pos2(hybrid_card.min.x + 14.0, y), Align2::LEFT_TOP, *label, FontId::monospace(10.5), theme.accent);
-                painter.text(pos2(hybrid_card.min.x + 125.0, y), Align2::LEFT_TOP, *desc, FontId::monospace(10.0), Color32::from_gray(180));
+                let y = hybrid_card.min.y + 34.0 + idx as f32 * 17.5;
+                painter.text(pos2(hybrid_card.min.x + 14.0, y), Align2::LEFT_TOP, *label, FontId::monospace(10.0), theme.accent);
+                painter.text(pos2(hybrid_card.min.x + 110.0, y), Align2::LEFT_TOP, *desc, FontId::monospace(9.5), Color32::from_gray(175));
             }
 
-            cur_y += 154.0;
+            cur_y += 138.0;
 
             // ── Card 2: Vim Mode ─────────────────────────────────────────────
             let is_vim = *editor_input_mode == EditorInputMode::Vim;
-            let vim_card = Rect::from_min_size(pos2(p_origin.x, cur_y), vec2(card_w, 142.0));
+            let vim_card = Rect::from_min_size(pos2(p_origin.x, cur_y), vec2(card_w, 128.0));
             let vim_hover = ui.rect_contains_pointer(vim_card);
 
             if vim_hover && ui.input(|i| i.pointer.primary_clicked()) {
@@ -387,33 +387,33 @@ pub fn render_setting_panel(
             );
 
             painter.text(
-                vim_card.min + vec2(14.0, 12.0),
+                vim_card.min + vec2(14.0, 11.0),
                 Align2::LEFT_TOP,
                 "⚔ Vim Mode (Modal Keyboard Engine)",
-                FontId::monospace(13.0),
+                FontId::monospace(12.5),
                 if is_vim { theme.accent } else { theme.highlight },
             );
             if is_vim {
                 painter.text(
-                    pos2(vim_card.max.x - 14.0, vim_card.min.y + 12.0),
+                    pos2(vim_card.max.x - 14.0, vim_card.min.y + 11.0),
                     Align2::RIGHT_TOP,
                     "● ACTIVE",
-                    FontId::monospace(11.0),
+                    FontId::monospace(10.5),
                     theme.accent,
                 );
             }
 
             let vim_features = [
-                ("• Normal Mode", "Home-row motions (h, j, k, l, w, b, 0, $, gg, G)"),
-                ("• Verbs & Lines", "dd (delete line), yy (yank line), cc (change), dw, x, u, Ctrl+R"),
-                ("• Insert Mode", "Enter with i, a, o, A, I; Escape drops back to Normal instantly"),
-                ("• Visual Mode", "v for char visual, V for line visual, y to copy, d to cut"),
-                ("• Dynamic Caret", "Caret automatically morphs between Block and Beam modes"),
+                ("• Motions", "h, j, k, l, w, b, 0, $, gg, G & counts (3j, 5w)"),
+                ("• Operators", "dd, yy, cc, dw, x, u, Ctrl+R & text objects"),
+                ("• Search", "/ and ? in-buffer search with live n/N repeat"),
+                ("• Modes", "Normal, Insert (i, a, o, A, I), Visual (v, V)"),
+                ("• Caret", "Dynamic Block in Normal and Beam in Insert"),
             ];
             for (idx, (label, desc)) in vim_features.iter().enumerate() {
-                let y = vim_card.min.y + 36.0 + idx as f32 * 20.0;
-                painter.text(pos2(vim_card.min.x + 14.0, y), Align2::LEFT_TOP, *label, FontId::monospace(10.5), theme.accent);
-                painter.text(pos2(vim_card.min.x + 125.0, y), Align2::LEFT_TOP, *desc, FontId::monospace(10.0), Color32::from_gray(180));
+                let y = vim_card.min.y + 34.0 + idx as f32 * 17.5;
+                painter.text(pos2(vim_card.min.x + 14.0, y), Align2::LEFT_TOP, *label, FontId::monospace(10.0), theme.accent);
+                painter.text(pos2(vim_card.min.x + 110.0, y), Align2::LEFT_TOP, *desc, FontId::monospace(9.5), Color32::from_gray(175));
             }
         }
 

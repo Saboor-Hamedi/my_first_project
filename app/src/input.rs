@@ -202,6 +202,9 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
 
     if escape {
         if app.editor_input_mode == crate::app::EditorInputMode::Vim && app.vim.mode != crate::vim::VimSubMode::Normal {
+            if app.vim.is_searching() {
+                app.vim.search.cancel(&mut app.ed);
+            }
             app.vim.set_mode(crate::vim::VimSubMode::Normal, &mut app.ed);
             return true;
         }

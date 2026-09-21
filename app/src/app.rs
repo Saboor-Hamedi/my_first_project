@@ -419,6 +419,24 @@ impl App {
                         self.caret.kind = crate::caret::CaretKind::Block;
                     }
                 }
+
+                let search_matches = if self.editor_input_mode == EditorInputMode::Vim
+                    && (!self.vim.search.match_indices.is_empty() || self.vim.is_searching())
+                {
+                    let q_len = if self.vim.is_searching() {
+                        self.vim.search.query.chars().count()
+                    } else {
+                        self.vim.search.last_query.chars().count()
+                    };
+                    if q_len > 0 && !self.vim.search.match_indices.is_empty() {
+                        Some((self.vim.search.match_indices.as_slice(), q_len))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
                 render_editor_body(
                     ui,
                     &painter,
@@ -436,6 +454,7 @@ impl App {
                     now,
                     typed,
                     self.settings_open || self.search_open,
+                    search_matches,
                 );
                 self.caret.kind = original_caret_kind;
             }
@@ -458,12 +477,25 @@ impl App {
             }
         }
 
+        // Check for search status feedback from Vim engine
+        if let Some(msg) = self.vim.status_feedback.take() {
+            self.set_status(msg, now);
+        }
+
         // Bottom Dock (Shows active editing mode badge, status feedback, and word stats)
         let (row, col) = self.ed.visual_row_col(&self.visual_lines);
-        let mode_badge = match self.editor_input_mode {
-            EditorInputMode::Vim => Some(self.vim.compact_label()),
-            EditorInputMode::Hybrid => Some("HYBRID"),
+        let mode_badge_str = match self.editor_input_mode {
+            EditorInputMode::Vim => self.vim.compact_label(),
+            EditorInputMode::Hybrid => "HYBRID".to_string(),
         };
+
+        let search_prompt = if self.editor_input_mode == EditorInputMode::Vim && self.vim.is_searching() {
+            let symbol = if self.vim.search.backward { "?" } else { "/" };
+            Some((symbol, self.vim.search.query.as_str(), self.vim.search.match_indices.len()))
+        } else {
+            None
+        };
+
         render_bottom_dock(
             &painter,
             cmd_bar_rect,
@@ -476,7 +508,8 @@ impl App {
             row + 1,
             col + 1,
             self.ed.text().split_whitespace().count(),
-            mode_badge,
+            Some(mode_badge_str.as_str()),
+            search_prompt,
             self.theme.accent,
             self.theme.muted,
         );
@@ -562,8 +595,8 @@ impl App {
             }
             painter.rect_filled(bounds, 0.0, Color32::from_black_alpha(175));
 
-            let modal_w = 680.0;
-            let modal_h = 520.0;
+            let modal_w = 640.0;
+            let modal_h = 490.0;
             let modal_rect = Rect::from_center_size(bounds.center(), eframe::egui::vec2(modal_w, modal_h));
 
             painter.rect(

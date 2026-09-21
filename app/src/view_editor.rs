@@ -83,6 +83,7 @@ pub fn render_editor_body(
     now: f64,
     mut typed: bool,
     block_scroll: bool,
+    search_matches: Option<(&[usize], usize)>,
 ) {
     let font = FontId::monospace(font_size);
     let visible_h = editor_rect.height();
@@ -181,6 +182,36 @@ pub fn render_editor_body(
                     }
                     let highlight_rect = Rect::from_min_size(pos2(sel_x, line_y), vec2(sel_w, lh));
                     editor_painter.rect_filled(highlight_rect, 2.0, sel_color);
+                }
+            }
+        }
+
+        // Render in-buffer search match highlights behind text on this line
+        if let Some((matches, q_len)) = search_matches {
+            if q_len > 0 {
+                for &m_idx in matches {
+                    if m_idx + q_len <= line.char_start || m_idx >= line.char_end {
+                        continue;
+                    }
+                    let match_start = m_idx.max(line.char_start);
+                    let match_end = (m_idx + q_len).min(line.char_end);
+                    if match_start < match_end {
+                        let start_col = match_start - line.char_start;
+                        let end_col = match_end - line.char_start;
+                        let match_x = ed_origin.x + start_col as f32 * cw;
+                        let match_w = (end_col - start_col) as f32 * cw;
+                        let is_current = m_idx == ed.cur;
+                        let match_color = if is_current {
+                            Color32::from_rgba_unmultiplied(255, 195, 45, 120) // brighter amber for active match
+                        } else {
+                            Color32::from_rgba_unmultiplied(255, 215, 60, 50)  // soft subtle amber
+                        };
+                        editor_painter.rect_filled(
+                            Rect::from_min_size(pos2(match_x, line_y), vec2(match_w, lh)),
+                            2.0,
+                            match_color,
+                        );
+                    }
                 }
             }
         }

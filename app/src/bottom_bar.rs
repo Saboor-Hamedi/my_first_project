@@ -15,6 +15,7 @@ pub fn render_bottom_dock(
     cursor_col: usize,
     total_words: usize,
     mode_badge: Option<&str>,
+    search_prompt: Option<(&str, &str, usize)>,
     accent: Color32,
     muted: Color32,
 ) {
@@ -59,6 +60,43 @@ pub fn render_bottom_dock(
             FontId::monospace(14.0),
             Color32::WHITE,
         );
+    } else if let Some((symbol, query, match_count)) = search_prompt {
+        // [SEARCH] badge
+        let badge_label = if symbol == "?" { "? SEARCH" } else { "/ SEARCH" };
+        let badge_rect = Rect::from_min_size(pos2(cmd_x, cmd_y - 2.0), vec2(64.0, 20.0));
+        painter.rect_filled(badge_rect, 3.0, accent);
+        painter.text(
+            badge_rect.center(),
+            Align2::CENTER_CENTER,
+            badge_label,
+            FontId::monospace(10.0),
+            Color32::BLACK,
+        );
+
+        let query_display = format!("{}_", query);
+        painter.text(
+            pos2(cmd_x + 72.0, cmd_y),
+            Align2::LEFT_TOP,
+            query_display,
+            FontId::monospace(14.0),
+            Color32::WHITE,
+        );
+
+        if !query.is_empty() {
+            let count_info = if match_count == 0 {
+                "(no matches)".to_string()
+            } else {
+                format!("({} matches)", match_count)
+            };
+            let query_w = (query.len() + 2) as f32 * 8.5;
+            painter.text(
+                pos2(cmd_x + 75.0 + query_w, cmd_y + 2.0),
+                Align2::LEFT_TOP,
+                count_info,
+                FontId::monospace(11.0),
+                muted,
+            );
+        }
     } else {
         if let Some(badge) = mode_badge {
             let badge_w = 10.0 + badge.len() as f32 * 6.5;
