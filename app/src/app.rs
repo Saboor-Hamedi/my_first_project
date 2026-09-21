@@ -124,7 +124,7 @@ impl App {
             ed: Editor::new(),
             cmd_ed: Editor::new(),
             in_command: false,
-            caret: Caret::new(CaretKind::Block),
+            caret: Caret::new(CaretKind::Beam),
             theme: Theme::from_kind(ThemeKind::Green),
             sound: SoundEngine::new(SoundProfile::Thocky), // Mechanical keyboard enabled by default
             font_size: 16.0,
@@ -412,8 +412,12 @@ impl App {
         match self.mode {
             Mode::Normal => {
                 let original_caret_kind = self.caret.kind;
-                if self.editor_input_mode == EditorInputMode::Vim && self.vim.mode == crate::vim::VimSubMode::Insert {
-                    self.caret.kind = crate::caret::CaretKind::Beam;
+                if self.editor_input_mode == EditorInputMode::Vim {
+                    if self.vim.mode == crate::vim::VimSubMode::Insert {
+                        self.caret.kind = crate::caret::CaretKind::Beam;
+                    } else if self.caret.kind == crate::caret::CaretKind::Beam {
+                        self.caret.kind = crate::caret::CaretKind::Block;
+                    }
                 }
                 render_editor_body(
                     ui,

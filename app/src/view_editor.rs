@@ -116,6 +116,7 @@ pub fn render_editor_body(
                 let clicked_col = (((pos.x - ed_origin.x).max(0.0)) / cw).round() as usize;
                 let line_len = line.char_end.saturating_sub(line.char_start);
                 ed.cur = line.char_start + clicked_col.min(line_len);
+                ed.selection = None;
                 typed = true;
             }
         }
@@ -159,8 +160,8 @@ pub fn render_editor_body(
         if let Some((sel_start, sel_end)) = sel_range {
             if line.char_start == line.char_end {
                 // Empty line gap between paragraphs (\n\n):
-                // Highlight a visible block when this empty line falls within the active selection.
-                if sel_start <= line.char_start && sel_end >= line.char_end {
+                // Highlight a visible block only when the active selection spans across this empty line.
+                if sel_start <= line.char_start && sel_end > line.char_end {
                     let sel_w = cw.max(12.0);
                     let highlight_rect = Rect::from_min_size(pos2(ed_origin.x, line_y), vec2(sel_w, lh));
                     editor_painter.rect_filled(highlight_rect, 2.0, sel_color);

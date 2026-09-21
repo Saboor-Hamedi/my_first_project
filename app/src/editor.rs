@@ -191,6 +191,7 @@ impl Editor {
     /// Moves cursor to start of current line
     #[allow(dead_code)]
     pub fn home(&mut self) {
+        self.selection = None;
         while self.cur > 0 && self.buf[self.cur - 1] != '\n' {
             self.cur -= 1;
         }
@@ -199,6 +200,7 @@ impl Editor {
     /// Moves cursor to end of current line
     #[allow(dead_code)]
     pub fn end(&mut self) {
+        self.selection = None;
         while self.cur < self.buf.len() && self.buf[self.cur] != '\n' {
             self.cur += 1;
         }
@@ -214,6 +216,7 @@ impl Editor {
     /// Moves cursor one line up, preserving column if possible
     #[allow(dead_code)]
     pub fn up(&mut self) {
+        self.selection = None;
         let (row, col) = self.row_col();
         if row == 0 {
             return;
@@ -238,6 +241,7 @@ impl Editor {
     /// Moves cursor one line down, preserving column if possible
     #[allow(dead_code)]
     pub fn down(&mut self) {
+        self.selection = None;
         let (row, col) = self.row_col();
         let target_row = row + 1;
         self.set_row_col(target_row, col);
@@ -553,6 +557,7 @@ impl Editor {
     pub fn set_text(&mut self, s: &str) {
         self.buf = s.chars().collect();
         self.cur = 0;
+        self.selection = None;
     }
 
     pub fn text(&self) -> String {

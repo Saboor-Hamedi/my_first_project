@@ -74,7 +74,9 @@ impl VimEngine {
                 ed.selection = Some(start);
                 ed.cur = end;
             }
-            VimSubMode::Insert => {}
+            VimSubMode::Insert => {
+                ed.clear_selection();
+            }
         }
     }
 
@@ -459,6 +461,22 @@ impl VimEngine {
                 self.set_mode(VimSubMode::Insert, ed);
                 true
             }
+            'v' => {
+                if self.mode == VimSubMode::Visual {
+                    self.set_mode(VimSubMode::Normal, ed);
+                } else {
+                    self.set_mode(VimSubMode::Visual, ed);
+                }
+                true
+            }
+            'V' => {
+                if self.mode == VimSubMode::VisualLine {
+                    self.set_mode(VimSubMode::Normal, ed);
+                } else {
+                    self.set_mode(VimSubMode::VisualLine, ed);
+                }
+                true
+            }
             _ => false,
         }
     }
@@ -495,6 +513,13 @@ mod tests {
 
         // Esc -> Normal
         assert!(vim.handle_key(&mut ed, &[], Key::Escape, Modifiers::default()));
+        assert_eq!(vim.mode, VimSubMode::Normal);
+        assert!(!ed.has_selection());
+
+        // 'v' -> Visual, then 'v' again -> Normal
+        assert!(vim.handle_char(&mut ed, &[], 'v'));
+        assert_eq!(vim.mode, VimSubMode::Visual);
+        assert!(vim.handle_char(&mut ed, &[], 'v'));
         assert_eq!(vim.mode, VimSubMode::Normal);
         assert!(!ed.has_selection());
     }
