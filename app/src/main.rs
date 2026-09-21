@@ -5,6 +5,7 @@ mod commands;
 mod db_worker;
 mod editor;
 mod fuzzy;
+mod hybrid;
 mod input;
 mod modals;
 mod mode;
@@ -16,6 +17,7 @@ mod sound;
 mod theme;
 mod view_editor;
 mod view_stats;
+mod vim;
 
 use app::App;
 use eframe::egui::{self, FontData, FontDefinitions, FontFamily};

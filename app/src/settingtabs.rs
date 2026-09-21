@@ -5,6 +5,7 @@ use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, Stroke};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingTab {
     Carets,
+    EditorMode,
     Sounds,
     Theme,
     Shortcuts,
@@ -12,8 +13,9 @@ pub enum SettingTab {
 }
 
 impl SettingTab {
-    pub const ALL: [SettingTab; 5] = [
+    pub const ALL: [SettingTab; 6] = [
         SettingTab::Carets,
+        SettingTab::EditorMode,
         SettingTab::Sounds,
         SettingTab::Theme,
         SettingTab::Shortcuts,
@@ -23,6 +25,7 @@ impl SettingTab {
     pub fn title(&self) -> &'static str {
         match self {
             SettingTab::Carets => "Carets",
+            SettingTab::EditorMode => "Editor Mode",
             SettingTab::Sounds => "Sounds",
             SettingTab::Theme => "Theme",
             SettingTab::Shortcuts => "Shortcuts",
@@ -33,6 +36,7 @@ impl SettingTab {
     pub fn icon(&self) -> &'static str {
         match self {
             SettingTab::Carets => "✦",
+            SettingTab::EditorMode => "⚡",
             SettingTab::Sounds => "♪",
             SettingTab::Theme => "◐",
             SettingTab::Shortcuts => "⌨",

@@ -272,6 +272,253 @@ impl Editor {
         }
     }
 
+    /// Returns previous word boundary index before `idx`.
+    pub fn prev_word_boundary(&self, idx: usize) -> usize {
+        let mut i = idx.min(self.buf.len());
+        while i > 0 && self.buf[i - 1].is_whitespace() {
+            i -= 1;
+        }
+        while i > 0 && !self.buf[i - 1].is_whitespace() {
+            i -= 1;
+        }
+        i
+    }
+
+    /// Returns next word boundary index after `idx`.
+    pub fn next_word_boundary(&self, idx: usize) -> usize {
+        let mut i = idx.min(self.buf.len());
+        while i < self.buf.len() && !self.buf[i].is_whitespace() {
+            i += 1;
+        }
+        while i < self.buf.len() && self.buf[i].is_whitespace() {
+            i += 1;
+        }
+        i
+    }
+
+    pub fn word_left(&mut self) {
+        self.cur = self.prev_word_boundary(self.cur);
+        self.selection = None;
+    }
+
+    pub fn word_right(&mut self) {
+        self.cur = self.next_word_boundary(self.cur);
+        self.selection = None;
+    }
+
+    pub fn word_left_select(&mut self) {
+        if self.selection.is_none() {
+            self.selection = Some(self.cur);
+        }
+        self.cur = self.prev_word_boundary(self.cur);
+    }
+
+    pub fn word_right_select(&mut self) {
+        if self.selection.is_none() {
+            self.selection = Some(self.cur);
+        }
+        self.cur = self.next_word_boundary(self.cur);
+    }
+
+    /// Ctrl+Delete: delete characters to the next word boundary
+    pub fn delete_word_forward(&mut self) {
+        if self.delete_selection() {
+            return;
+        }
+        if self.cur < self.buf.len() {
+            let next = self.next_word_boundary(self.cur);
+            if next > self.cur {
+                self.save_undo_snapshot();
+                self.buf.drain(self.cur..next);
+                self.selection = None;
+            }
+        }
+    }
+
+    /// Returns the start and end (including trailing newline) indices of the current line.
+    pub fn current_line_span(&self) -> (usize, usize) {
+        if self.buf.is_empty() {
+            return (0, 0);
+        }
+        let cur = self.cur.min(self.buf.len());
+        let mut start = cur;
+        while start > 0 && self.buf[start - 1] != '\n' {
+            start -= 1;
+        }
+        let mut end = cur;
+        while end < self.buf.len() && self.buf[end] != '\n' {
+            end += 1;
+        }
+        if end < self.buf.len() && self.buf[end] == '\n' {
+            end += 1;
+        }
+        (start, end)
+    }
+
+    /// Duplicate the current line directly below
+    pub fn duplicate_line(&mut self) {
+        self.save_undo_snapshot();
+        let (start, end) = self.current_line_span();
+        let line_chars: Vec<char> = self.buf[start..end].to_vec();
+        let has_newline = line_chars.last() == Some(&'\n');
+
+        let insert_pos = end;
+        if !has_newline {
+            self.buf.insert(insert_pos, '\n');
+            let mut next_pos = insert_pos + 1;
+            for c in line_chars {
+                self.buf.insert(next_pos, c);
+                next_pos += 1;
+            }
+            self.cur = next_pos;
+        } else {
+            let mut next_pos = insert_pos;
+            for c in line_chars {
+                self.buf.insert(next_pos, c);
+                next_pos += 1;
+            }
+            self.cur = next_pos.saturating_sub(1);
+        }
+        self.selection = None;
+    }
+
+    /// Move current line up (Alt+Up)
+    pub fn move_line_up(&mut self) {
+        let (cur_start, cur_end) = self.current_line_span();
+        if cur_start == 0 {
+            return;
+        }
+        self.save_undo_snapshot();
+        let prev_end = cur_start;
+        let mut prev_start = prev_end.saturating_sub(1);
+        while prev_start > 0 && self.buf[prev_start - 1] != '\n' {
+            prev_start -= 1;
+        }
+        let offset = self.cur.saturating_sub(cur_start);
+
+        let cur_line: Vec<char> = self.buf.drain(cur_start..cur_end).collect();
+        let mut insert_idx = prev_start;
+        for c in cur_line {
+            self.buf.insert(insert_idx, c);
+            insert_idx += 1;
+        }
+        self.cur = (prev_start + offset).min(self.buf.len());
+        self.selection = None;
+    }
+
+    /// Move current line down (Alt+Down)
+    pub fn move_line_down(&mut self) {
+        let (cur_start, cur_end) = self.current_line_span();
+        if cur_end >= self.buf.len() {
+            return;
+        }
+        self.save_undo_snapshot();
+        let next_start = cur_end;
+        let mut next_end = next_start;
+        while next_end < self.buf.len() && self.buf[next_end] != '\n' {
+            next_end += 1;
+        }
+        if next_end < self.buf.len() && self.buf[next_end] == '\n' {
+            next_end += 1;
+        }
+        let offset = self.cur.saturating_sub(cur_start);
+
+        let next_line: Vec<char> = self.buf.drain(next_start..next_end).collect();
+        let mut insert_idx = cur_start;
+        for c in next_line {
+            self.buf.insert(insert_idx, c);
+            insert_idx += 1;
+        }
+        self.cur = (insert_idx + offset).min(self.buf.len());
+        self.selection = None;
+    }
+
+    /// Deletes current line (for dd or line cut) and returns deleted string
+    pub fn delete_line(&mut self) -> String {
+        self.save_undo_snapshot();
+        let (start, end) = self.current_line_span();
+        let line_str: String = self.buf[start..end].iter().collect();
+        self.buf.drain(start..end);
+        self.cur = start.min(self.buf.len());
+        self.selection = None;
+        line_str
+    }
+
+    /// Yanks (copies) current line
+    pub fn yank_line(&self) -> String {
+        let (start, end) = self.current_line_span();
+        self.buf[start..end].iter().collect()
+    }
+
+    /// Smart Tab / Indent (4 spaces)
+    pub fn indent(&mut self) {
+        if let Some((start, end)) = self.selected_range() {
+            self.save_undo_snapshot();
+            let mut line_start = start;
+            while line_start > 0 && self.buf[line_start - 1] != '\n' {
+                line_start -= 1;
+            }
+            let mut i = line_start;
+            let mut added = 0;
+            while i <= end + added && i <= self.buf.len() {
+                if i == 0 || (i > 0 && i <= self.buf.len() && self.buf[i - 1] == '\n') {
+                    for _ in 0..4 {
+                        self.buf.insert(i, ' ');
+                        added += 1;
+                    }
+                    i += 4;
+                }
+                i += 1;
+            }
+            self.cur = (self.cur + 4).min(self.buf.len());
+        } else {
+            self.save_undo_snapshot();
+            for _ in 0..4 {
+                self.buf.insert(self.cur, ' ');
+                self.cur += 1;
+            }
+        }
+    }
+
+    /// Smart Shift+Tab / Dedent (removes up to 4 leading spaces)
+    pub fn dedent(&mut self) {
+        self.save_undo_snapshot();
+        let mut line_start = self.cur;
+        while line_start > 0 && self.buf[line_start - 1] != '\n' {
+            line_start -= 1;
+        }
+        let mut removed = 0;
+        while removed < 4 && line_start < self.buf.len() && self.buf[line_start] == ' ' {
+            self.buf.remove(line_start);
+            removed += 1;
+        }
+        self.cur = self.cur.saturating_sub(removed);
+        self.selection = None;
+    }
+
+    /// Auto-pairing / wrapping for quotes and brackets
+    pub fn auto_pair(&mut self, open: char, close: char) {
+        if let Some((start, end)) = self.selected_range() {
+            self.save_undo_snapshot();
+            let selected: Vec<char> = self.buf.drain(start..end).collect();
+            self.buf.insert(start, open);
+            let mut p = start + 1;
+            for c in selected {
+                self.buf.insert(p, c);
+                p += 1;
+            }
+            self.buf.insert(p, close);
+            self.cur = p + 1;
+            self.selection = None;
+        } else {
+            self.save_undo_snapshot();
+            self.buf.insert(self.cur, open);
+            self.buf.insert(self.cur + 1, close);
+            self.cur += 1;
+            self.selection = None;
+        }
+    }
+
     pub fn clear(&mut self) {
         if !self.buf.is_empty() {
             self.save_undo_snapshot();

@@ -14,6 +14,7 @@ pub fn render_bottom_dock(
     cursor_row: usize,
     cursor_col: usize,
     total_words: usize,
+    mode_badge: Option<&str>,
     accent: Color32,
     muted: Color32,
 ) {
@@ -37,6 +38,7 @@ pub fn render_bottom_dock(
 
     let cmd_y = dock_rect.min.y + 9.0;
     let cmd_x = dock_rect.min.x + content_left_margin;
+    let mut text_x = cmd_x;
 
     if in_command {
         // [:CMD] badge
@@ -57,14 +59,36 @@ pub fn render_bottom_dock(
             FontId::monospace(14.0),
             Color32::WHITE,
         );
-    } else if !status_msg.is_empty() && (now - status_time) < 3.0 {
-        painter.text(
-            pos2(cmd_x, cmd_y),
-            Align2::LEFT_TOP,
-            status_msg,
-            FontId::monospace(12.0),
-            muted,
-        );
+    } else {
+        if let Some(badge) = mode_badge {
+            let badge_w = 12.0 + badge.len() as f32 * 7.5;
+            let badge_rect = Rect::from_min_size(pos2(cmd_x, cmd_y - 2.0), vec2(badge_w, 20.0));
+            painter.rect(
+                badge_rect,
+                3.0,
+                Color32::from_rgb(18, 24, 20),
+                Stroke::new(1.0, accent),
+                egui::StrokeKind::Inside,
+            );
+            painter.text(
+                badge_rect.center(),
+                Align2::CENTER_CENTER,
+                badge,
+                FontId::monospace(10.5),
+                accent,
+            );
+            text_x += badge_w + 10.0;
+        }
+
+        if !status_msg.is_empty() && (now - status_time) < 3.0 {
+            painter.text(
+                pos2(text_x, cmd_y),
+                Align2::LEFT_TOP,
+                status_msg,
+                FontId::monospace(12.0),
+                muted,
+            );
+        }
     }
 
     // Right side stats: Line, Col, word count (responsive)

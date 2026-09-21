@@ -196,6 +196,10 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
     }
 
     if escape {
+        if app.editor_input_mode == crate::app::EditorInputMode::Vim && app.vim.mode != crate::vim::VimSubMode::Normal {
+            app.vim.set_mode(crate::vim::VimSubMode::Normal, &mut app.ed);
+            return true;
+        }
         if app.ed.has_selection() {
             app.ed.clear_selection();
             return true;
@@ -246,6 +250,29 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                             app.cmd_ed.insert(c);
                         }
                         app.last_char_time = now;
+                    } else if app.editor_input_mode == crate::app::EditorInputMode::Vim && app.mode == Mode::Normal {
+                        if s == ":" && app.vim.mode == crate::vim::VimSubMode::Normal {
+                            app.in_command = true;
+                            app.cmd_ed.clear();
+                        } else {
+                            for c in s.chars() {
+                                if c == '\r' || c == '\n' {
+                                    continue;
+                                }
+                                if app.vim.handle_char(&mut app.ed, c) {
+                                    typed = true;
+                                    app.sound.play();
+                                    app.last_char_time = now;
+                                    app.is_dirty = true;
+                                } else if app.vim.mode == crate::vim::VimSubMode::Insert {
+                                    app.ed.insert(c);
+                                    typed = true;
+                                    app.sound.play();
+                                    app.last_char_time = now;
+                                    app.is_dirty = true;
+                                }
+                            }
+                        }
                     } else if s == ":" && app.mode == Mode::Normal && app.ed.row_col().1 == 0 {
                         app.in_command = true;
                         app.cmd_ed.clear();
@@ -254,9 +281,15 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                             if c == '\n' || c == '\r' {
                                 continue;
                             }
-                            app.ed.insert(c);
-                            if app.mode == Mode::Normal {
-                                app.sound.play();
+                            if app.editor_input_mode == crate::app::EditorInputMode::Hybrid && app.hybrid.handle_char(&mut app.ed, c) {
+                                if app.mode == Mode::Normal {
+                                    app.sound.play();
+                                }
+                            } else {
+                                app.ed.insert(c);
+                                if app.mode == Mode::Normal {
+                                    app.sound.play();
+                                }
                             }
                         }
                         typed = true;
@@ -270,6 +303,25 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                     modifiers,
                     ..
                 } => {
+                    if !app.in_command && app.mode == Mode::Normal {
+                        if app.editor_input_mode == crate::app::EditorInputMode::Vim {
+                            if app.vim.handle_key(&mut app.ed, *key, *modifiers) {
+                                typed = true;
+                                app.sound.play();
+                                app.last_char_time = now;
+                                continue;
+                            }
+                        } else if app.editor_input_mode == crate::app::EditorInputMode::Hybrid {
+                            if app.hybrid.handle_key(&mut app.ed, *key, *modifiers) {
+                                typed = true;
+                                app.sound.play();
+                                app.last_char_time = now;
+                                app.is_dirty = true;
+                                continue;
+                            }
+                        }
+                    }
+
                     use egui::Key::*;
                     match key {
                         Enter if modifiers.ctrl => {

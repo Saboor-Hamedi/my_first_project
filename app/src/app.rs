@@ -7,6 +7,7 @@ use crate::editor::{Editor, VisualLine};
 use crate::fuzzy::{SearchItem, SearchResultKind};
 use crate::input::{handle_input, window_shortcuts};
 use crate::modals::{render_delete_confirm_modal, render_rename_modal, render_search_modal};
+use crate::hybrid::HybridEngine;
 use crate::mode::Mode;
 use crate::notes::{delete_active_note, quick_save_active_note, rename_active_note, update_search_results};
 use crate::settingpanel::{render_setting_panel, SettingPanelAction};
@@ -16,12 +17,19 @@ use crate::sound::{SoundEngine, SoundProfile};
 use crate::theme::{Theme, ThemeKind};
 use crate::view_editor::{render_editor_body, render_editor_header};
 use crate::view_stats::render_stats;
+use crate::vim::VimEngine;
 
 use chrono::Local;
 use core::{DailyActivity, Database, Note};
 use eframe::egui::{self, pos2, Color32, FontId, Rect};
 use std::sync::mpsc::Sender;
 use std::time::Duration;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EditorInputMode {
+    Hybrid,
+    Vim,
+}
 
 pub fn default_backup_dir() -> std::path::PathBuf {
     if let Some(proj) = directories::ProjectDirs::from("com", "mindforge", "mindforge") {
@@ -89,6 +97,11 @@ pub struct App {
     pub db: Option<Database>,
     pub db_tx: Sender<DbMsg>,
 
+    // Active editing mode (Hybrid vs Vim)
+    pub editor_input_mode: EditorInputMode,
+    pub hybrid: HybridEngine,
+    pub vim: VimEngine,
+
     // Daily Activity & Writing Story tracking
     pub pending_secs: f32,
     pub pending_keys: u32,
@@ -147,6 +160,9 @@ impl App {
             last_saved_time: 0.0,
             db,
             db_tx: tx,
+            editor_input_mode: EditorInputMode::Hybrid,
+            hybrid: HybridEngine::new(),
+            vim: VimEngine::new(),
             pending_secs: 0.0,
             pending_keys: 0,
             pending_words: 0,
@@ -200,6 +216,13 @@ impl App {
             }
             if let Ok(Some(b)) = db.get_setting("backup_dir") {
                 self.backup_dir = b;
+            }
+            if let Ok(Some(m)) = db.get_setting("editor_mode") {
+                if m == "vim" {
+                    self.editor_input_mode = EditorInputMode::Vim;
+                } else {
+                    self.editor_input_mode = EditorInputMode::Hybrid;
+                }
             }
         }
     }
@@ -388,6 +411,10 @@ impl App {
         // Active View rendering delegated to dedicated view modules
         match self.mode {
             Mode::Normal => {
+                let original_caret_kind = self.caret.kind;
+                if self.editor_input_mode == EditorInputMode::Vim && self.vim.mode == crate::vim::VimSubMode::Insert {
+                    self.caret.kind = crate::caret::CaretKind::Beam;
+                }
                 render_editor_body(
                     ui,
                     &painter,
@@ -406,6 +433,7 @@ impl App {
                     typed,
                     self.settings_open || self.search_open,
                 );
+                self.caret.kind = original_caret_kind;
             }
             Mode::Stats => {
                 let today_str = Local::now().date_naive().format("%Y-%m-%d").to_string();
@@ -426,8 +454,12 @@ impl App {
             }
         }
 
-        // Bottom Dock (No shortcut clutter! Just active status feedback and word stats)
+        // Bottom Dock (Shows active editing mode badge, status feedback, and word stats)
         let (row, col) = self.ed.visual_row_col(&self.visual_lines);
+        let mode_badge = match self.editor_input_mode {
+            EditorInputMode::Vim => Some(self.vim.mode_label()),
+            EditorInputMode::Hybrid => Some("HYBRID"),
+        };
         render_bottom_dock(
             &painter,
             cmd_bar_rect,
@@ -440,6 +472,7 @@ impl App {
             row + 1,
             col + 1,
             self.ed.text().split_whitespace().count(),
+            mode_badge,
             self.theme.accent,
             self.theme.muted,
         );
@@ -559,6 +592,7 @@ impl App {
                 &painter,
                 panel_rect,
                 self.active_setting_tab,
+                &mut self.editor_input_mode,
                 &mut self.caret,
                 &mut self.sound,
                 &mut self.theme,

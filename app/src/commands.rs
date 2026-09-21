@@ -23,9 +23,76 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
     match cmd.as_str() {
         "help" => {
             app.set_status(
-                ":w (save) | :clear | :backup | :export [file] | :import <file> | :r (rename) | :d (delete)",
+                ":w | :clear | :backup | :vim [on/off] | :mode [hybrid/vim] | :export | :import",
                 now,
             );
+        }
+        "vim" => {
+            match args.to_lowercase().trim() {
+                "on" | "enable" | "1" => {
+                    app.editor_input_mode = crate::app::EditorInputMode::Vim;
+                    app.vim.set_mode(crate::vim::VimSubMode::Normal, &mut app.ed);
+                    let _ = app.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+                        key: "editor_mode".into(),
+                        val: "vim".into(),
+                    });
+                    app.set_status("Vim Mode Enabled (-- NORMAL --)", now);
+                }
+                "off" | "disable" | "0" => {
+                    app.editor_input_mode = crate::app::EditorInputMode::Hybrid;
+                    let _ = app.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+                        key: "editor_mode".into(),
+                        val: "hybrid".into(),
+                    });
+                    app.set_status("Hybrid Mode Enabled (Modern IDE)", now);
+                }
+                _ => {
+                    if app.editor_input_mode == crate::app::EditorInputMode::Vim {
+                        app.editor_input_mode = crate::app::EditorInputMode::Hybrid;
+                        let _ = app.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+                            key: "editor_mode".into(),
+                            val: "hybrid".into(),
+                        });
+                        app.set_status("Switched to Hybrid Mode (Modern IDE)", now);
+                    } else {
+                        app.editor_input_mode = crate::app::EditorInputMode::Vim;
+                        app.vim.set_mode(crate::vim::VimSubMode::Normal, &mut app.ed);
+                        let _ = app.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+                            key: "editor_mode".into(),
+                            val: "vim".into(),
+                        });
+                        app.set_status("Switched to Vim Mode (-- NORMAL --)", now);
+                    }
+                }
+            }
+        }
+        "mode" => {
+            match args.to_lowercase().trim() {
+                "vim" => {
+                    app.editor_input_mode = crate::app::EditorInputMode::Vim;
+                    app.vim.set_mode(crate::vim::VimSubMode::Normal, &mut app.ed);
+                    let _ = app.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+                        key: "editor_mode".into(),
+                        val: "vim".into(),
+                    });
+                    app.set_status("Vim Mode Active (-- NORMAL --)", now);
+                }
+                "hybrid" => {
+                    app.editor_input_mode = crate::app::EditorInputMode::Hybrid;
+                    let _ = app.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+                        key: "editor_mode".into(),
+                        val: "hybrid".into(),
+                    });
+                    app.set_status("Hybrid Mode Active (Modern IDE)", now);
+                }
+                _ => {
+                    let current = match app.editor_input_mode {
+                        crate::app::EditorInputMode::Hybrid => "Hybrid (Modern IDE)",
+                        crate::app::EditorInputMode::Vim => "Vim (Modal Engine)",
+                    };
+                    app.set_status(format!("Mode: {} (type :vim or :mode vim/hybrid)", current), now);
+                }
+            }
         }
         "w" | "save" => {
             app.quick_save_active_note(now);
