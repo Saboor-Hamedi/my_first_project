@@ -54,17 +54,40 @@ Pressing `Ctrl+D` computes the active line boundary using `ed.current_line_span(
 
 ---
 
-## ⚡ Vim Engine (`app/src/vim/mod.rs`)
+## ⚡ Vim Engine (`app/src/vim/`)
 
-The Vim Engine provides modal editing without sacrificing GUI smoothness:
+The Vim Engine provides modal editing organized into a decoupled, object-oriented module hierarchy:
+
+- **`types.rs`**: Core enums (`VimSubMode`, `VimMotion`, `VimOperator`, `TextObjectKind`, `VimAction`).
+- **`keymap.rs`**: Configurable keymap registry decoupling key bindings from actions for future user customization.
+- **`motions.rs`**: Executes motions with numeric count multipliers (e.g. `3j`, `5w`, `10k`).
+- **`text_objects.rs`**: Nested delimiter and word matching for `ci"`, `di(`, `da{`, `yaw`, etc.
+- **`search.rs`**: In-buffer search engine (`/` and `?`) with live editor highlights and `n`/`N` wrapping navigation.
+- **`mod.rs`**: `VimEngine` coordinator managing state transitions, registers, and bottom bar status feedback.
+
+### Motion Multipliers
+Typing a count before a motion (e.g., `3j`, `5w`, `2dd`, `3yy`, `2p`) executes the motion or operator repeated times. The status badge displays `COUNT: X` during accumulation.
+
+### In-Buffer Search (`/` and `?`)
+- Typing `/` (forward) or `?` (backward) in Normal mode opens search input in the bottom bar with live match counter `(X matches)`.
+- Live matches are highlighted directly in the editor buffer across all visible lines.
+- `Enter` confirms and jumps to match; `Escape` cancels and restores prior cursor position.
+- `n` and `N` cycle forward and backward through matches.
+
+### Text Objects
+- Supports inner (`i`) and around (`a`) scopes for quotes (`"`, `'`, ``` ` ```), brackets (`()`, `{}`, `[]`, `<>`), and words (`w`).
+- `ci"` deletes content inside quotes and switches to Insert mode.
+- `di(` deletes content within matching parentheses.
+- `da{` deletes braces and their contents.
+- `vi"` selects the inner text object in Visual mode.
 
 ### Dynamic Caret Morphing
 - When entering **Normal Mode**, the caret dynamically morphs into a solid **Block Caret** matching the current character dimensions.
 - When entering **Insert Mode** (`i`, `a`, `I`, `A`, `o`, `O`), the caret smoothly morphs into an elegant vertical **Beam Caret**.
 
 ### Visual Mode & Gap Highlighting
-- In Visual mode (`v`) or Visual Line mode (`V`), moving with `j` and `k` uses `ed.down_select()` and `ed.up_select()` so that the initial anchor is strictly preserved.
-- When navigating across empty lines (`\n\n`), the selection renderer explicitly paints empty line gaps so multiline paragraph selections are visually continuous.
+- In Visual mode (`v`) or Visual Line mode (`V`), moving with `j` and `k` uses visual line selection so the initial anchor is strictly preserved.
+- When navigating across empty lines (`\n\n`), the selection renderer highlights empty line gaps when the active selection spans across them.
 
 ---
 
