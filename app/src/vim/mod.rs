@@ -798,6 +798,49 @@ mod tests {
     }
 
     #[test]
+    fn test_vim_visual_text_objects() {
+        // ── Test 1: vi' with cursor INSIDE the quotes ──────────────────────
+        let mut ed = Editor::new();
+        ed.insert_str("hello 'world' end");
+        ed.cur = 8; // on 'o' inside 'world'
+        let mut vim = VimEngine::new();
+
+        assert!(vim.handle_char(&mut ed, &[], 'v'));
+        assert_eq!(vim.mode, VimSubMode::Visual);
+        assert!(vim.handle_char(&mut ed, &[], 'i'));
+        assert!(vim.handle_char(&mut ed, &[], '\''));
+        // Should select "world" (positions 7..12)
+        assert!(ed.has_selection(), "vi' from inside quotes must produce a selection");
+        assert_eq!(ed.selected_text().unwrap(), "world");
+
+        // ── Test 2: vi' with cursor BEFORE the quotes ───────────────────────
+        let mut ed2 = Editor::new();
+        ed2.insert_str("hello 'world' end");
+        ed2.cur = 2; // on 'l', before 'world'
+        let mut vim2 = VimEngine::new();
+
+        assert!(vim2.handle_char(&mut ed2, &[], 'v'));
+        assert!(vim2.handle_char(&mut ed2, &[], 'i'));
+        assert!(vim2.handle_char(&mut ed2, &[], '\''));
+        assert!(ed2.has_selection(), "vi' from before quotes must produce a selection");
+        assert_eq!(ed2.selected_text().unwrap(), "world");
+
+        // ── Test 3: vi[ with cursor INSIDE brackets ─────────────────────────
+        let mut ed3 = Editor::new();
+        ed3.insert_str("arr[one, two]");
+        ed3.cur = 6; // on 'n' inside [one, two]
+        let mut vim3 = VimEngine::new();
+
+        assert!(vim3.handle_char(&mut ed3, &[], 'v'));
+        assert!(vim3.handle_char(&mut ed3, &[], 'i'));
+        assert!(vim3.handle_char(&mut ed3, &[], '['));
+        assert!(ed3.has_selection(), "vi[ from inside brackets must produce a selection");
+        assert_eq!(ed3.selected_text().unwrap(), "one, two");
+    }
+
+
+
+    #[test]
     fn test_vim_bracket_text_objects() {
         let mut ed = Editor::new();
         ed.insert_str("fn call(param1, param2);");

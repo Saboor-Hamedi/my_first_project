@@ -45,8 +45,11 @@ pub fn handle_editor_text(app: &mut App, s: &str, now: f64) -> bool {
                 if c == '\r' || c == '\n' {
                     continue;
                 }
-                // When searching, all chars must reach handle_char — skip read-only filter.
-                if !app.vim.is_searching() {
+                // Only block editing chars when Vim is in Normal sub-mode.
+                // In Visual, Search, or operator-pending modes, chars like 'i', 'a', 'd'
+                // are part of text object sequences (vi', va", diw) and must pass through.
+                let is_vim_normal = app.vim.mode == VimSubMode::Normal;
+                if is_vim_normal && !app.vim.is_searching() {
                     match c {
                         'i' | 'I' | 'a' | 'A' | 'o' | 'O' | 's' | 'S' | 'c' | 'C' | 'r' | 'R' | 'd' | 'D' | 'x' | 'X' | 'p' | 'P' | 'u' => {
                             app.set_status("📖 Documentation is read-only (navigate with j, k, w, b, gg, G, or /)", now);
