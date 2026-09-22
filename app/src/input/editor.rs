@@ -45,12 +45,15 @@ pub fn handle_editor_text(app: &mut App, s: &str, now: f64) -> bool {
                 if c == '\r' || c == '\n' {
                     continue;
                 }
-                match c {
-                    'i' | 'I' | 'a' | 'A' | 'o' | 'O' | 's' | 'S' | 'c' | 'C' | 'r' | 'R' | 'd' | 'D' | 'x' | 'X' | 'p' | 'P' | 'u' => {
-                        app.set_status("📖 Documentation is read-only (navigate with j, k, w, b, gg, G, or /)", now);
-                        continue;
+                // When searching, all chars must reach handle_char — skip read-only filter.
+                if !app.vim.is_searching() {
+                    match c {
+                        'i' | 'I' | 'a' | 'A' | 'o' | 'O' | 's' | 'S' | 'c' | 'C' | 'r' | 'R' | 'd' | 'D' | 'x' | 'X' | 'p' | 'P' | 'u' => {
+                            app.set_status("📖 Documentation is read-only (navigate with j, k, w, b, gg, G, or /)", now);
+                            continue;
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
                 app.vim.pending_keys_time = now;
                 if app.vim.handle_char(&mut app.doc_ed, &app.visual_lines, c) {
@@ -74,6 +77,7 @@ pub fn handle_editor_text(app: &mut App, s: &str, now: f64) -> bool {
                 }
             }
             return typed;
+
         } else {
             let mut typed = false;
             for c in s.chars() {
