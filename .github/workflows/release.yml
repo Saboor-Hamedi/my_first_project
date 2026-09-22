@@ -8,245 +8,334 @@ on:
 permissions:
   contents: write
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Each OS gets its own native installer:
+#   Windows  →  mindforge-v{ver}-windows-setup.exe   (NSIS wizard, Next/Next/Finish)
+#   macOS    →  mindforge-v{ver}-macos.dmg            (drag-to-Applications)
+#   Linux    →  mindforge-v{ver}-linux.deb            (apt install / double-click)
+# ──────────────────────────────────────────────────────────────────────────────
+
 jobs:
-  build:
-    name: Build ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # ── Windows ──────────────────────────────────────────────────────────
-          - name: Windows x64
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact_ext: .exe
-            archive_ext: .zip
-            archive_cmd: zip
-
-          # ── macOS Intel ──────────────────────────────────────────────────────
-          - name: macOS Intel
-            os: macos-latest
-            target: x86_64-apple-darwin
-            artifact_ext: ""
-            archive_ext: .tar.gz
-            archive_cmd: tar
-
-          # ── macOS Apple Silicon ───────────────────────────────────────────────
-          - name: macOS Apple Silicon
-            os: macos-latest
-            target: aarch64-apple-darwin
-            artifact_ext: ""
-            archive_ext: .tar.gz
-            archive_cmd: tar
-
-          # ── Linux x64 ────────────────────────────────────────────────────────
-          - name: Linux x64
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            artifact_ext: ""
-            archive_ext: .tar.gz
-            archive_cmd: tar
-
+  # ── Tests first ─────────────────────────────────────────────────────────────
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      # ── Linux system dependencies ─────────────────────────────────────────
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Linux build deps
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y \
-            libgtk-3-dev \
-            libxdo-dev \
-            libxcb1-dev \
-            libxrandr-dev \
-            libxss-dev \
-            libasound2-dev \
-            pkg-config
-
-      # ── Cache cargo registry + build artifacts ───────────────────────────
-      - name: Cache Cargo
+          sudo apt-get install -y libgtk-3-dev libxdo-dev libxcb1-dev \
+            libxrandr-dev libxss-dev libasound2-dev pkg-config
+      - name: Cache
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          key: test-${{ hashFiles('**/Cargo.lock') }}
+      - run: cargo test --workspace
 
-      # ── Build ─────────────────────────────────────────────────────────────
-      - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }} -p app
+  # ── Windows NSIS installer (.exe wizard) ────────────────────────────────────
+  build-windows:
+    name: Windows installer
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
 
-      # ── Package ───────────────────────────────────────────────────────────
-      - name: Get version from tag
-        id: version
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: windows-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --release --target x86_64-pc-windows-msvc -p app
+
+      - name: Get version
+        id: ver
         shell: bash
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Package (Windows)
-        if: runner.os == 'Windows'
+      - name: Prepare binary
         shell: pwsh
         run: |
-          $ver = "${{ steps.version.outputs.VERSION }}"
-          $name = "mindforge-v${ver}-x86_64-windows"
-          mkdir dist
-          Copy-Item "target/${{ matrix.target }}/release/app.exe" "dist/mindforge.exe"
-          Compress-Archive -Path dist/mindforge.exe -DestinationPath "dist/${name}.zip"
-          echo "ASSET=dist/${name}.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "ASSET_NAME=${name}.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item "target\x86_64-pc-windows-msvc\release\app.exe" "dist\mindforge.exe"
 
-      - name: Package (macOS / Linux)
-        if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          ver="${{ steps.version.outputs.VERSION }}"
-          os_id=$(echo "${{ matrix.target }}" | sed 's/x86_64/x64/' | sed 's/aarch64/arm64/' | sed 's/-unknown-linux-gnu/-linux/' | sed 's/-apple-darwin/-macos/')
-          name="mindforge-v${ver}-${os_id}"
-          mkdir dist
-          cp "target/${{ matrix.target }}/release/app" "dist/mindforge"
-          chmod +x dist/mindforge
-          tar -czf "dist/${name}.tar.gz" -C dist mindforge
-          echo "ASSET=dist/${name}.tar.gz" >> "$GITHUB_ENV"
-          echo "ASSET_NAME=${name}.tar.gz" >> "$GITHUB_ENV"
-
-      # ── Build Windows NSIS Installer (optional, best-effort) ─────────────
-      - name: Build NSIS Installer (Windows)
-        if: runner.os == 'Windows'
+      - name: Install NSIS
         shell: pwsh
-        continue-on-error: true
-        run: |
-          $ver = "${{ steps.version.outputs.VERSION }}"
-          choco install nsis -y --no-progress 2>$null | Out-Null
+        run: choco install nsis -y --no-progress
 
-          $nsiContent = @"
-          !define APPNAME "MindForge"
-          !define VERSION "$ver"
-          !define EXE "mindforge.exe"
-          OutFile "dist\mindforge-v${ver}-installer-windows.exe"
-          InstallDir "\$PROGRAMFILES64\MindForge"
-          Section
-            SetOutPath "\$INSTDIR"
+      - name: Write installer.nsi
+        shell: pwsh
+        env:
+          VER: ${{ steps.ver.outputs.VERSION }}
+        run: |
+          $ver = $env:VER
+          $out = "dist\mindforge-v${ver}-windows-setup.exe"
+          $nsi = @"
+          Unicode True
+          !define APPNAME    "MindForge"
+          !define APPVER     "$ver"
+          !define PUBLISHER  "Saboor Hamedi"
+          !define WEBSITE    "https://github.com/Saboor-Hamedi/my_first_project"
+
+          Name "`${APPNAME} `${APPVER}"
+          OutFile "$out"
+          InstallDir "`$PROGRAMFILES64\MindForge"
+          InstallDirRegKey HKLM "Software\MindForge" "InstallDir"
+          RequestExecutionLevel admin
+          SetCompressor /SOLID lzma
+
+          ; ── Wizard pages ────────────────────────────────────────────────────
+          !include "MUI2.nsh"
+          !insertmacro MUI_PAGE_WELCOME
+          !insertmacro MUI_PAGE_LICENSE "LICENSE"
+          !insertmacro MUI_PAGE_DIRECTORY
+          !insertmacro MUI_PAGE_INSTFILES
+          !insertmacro MUI_PAGE_FINISH
+          !insertmacro MUI_UNPAGE_CONFIRM
+          !insertmacro MUI_UNPAGE_INSTFILES
+          !insertmacro MUI_LANGUAGE "English"
+
+          ; ── Install ─────────────────────────────────────────────────────────
+          Section "MindForge" SEC01
+            SectionIn RO
+            SetOutPath "`$INSTDIR"
             File "dist\mindforge.exe"
-            CreateShortCut "\$DESKTOP\MindForge.lnk" "\$INSTDIR\mindforge.exe"
-            WriteUninstaller "\$INSTDIR\Uninstall.exe"
+
+            CreateDirectory "`$SMPROGRAMS\MindForge"
+            CreateShortCut  "`$SMPROGRAMS\MindForge\MindForge.lnk"           "`$INSTDIR\mindforge.exe"
+            CreateShortCut  "`$SMPROGRAMS\MindForge\Uninstall MindForge.lnk" "`$INSTDIR\Uninstall.exe"
+            CreateShortCut  "`$DESKTOP\MindForge.lnk"                        "`$INSTDIR\mindforge.exe"
+
+            WriteRegStr   HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MindForge" "DisplayName"     "`${APPNAME}"
+            WriteRegStr   HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MindForge" "DisplayVersion"  "`${APPVER}"
+            WriteRegStr   HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MindForge" "Publisher"       "`${PUBLISHER}"
+            WriteRegStr   HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MindForge" "URLInfoAbout"    "`${WEBSITE}"
+            WriteRegStr   HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MindForge" "InstallLocation" "`$INSTDIR"
+            WriteRegStr   HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MindForge" "UninstallString" "`$INSTDIR\Uninstall.exe"
+            WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MindForge" "NoModify" 1
+            WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MindForge" "NoRepair"  1
+
+            WriteUninstaller "`$INSTDIR\Uninstall.exe"
           SectionEnd
+
+          ; ── Uninstall ────────────────────────────────────────────────────────
           Section "Uninstall"
-            Delete "\$INSTDIR\mindforge.exe"
-            Delete "\$INSTDIR\Uninstall.exe"
-            Delete "\$DESKTOP\MindForge.lnk"
-            RMDir "\$INSTDIR"
+            Delete "`$INSTDIR\mindforge.exe"
+            Delete "`$INSTDIR\Uninstall.exe"
+            RMDir  "`$INSTDIR"
+            Delete "`$SMPROGRAMS\MindForge\MindForge.lnk"
+            Delete "`$SMPROGRAMS\MindForge\Uninstall MindForge.lnk"
+            RMDir  "`$SMPROGRAMS\MindForge"
+            Delete "`$DESKTOP\MindForge.lnk"
+            DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MindForge"
+            DeleteRegKey HKLM "Software\MindForge"
           SectionEnd
           "@
-          $nsiContent | Out-File -FilePath "installer.nsi" -Encoding ASCII
-          makensis installer.nsi
-          if (Test-Path "dist\mindforge-v${ver}-installer-windows.exe") {
-            echo "NSIS_ASSET=dist/mindforge-v${ver}-installer-windows.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
-          }
+          $nsi | Out-File -FilePath "installer.nsi" -Encoding UTF8
 
-      # ── Build .deb package (Linux) ────────────────────────────────────────
-      - name: Build .deb (Linux)
-        if: runner.os == 'Linux'
-        shell: bash
-        continue-on-error: true
+      - name: Build NSIS installer
+        shell: pwsh
+        run: makensis installer.nsi
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-setup
+          path: dist/mindforge-v${{ steps.ver.outputs.VERSION }}-windows-setup.exe
+
+  # ── macOS DMG (drag-to-Applications) ────────────────────────────────────────
+  build-macos:
+    name: macOS DMG (${{ matrix.arch }})
+    needs: test
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: Intel
+            target: x86_64-apple-darwin
+            suffix: macos-intel
+          - arch: Apple Silicon
+            target: aarch64-apple-darwin
+            suffix: macos-arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }} -p app
+
+      - name: Get version
+        id: ver
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build .app + .dmg
         run: |
-          ver="${{ steps.version.outputs.VERSION }}"
-          name="mindforge_${ver}_amd64"
-          mkdir -p "deb_root/${name}/DEBIAN"
-          mkdir -p "deb_root/${name}/usr/bin"
-          mkdir -p "deb_root/${name}/usr/share/applications"
-          cp "target/${{ matrix.target }}/release/app" "deb_root/${name}/usr/bin/mindforge"
-          chmod +x "deb_root/${name}/usr/bin/mindforge"
-          cat > "deb_root/${name}/DEBIAN/control" <<EOF
+          ver="${{ steps.ver.outputs.VERSION }}"
+          mkdir -p dist staging
+
+          # ── .app bundle ──────────────────────────────────────────────────────
+          app="staging/MindForge.app"
+          mkdir -p "${app}/Contents/MacOS" "${app}/Contents/Resources"
+          cp "target/${{ matrix.target }}/release/app" "${app}/Contents/MacOS/MindForge"
+          chmod +x "${app}/Contents/MacOS/MindForge"
+
+          cat > "${app}/Contents/Info.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>CFBundleExecutable</key><string>MindForge</string>
+            <key>CFBundleIdentifier</key><string>app.mindforge.MindForge</string>
+            <key>CFBundleName</key><string>MindForge</string>
+            <key>CFBundleDisplayName</key><string>MindForge</string>
+            <key>CFBundleVersion</key><string>${ver}</string>
+            <key>CFBundleShortVersionString</key><string>${ver}</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict></plist>
+          PLIST
+
+          # ── Symlink to /Applications so DMG has drag target ─────────────────
+          ln -s /Applications "staging/Applications"
+
+          # ── Create DMG from staging folder ───────────────────────────────────
+          dmg="dist/mindforge-v${ver}-${{ matrix.suffix }}.dmg"
+          hdiutil create \
+            -volname "MindForge ${ver}" \
+            -srcfolder staging \
+            -ov \
+            -format UDZO \
+            "${dmg}"
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.suffix }}
+          path: dist/mindforge-v${{ steps.ver.outputs.VERSION }}-${{ matrix.suffix }}.dmg
+
+  # ── Linux .deb (apt install / double-click in file manager) ─────────────────
+  build-linux:
+    name: Linux .deb
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build deps
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y libgtk-3-dev libxdo-dev libxcb1-dev \
+            libxrandr-dev libxss-dev libasound2-dev pkg-config
+
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: linux-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        run: cargo build --release --target x86_64-unknown-linux-gnu -p app
+
+      - name: Get version
+        id: ver
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build .deb
+        run: |
+          ver="${{ steps.ver.outputs.VERSION }}"
+          pkg="mindforge_${ver}_amd64"
+          mkdir -p dist "deb/${pkg}/DEBIAN" "deb/${pkg}/usr/bin" \
+                        "deb/${pkg}/usr/share/applications" \
+                        "deb/${pkg}/usr/share/doc/mindforge"
+
+          cp target/x86_64-unknown-linux-gnu/release/app "deb/${pkg}/usr/bin/mindforge"
+          chmod +x "deb/${pkg}/usr/bin/mindforge"
+
+          cat > "deb/${pkg}/DEBIAN/control" <<EOF
           Package: mindforge
           Version: ${ver}
           Section: editors
           Priority: optional
           Architecture: amd64
           Maintainer: Saboor Hamedi <saboor@mindforge.app>
-          Description: MindForge — A distraction-free Vim-powered note editor
+          Homepage: https://github.com/Saboor-Hamedi/my_first_project
+          Description: MindForge
+           A distraction-free, Vim-powered note editor for focused writing.
           EOF
-          cat > "deb_root/${name}/usr/share/applications/mindforge.desktop" <<EOF
+
+          cat > "deb/${pkg}/usr/share/applications/mindforge.desktop" <<EOF
           [Desktop Entry]
           Name=MindForge
+          Comment=Distraction-free Vim-powered note editor
           Exec=mindforge
           Icon=mindforge
           Type=Application
           Categories=Utility;TextEditor;
+          Terminal=false
+          StartupNotify=true
           EOF
-          dpkg-deb --build "deb_root/${name}" "dist/${name}.deb" && \
-            echo "DEB_ASSET=dist/${name}.deb" >> "$GITHUB_ENV" || true
 
-      # ── macOS .app bundle (optional, best-effort) ─────────────────────────
-      - name: Build .app bundle (macOS)
-        if: runner.os == 'macOS'
-        shell: bash
-        continue-on-error: true
-        run: |
-          ver="${{ steps.version.outputs.VERSION }}"
-          app="dist/MindForge.app"
-          mkdir -p "${app}/Contents/MacOS"
-          mkdir -p "${app}/Contents/Resources"
-          cp "target/${{ matrix.target }}/release/app" "${app}/Contents/MacOS/mindforge"
-          chmod +x "${app}/Contents/MacOS/mindforge"
-          cat > "${app}/Contents/Info.plist" <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>CFBundleExecutable</key><string>mindforge</string>
-            <key>CFBundleIdentifier</key><string>app.mindforge.MindForge</string>
-            <key>CFBundleName</key><string>MindForge</string>
-            <key>CFBundleVersion</key><string>${ver}</string>
-            <key>CFBundlePackageType</key><string>APPL</string>
-          </dict>
-          </plist>
-          EOF
-          cd dist && zip -r "MindForge-v${ver}-${{ matrix.target }}.zip" MindForge.app && cd -
-          echo "APP_ASSET=dist/MindForge-v${ver}-${{ matrix.target }}.zip" >> "$GITHUB_ENV" || true
+          cp LICENSE "deb/${pkg}/usr/share/doc/mindforge/copyright" 2>/dev/null || true
 
-      # ── Create / publish GitHub Release ──────────────────────────────────
-      - name: Upload Release Assets
+          dpkg-deb --build "deb/${pkg}" "dist/${pkg}.deb"
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-deb
+          path: dist/mindforge_${{ steps.ver.outputs.VERSION }}_amd64.deb
+
+  # ── Collect everything and publish GitHub Release ───────────────────────────
+  release:
+    name: Publish Release
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all installers
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Show what we're releasing
+        run: ls -lh release-assets/
+
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: "MindForge ${{ github.ref_name }}"
           generate_release_notes: true
-          files: |
-            ${{ env.ASSET }}
-            ${{ env.NSIS_ASSET }}
-            ${{ env.DEB_ASSET }}
-            ${{ env.APP_ASSET }}
+          files: release-assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # ── Workspace tests (separate job, runs in parallel with builds) ──────────
-  test:
-    name: Workspace tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y \
-            libgtk-3-dev libxdo-dev libxcb1-dev libxrandr-dev \
-            libxss-dev libasound2-dev pkg-config
-      - name: Cache Cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ubuntu-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Run workspace tests
-        run: cargo test --workspace
