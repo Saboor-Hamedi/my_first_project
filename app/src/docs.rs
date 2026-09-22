@@ -37,6 +37,12 @@ pub const BRAIN_DOCS: &[DocItem] = &[
         content: include_str!("../../brain/vim.md"),
     },
     DocItem {
+        id: "motions",
+        title: "Motions",
+        filename: "motions.md",
+        content: include_str!("../../brain/motions.md"),
+    },
+    DocItem {
         id: "features",
         title: "Features",
         filename: "features.md",
@@ -358,7 +364,7 @@ mod tests {
 
     #[test]
     fn test_brain_docs_embedded_and_valid() {
-        assert_eq!(BRAIN_DOCS.len(), 5);
+        assert_eq!(BRAIN_DOCS.len(), 6);
         for doc in BRAIN_DOCS {
             assert!(!doc.id.is_empty());
             assert!(!doc.title.is_empty());
