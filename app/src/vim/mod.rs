@@ -146,7 +146,14 @@ impl VimEngine {
 
     /// Clears pending keys on timeout (~1s timeoutlen).
     pub fn update_hud(&mut self, now: f64) {
-        if !self.pending_keys.is_empty() && (now - self.pending_keys_time) > 1.0 {
+        let has_pending = !self.pending_keys.is_empty()
+            || self.pending_op.is_some()
+            || self.pending_prefix.is_some()
+            || self.pending_text_object_scope.is_some()
+            || self.pending_register.is_some()
+            || self.count_accumulator.is_some();
+
+        if has_pending && (now - self.pending_keys_time) > 1.0 {
             self.pending_keys.clear();
             self.pending_op = None;
             self.pending_text_object_scope = None;
@@ -465,6 +472,10 @@ impl VimEngine {
                 self.pending_keys.clear();
                 return true;
             }
+            // Unknown second key after 'g' — clear pending and re-process 'c' normally
+            // below instead of silently dropping it (prevents vim getting stuck).
+            self.pending_keys.clear();
+            // fall through — 'c' will be processed by the sections below
         }
         if c == 'g' {
             self.pending_prefix = Some('g');
