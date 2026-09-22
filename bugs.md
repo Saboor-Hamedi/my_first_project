@@ -1,70 +1,63 @@
-Here is the direct analysis of the codebase, the exact files that are bloated, and how to split them into clean, modular submodules.
+# MindForge — Future Roadmap & Architecture Plan
 
 ---
 
-### The 5 Biggest Files Needing Modularization
-
-| File | Size / Lines | The Problem | Recommended Modularization |
-|---|---|---|---|
-| [**`app/src/settingpanel.rs`**](file:///b:/rust/my_first_project/app/src/settingpanel.rs) | **54.6 KB** (~1,262 lines) | Houses all 7 settings tabs inside a single massive function with embedded UI drawing logic for every category. | Divide into a `settings/` submodule with 1 file per tab. |
-| [**`app/src/app.rs`**](file:///b:/rust/my_first_project/app/src/app.rs) | **34.9 KB** (~943 lines) | God-object handling state, frame layout, database reloading, modal dispatch, and activity tracking all in one file. | Separate app state/lifecycle, modal dispatch, and activity flushing. |
-| [**`app/src/input.rs`**](file:///b:/rust/my_first_project/app/src/input.rs) | **28.4 KB** (~690 lines) | Mixes global hotkeys, clipboard operations, command line parsing, Vim routing, and normal typing in one giant loop. | Split into global shortcuts, mode dispatcher, and editor key routing. |
-| [**`app/src/view_editor.rs`**](file:///b:/rust/my_first_project/app/src/view_editor.rs) | **26.3 KB** (~655 lines) | Combines editor rendering, smooth scrolling, selection logic, AND a **360-line custom font ligature renderer**. | Extract the ligature engine into its own module. |
-| [**`core/src/db.rs`**](file:///b:/rust/my_first_project/core/src/db.rs) | **22.3 KB** (~671 lines) | Contains all SQLite operations for flashcards, notes, decisions, daily activity, and app settings in one single `Database` impl. | Split queries into trait/sub-impl files by domain. |
+## 🎯 Vision
+Transform MindForge from a distraction-free notebook into a high-performance, keyboard-first, local-native knowledge workstation and lightweight code/note editor that can rival GUI-first Vim/Neovim experiences.
 
 ---
 
-### Exact Breakdown: How to Divide Them
-
-#### 1. [`settingpanel.rs`](file:///b:/rust/my_first_project/app/src/settings/) (1,262 lines) — [COMPLETED]
-Modularized into `app/src/settings/`:
-- `tabs.rs`: Tab navigation enum & sidebar renderer.
-- `carets.rs`: Caret styles, particles, width slider.
-- `editor_mode.rs`: Hybrid vs Vim mode configuration.
-- `sounds.rs`: Synthesized mechanical switch profiles & waveforms.
-- `theme.rs`: Palette selector & live preview swatches.
-- `shortcuts.rs`: Interactive keybinding reference table.
-- `backup.rs`: Atomic SQLite backup & snapshots.
-- `updates.rs`: Auto-updater state & download controls.
-- `mod.rs`: Clean router and panel renderer.
+## 🗺️ Milestone 1: Editor & Vim Engine Polish (Stability First)
+- [ ] **Dot Repeat (`.`) Engine**: Full record-and-replay of last mutating action (motions + text mutations).
+- [ ] **Registers & System Clipboard Integration**:
+  - Unnamed register `""` sync with OS clipboard option.
+  - Named registers `"a` through `"z` persistent across sessions.
+  - Blackhole register `"_`.
+- [ ] **Line-based motions**: `H`, `M`, `L` (screen line jumps), `zt`, `zz`, `zb` (viewport scroll without moving cursor).
+- [ ] **Visual Block Mode (`Ctrl+V`)**: Columnar selections, block insertions (`I`), and block appends (`A`).
+- [ ] **Undo Tree / Branching History**: Visual timeline or list representation of undo branches instead of purely linear history.
 
 ---
 
-#### 2. [`view_editor.rs`](file:///b:/rust/my_first_project/app/src/view_editor/) (655 lines) — [COMPLETED]
-Modularized into `app/src/view_editor/`:
-- `header.rs`: Document title and 6-dot window drag gripper.
-- `ligatures.rs`: Custom coding ligature detection and vector drawing engine.
-- `body.rs`: Viewport frustum culling, soft-wrapped text, smooth scrolling, and caret rendering.
-- `mod.rs`: Clean re-exports and API boundary.
+## ⚡ Milestone 2: Syntax Highlighting & Visual Engine
+- [ ] **Tree-sitter or Syntect Integration**: Fast, tree-based syntax coloring for Markdown, Rust, Python, JavaScript, JSON, and TOML.
+- [ ] **Inline Code Block Evaluation / Scratchpad**: Execute small snippets or preview output inline.
+- [ ] **Gutter & Line Numbers**:
+  - Relative / hybrid line numbers toggleable via `:set rnu` / `:set nornu`.
+  - Git diff indicators in the margin gutter (added, modified, deleted lines).
+- [ ] **Fold / Unfold Engine**: Markdown header folding (`za`, `zc`, `zo`) with subtle folding pill indicators.
 
 ---
 
-#### 3. [`input.rs`](file:///b:/rust/my_first_project/app/src/input/) (690 lines) — [COMPLETED]
-Modularized into `app/src/input/`:
-- `global.rs`: Window controls, modal triggers (`Ctrl+P`, `Ctrl+B`, `Ctrl+,`), clipboard (`Ctrl+C`, `Ctrl+V`, `Ctrl+X`), undo/redo.
-- `command.rs`: Key and paste handling while the `:` command bar is active.
-- `editor.rs`: Normal / Vim / Hybrid / Doc text input, cursor routing, and read-only docs navigation.
-- `mod.rs`: Top-level input pipeline router.
+## 📂 Milestone 3: Workspace & File Management
+- [ ] **Native File Tree Explorer**: Left sidebar toggle (`Ctrl+E` / `:Ex`) displaying real filesystem directories, not just SQLite notes.
+- [ ] **Multi-Tab & Split Panes**:
+  - Horizontal (`:sp`) and Vertical (`:vsp`) editor splits with smooth resizable dividers.
+  - Tab bar with clean keyboard navigation (`gt`, `gT`, `Ctrl+W` window motions).
+- [ ] **Project-wide Ripgrep Search**: Blazing fast workspace text search (`Ctrl+Shift+F` / `:grep`) with live jump list.
 
 ---
 
-#### 4. [`core/src/db.rs`](file:///b:/rust/my_first_project/core/src/db/) (671 lines) — [COMPLETED]
-Modularized into `core/src/db/`:
-- `connection.rs`: Database connection, WAL configuration, backup, and table schema migrations.
-- `notes.rs`: Note CRUD (`add_note`, `get_note`, `update_note`, `delete_note`, `rename_note`).
-- `cards.rs`: Spaced repetition SM-2 flashcard queries and review history.
-- `activity.rs`: Daily activity counters, lifetime stats, decisions calibration, and settings persistence.
-- `mod.rs`: Clean API boundary, Database struct definition, and unit tests.
+## 🧠 Milestone 4: Knowledge Graph & Spaced Repetition (MindForge Core)
+- [ ] **Backlinks & Bidirectional Wiki-Links**: `[[Note Title]]` autocompletion with floating preview popup on hover/cursor.
+- [ ] **Interactive 2D Knowledge Graph**: GPU-accelerated force-directed graph view of note connections using egui/wgpu.
+- [ ] **SM-2 Flashcard Dashboard**: Dedicated review session screen with spaced repetition analytics and heatmaps.
+- [ ] **Daily Journaling Auto-template**: One-key daily note generator (`Ctrl+J` / `:today`).
 
 ---
 
-#### 5. [`app.rs`](file:///b:/rust/my_first_project/app/src/app.rs) (943 lines)
-- **`App` struct**: Holds over 40 fields. State for search, rename, delete modals, and statistics can be grouped into dedicated sub-structs (e.g. `AppModals`, `ActivityTracker`).
-- **Modal rendering in `draw()`**: Lines 716–858 in `app.rs` explicitly wire up every modal's actions. Moving modal dispatch into a separate `modals_controller.rs` cuts ~200 lines from `app.rs`.
+## 🧩 Milestone 5: Config & Extensibility
+- [ ] **JSON Keymaps & Custom Bindings (`vim.json`)**: User-definable key bindings, remaps, and leader key combos (`<Space>`).
+- [ ] **Theme JSON Engine**: Drop-in user themes in a `themes/` directory (Tokyo Night, Catppuccin, Gruvbox, Nord).
+- [ ] **LSP Client Foundation (Language Server Protocol)**:
+  - Hover doc tooltips.
+  - Autocomplete dropdown.
+  - Go to definition (`gd`).
 
 ---
 
-### Which one would you like to modularize first?
-1. **`settingpanel.rs`** (Quickest win, largest file, clean division).
-2. **`view_editor.rs`** (Clean separation of ligature engine from editor canvas).
-3. **`core/src/db.rs`** (Clean domain-driven separation of SQLite operations).
+## 🏗️ Codebase Architecture & Modularization
+- [ ] **`app.rs` De-bloating**:
+  - Extract modal state and handlers into `app/src/modals/`.
+  - Extract activity tracking / stats flush into `app/src/activity/`.
+- [ ] **Vim Subsystem Isolation**: Move `app/src/vim/` to a completely decoupled crate or distinct module boundary with zero egui rendering dependencies.
