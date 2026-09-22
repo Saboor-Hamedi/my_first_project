@@ -243,73 +243,19 @@ pub fn render_markdown_preview(
 ) {
     let preview_painter = painter.with_clip_rect(rect);
 
-    // Subtle container background with soft card styling and refined border
-    let card_bg = Color32::from_rgba_unmultiplied(
-        theme.bg.r(),
-        theme.bg.g(),
-        theme.bg.b(),
-        245,
-    );
-    preview_painter.rect_filled(rect, 6.0, card_bg);
-    preview_painter.rect_stroke(
-        rect,
-        6.0,
-        Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 38)),
-        egui::StrokeKind::Inside,
-    );
-
-    // Top Header Strip inside preview pane
-    let top_bar_h = 26.0;
-    let top_bar_rect = Rect::from_min_size(rect.min, vec2(rect.width(), top_bar_h));
-    preview_painter.rect_filled(
-        top_bar_rect,
-        egui::CornerRadius {
-            nw: 6,
-            ne: 6,
-            sw: 0,
-            se: 0,
-        },
-        Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 12),
-    );
-    preview_painter.line_segment(
-        [top_bar_rect.left_bottom(), top_bar_rect.right_bottom()],
-        Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 28)),
-    );
+    // Seamless background matching editor body
+    preview_painter.rect_filled(rect, 0.0, theme.bg);
 
     let blocks = parse_markdown(content);
 
-    // Left indicator: dot + PREVIEW label
-    preview_painter.text(
-        pos2(top_bar_rect.min.x + 12.0, top_bar_rect.center().y),
-        Align2::LEFT_CENTER,
-        "●  LIVE PREVIEW",
-        FontId::monospace(10.0),
-        Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 130),
-    );
-
-    // Right stats: block count
-    if !blocks.is_empty() {
-        preview_painter.text(
-            pos2(top_bar_rect.max.x - 12.0, top_bar_rect.center().y),
-            Align2::RIGHT_CENTER,
-            format!("{} items", blocks.len()),
-            FontId::monospace(10.0),
-            Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 100),
-        );
-    }
-
-    // Inner padding & content clip area (underneath top bar)
+    // Inner padding & content area aligned with editor body
     let pad_x = 14.0;
-    let pad_y = 10.0;
-    let content_rect = Rect::from_min_max(
-        pos2(rect.min.x, rect.min.y + top_bar_h),
-        rect.max,
-    );
-    let content_painter = painter.with_clip_rect(content_rect);
+    let pad_y = 6.0;
+    let content_painter = painter.with_clip_rect(rect);
     let max_text_w = (rect.width() - pad_x * 2.0).max(60.0);
 
     // Mouse scroll handling inside preview pane
-    if ui.rect_contains_pointer(content_rect) {
+    if ui.rect_contains_pointer(rect) {
         let delta = ui.input(|i| {
             if i.smooth_scroll_delta.y.abs() > 0.001 {
                 i.smooth_scroll_delta.y
@@ -324,16 +270,16 @@ pub fn render_markdown_preview(
 
     // Empty state placeholder
     if blocks.is_empty() {
-        let placeholder_y = content_rect.center().y - 10.0;
+        let placeholder_y = rect.center().y - 10.0;
         content_painter.text(
-            pos2(content_rect.center().x, placeholder_y),
+            pos2(rect.center().x, placeholder_y),
             Align2::CENTER_CENTER,
             "Nothing to preview yet",
             FontId::proportional(font_size * 1.05),
             Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 120),
         );
         content_painter.text(
-            pos2(content_rect.center().x, placeholder_y + 20.0),
+            pos2(rect.center().x, placeholder_y + 20.0),
             Align2::CENTER_CENTER,
             "Type markdown in the editor to see live rendering",
             FontId::proportional(font_size * 0.85),
@@ -343,7 +289,7 @@ pub fn render_markdown_preview(
     }
 
     let start_x = rect.min.x + pad_x;
-    let mut current_y = content_rect.min.y + pad_y - *scroll_y;
+    let mut current_y = rect.min.y + pad_y - *scroll_y;
 
     for block in &blocks {
         match block {
@@ -353,7 +299,7 @@ pub fn render_markdown_preview(
                 let color = theme.highlight;
                 let galley = painter.layout(text.clone(), font, color, max_text_w);
                 let text_h = galley.size().y;
-                if current_y + text_h >= content_rect.min.y && current_y <= content_rect.max.y {
+                if current_y + text_h >= rect.min.y && current_y <= rect.max.y {
                     content_painter.galley(pos2(start_x, current_y), galley, color);
                     // Underline divider line across text width
                     let line_y = current_y + text_h + 4.0;
@@ -376,7 +322,7 @@ pub fn render_markdown_preview(
                 let color = theme.accent;
                 let galley = painter.layout(text.clone(), font, color, max_text_w);
                 let text_h = galley.size().y;
-                if current_y + text_h >= content_rect.min.y && current_y <= content_rect.max.y {
+                if current_y + text_h >= rect.min.y && current_y <= rect.max.y {
                     content_painter.galley(pos2(start_x, current_y), galley, color);
                     let line_y = current_y + text_h + 3.0;
                     content_painter.line_segment(
@@ -392,7 +338,7 @@ pub fn render_markdown_preview(
                 let color = theme.text;
                 let galley = painter.layout(text.clone(), font, color, max_text_w);
                 let text_h = galley.size().y;
-                if current_y + text_h >= content_rect.min.y && current_y <= content_rect.max.y {
+                if current_y + text_h >= rect.min.y && current_y <= rect.max.y {
                     content_painter.galley(pos2(start_x, current_y), galley, color);
                 }
                 current_y += text_h + 8.0;
@@ -403,7 +349,7 @@ pub fn render_markdown_preview(
                 let color = theme.muted;
                 let galley = painter.layout(text.clone(), font, color, max_text_w);
                 let text_h = galley.size().y;
-                if current_y + text_h >= content_rect.min.y && current_y <= content_rect.max.y {
+                if current_y + text_h >= rect.min.y && current_y <= rect.max.y {
                     content_painter.galley(pos2(start_x, current_y), galley, color);
                 }
                 current_y += text_h + 6.0;
@@ -412,7 +358,7 @@ pub fn render_markdown_preview(
                 let job = build_inline_job(text, font_size, theme.text, theme, max_text_w);
                 let galley = painter.layout_job(job);
                 let text_h = galley.size().y;
-                if current_y + text_h >= content_rect.min.y && current_y <= content_rect.max.y {
+                if current_y + text_h >= rect.min.y && current_y <= rect.max.y {
                     content_painter.galley(pos2(start_x, current_y), galley, Color32::WHITE);
                 }
                 current_y += text_h + 9.0;
@@ -423,7 +369,7 @@ pub fn render_markdown_preview(
                 let galley = painter.layout_job(job);
                 let text_h = galley.size().y;
                 let box_h = text_h + 10.0;
-                if current_y + box_h >= content_rect.min.y && current_y <= content_rect.max.y {
+                if current_y + box_h >= rect.min.y && current_y <= rect.max.y {
                     // Left quote vertical accent border
                     let bar_rect = Rect::from_min_size(pos2(start_x, current_y), vec2(3.5, box_h));
                     content_painter.rect_filled(bar_rect, 1.5, theme.accent);
@@ -447,7 +393,7 @@ pub fn render_markdown_preview(
                 let job = build_inline_job(text, font_size, text_color, theme, max_text_w - bullet_w);
                 let galley = painter.layout_job(job);
                 let text_h = galley.size().y;
-                if current_y + text_h >= content_rect.min.y && current_y <= content_rect.max.y {
+                if current_y + text_h >= rect.min.y && current_y <= rect.max.y {
                     let bullet_font = FontId::monospace(font_size * 0.92);
                     let b_color = match checked {
                         Some(true) => theme.accent,
@@ -465,7 +411,7 @@ pub fn render_markdown_preview(
                 let color = theme.highlight;
                 let galley = painter.layout(code.clone(), font, color, max_text_w - 20.0);
                 let block_h = galley.size().y + 24.0;
-                if current_y + block_h >= content_rect.min.y && current_y <= content_rect.max.y {
+                if current_y + block_h >= rect.min.y && current_y <= rect.max.y {
                     let code_rect = Rect::from_min_size(pos2(start_x, current_y), vec2(max_text_w, block_h));
                     // Dark contrasting container box
                     let box_color = Color32::from_rgba_unmultiplied(12, 14, 18, 245);
@@ -506,7 +452,7 @@ pub fn render_markdown_preview(
             }
             MdBlock::Rule => {
                 current_y += 6.0;
-                if current_y >= content_rect.min.y && current_y <= content_rect.max.y {
+                if current_y >= rect.min.y && current_y <= rect.max.y {
                     content_painter.line_segment(
                         [pos2(start_x, current_y), pos2(start_x + max_text_w, current_y)],
                         Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 40)),
@@ -518,7 +464,7 @@ pub fn render_markdown_preview(
     }
 
     // Clamp scroll
-    let total_h = (current_y + *scroll_y - (content_rect.min.y + pad_y)).max(0.0);
-    let max_scroll = (total_h - content_rect.height() + pad_y * 2.0).max(0.0);
+    let total_h = (current_y + *scroll_y - (rect.min.y + pad_y)).max(0.0);
+    let max_scroll = (total_h - rect.height() + pad_y * 2.0).max(0.0);
     *scroll_y = scroll_y.clamp(0.0, max_scroll);
 }

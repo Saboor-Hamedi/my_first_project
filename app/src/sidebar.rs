@@ -26,7 +26,7 @@ pub fn render_sidebar(
     text_color: Color32,
     muted_color: Color32,
 ) -> Option<SidebarAction> {
-    let gap = 14.0;
+    let gap = 10.0;
     let sidebar_w = 230.0;
     let sb_top = bounds.min.y + 12.0;
     let sb_bottom = bounds.max.y - 36.0 - 8.0;

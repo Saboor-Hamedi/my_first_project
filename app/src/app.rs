@@ -473,26 +473,26 @@ impl App {
         );
 
         let sidebar_w = 230.0;
-        let sidebar_gap_x = 14.0;
+        let sidebar_gap_x = 10.0;
         let sidebar_top = bounds.min.y + 12.0;
         let sidebar_bottom = cmd_bar_rect.min.y - 8.0;
 
         let is_preview_active = self.preview_open && self.mode == Mode::Normal;
 
+        // Snug 8px padding: consistent between sidebar and line numbers, and window edge and line numbers
+        let left_padding = 8.0;
         let (content_left_margin, doc_sidebar_rect) = if self.mode == Mode::Doc {
             let sb_rect = Rect::from_min_max(
                 pos2(bounds.min.x + sidebar_gap_x, sidebar_top),
                 pos2(bounds.min.x + sidebar_gap_x + sidebar_w, sidebar_bottom),
             );
-            (sidebar_gap_x + sidebar_w + 24.0, Some(sb_rect))
+            (sidebar_gap_x + sidebar_w + left_padding, Some(sb_rect))
         } else if self.sidebar_open {
-            (sidebar_gap_x + sidebar_w + 24.0, None)
-        } else if is_preview_active {
-            (14.0, None)
+            (sidebar_gap_x + sidebar_w + left_padding, None)
         } else {
-            (24.0, None)
+            (left_padding, None)
         };
-        let content_right_margin = if is_preview_active { 12.0 } else { 24.0 };
+        let content_right_margin = 10.0;
 
         let editor_top = bounds.min.y + 44.0;
         let editor_bottom = cmd_bar_rect.min.y - 8.0;
@@ -524,6 +524,30 @@ impl App {
             }
         }
 
+        // Split Editor & Preview panes setup
+        let divider_w = 12.0;
+        let (actual_editor_rect, preview_rect_opt, divider_rect_opt) = if is_preview_active {
+            let total_w = editor_rect.width();
+            let available_w = (total_w - divider_w).max(200.0);
+            let left_w = (available_w * self.split_ratio).clamp(120.0, available_w - 120.0);
+
+            let left_rect = Rect::from_min_max(
+                editor_rect.min,
+                pos2(editor_rect.min.x + left_w, editor_rect.max.y),
+            );
+            let divider_rect = Rect::from_min_max(
+                pos2(left_rect.max.x, bounds.min.y + 12.0),
+                pos2(left_rect.max.x + divider_w, editor_rect.max.y),
+            );
+            let right_rect = Rect::from_min_max(
+                pos2(divider_rect.max.x, editor_rect.min.y),
+                editor_rect.max,
+            );
+            (left_rect, Some(right_rect), Some(divider_rect))
+        } else {
+            (editor_rect, None, None)
+        };
+
         // Keep visual lines updated to exact editor width (accounting for preview split and line numbers)
         let target_ed = if self.mode == Mode::Doc { &self.doc_ed } else { &self.ed };
         let total_lines = (target_ed.buf.iter().filter(|&&c| c == '\n').count() + 1).max(1);
@@ -534,14 +558,7 @@ impl App {
             0.0
         };
 
-        let divider_w = 12.0;
-        let effective_editor_w = if is_preview_active {
-            let total_w = editor_rect.width();
-            let available_w = (total_w - divider_w).max(200.0);
-            (available_w * self.split_ratio).clamp(120.0, available_w - 120.0)
-        } else {
-            editor_rect.width()
-        };
+        let effective_editor_w = actual_editor_rect.width();
         let text_area_w = (effective_editor_w - gutter_space - 8.0).max(100.0);
         let max_cols = (text_area_w / cw).floor().max(15.0) as usize;
         self.visual_lines = target_ed.compute_visual_lines(max_cols);
@@ -557,16 +574,30 @@ impl App {
             } else {
                 (self.active_note_title.clone(), self.is_dirty)
             };
-            render_editor_header(
-                ui,
-                &painter,
-                bounds,
-                content_left_margin,
-                content_right_margin,
-                &header_title,
-                header_dirty,
-                &self.theme,
-            );
+
+            if let Some(p_rect) = preview_rect_opt {
+                crate::view_editor::render_split_editor_header(
+                    ui,
+                    &painter,
+                    bounds,
+                    actual_editor_rect,
+                    p_rect,
+                    &header_title,
+                    header_dirty,
+                    &self.theme,
+                );
+            } else {
+                render_editor_header(
+                    ui,
+                    &painter,
+                    bounds,
+                    content_left_margin,
+                    content_right_margin,
+                    &header_title,
+                    header_dirty,
+                    &self.theme,
+                );
+            }
         }
 
         // Active View rendering delegated to dedicated view modules
@@ -607,26 +638,9 @@ impl App {
                     (&mut self.ed, &mut self.scroll_y)
                 };
 
-                let is_preview_active = self.preview_open && self.mode == Mode::Normal;
-
-                let (actual_editor_rect, preview_rect_opt) = if is_preview_active {
+                if let (Some(_), Some(divider_rect)) = (preview_rect_opt, divider_rect_opt) {
                     let total_w = editor_rect.width();
-                    let divider_w = 12.0;
                     let available_w = (total_w - divider_w).max(200.0);
-                    let left_w = (available_w * self.split_ratio).clamp(120.0, available_w - 120.0);
-
-                    let left_rect = Rect::from_min_max(
-                        editor_rect.min,
-                        pos2(editor_rect.min.x + left_w, editor_rect.max.y),
-                    );
-                    let divider_rect = Rect::from_min_max(
-                        pos2(left_rect.max.x, editor_rect.min.y),
-                        pos2(left_rect.max.x + divider_w, editor_rect.max.y),
-                    );
-                    let right_rect = Rect::from_min_max(
-                        pos2(divider_rect.max.x, editor_rect.min.y),
-                        editor_rect.max,
-                    );
 
                     // Generous hit box for dragging so mouse never slips off (prevents drag dropping)
                     let divider_hit_rect = divider_rect.expand2(vec2(8.0, 0.0));
@@ -661,13 +675,13 @@ impl App {
                     };
                     let mid_x = divider_rect.center().x;
                     painter.line_segment(
-                        [pos2(mid_x, divider_rect.min.y + 4.0), pos2(mid_x, divider_rect.max.y - 4.0)],
+                        [pos2(mid_x, divider_rect.min.y), pos2(mid_x, divider_rect.max.y)],
                         Stroke::new(1.0, divider_color),
                     );
                     // Center pill knob handle with tactile grip dots
                     let knob_w = if is_active { 7.0 } else { 5.0 };
                     let knob_h = 42.0;
-                    let knob_rect = Rect::from_center_size(divider_rect.center(), vec2(knob_w, knob_h));
+                    let knob_rect = Rect::from_center_size(pos2(mid_x, actual_editor_rect.center().y), vec2(knob_w, knob_h));
                     painter.rect_filled(knob_rect, 3.0, divider_color);
 
                     let knob_mid = knob_rect.center();
@@ -678,12 +692,9 @@ impl App {
                             Stroke::new(1.0, grip_color),
                         );
                     }
-
-                    (left_rect, Some(right_rect))
                 } else {
                     self.is_dragging_splitter = false;
-                    (editor_rect, None)
-                };
+                }
 
                 render_editor_body(
                     ui,
