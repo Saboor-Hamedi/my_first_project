@@ -15,14 +15,14 @@ use crate::settings::{render_setting_panel, render_setting_tabs, SettingPanelAct
 use crate::sidebar::{render_sidebar, SidebarAction};
 use crate::sound::{SoundEngine, SoundProfile};
 use crate::theme::{Theme, ThemeKind};
-use crate::view_editor::{render_editor_body, render_editor_header};
+use crate::view_editor::{render_editor_body, render_editor_header, render_markdown_preview};
 use crate::view_stats::render_stats;
 use crate::vim::VimEngine;
 use crate::updater::UpdateManager;
 
 use chrono::Local;
 use core::{DailyActivity, Database, Note};
-use eframe::egui::{self, pos2, Color32, FontId, Rect};
+use eframe::egui::{self, pos2, vec2, Color32, FontId, Rect, Stroke};
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
@@ -100,6 +100,10 @@ pub struct App {
     // Scrolling & auto-save
     pub scroll_y: f32,
     pub doc_scroll_y: f32,
+    pub preview_scroll_y: f32,
+    pub preview_open: bool,
+    pub split_ratio: f32,
+    pub show_line_numbers: bool,
     pub is_dirty: bool,
     pub last_saved_time: f64,
 
@@ -178,6 +182,10 @@ impl App {
             total_notes_count: 0,
             scroll_y: 0.0,
             doc_scroll_y: 0.0,
+            preview_scroll_y: 0.0,
+            preview_open: false,
+            split_ratio: 0.5,
+            show_line_numbers: true,
             is_dirty: false,
             last_saved_time: 0.0,
             db,
@@ -251,6 +259,12 @@ impl App {
             }
             if let Ok(Some(s)) = db.get_setting("showcmd") {
                 self.showcmd.enabled = s != "off" && s != "false";
+            }
+            if let Ok(Some(ln)) = db.get_setting("line_numbers") {
+                self.show_line_numbers = ln != "off" && ln != "false";
+            }
+            if let Ok(Some(p)) = db.get_setting("preview") {
+                self.preview_open = p == "on" || p == "true";
             }
         }
     }
@@ -504,8 +518,19 @@ impl App {
             }
         }
 
-        // Keep visual lines updated to exact editor width
-        let max_cols = ((editor_rect.width() - 8.0) / cw).floor().max(20.0) as usize;
+        // Keep visual lines updated to exact editor width (accounting for preview split and line numbers)
+        let is_preview_active = self.preview_open && self.mode == Mode::Normal;
+        let effective_editor_w = if is_preview_active {
+            let total_w = editor_rect.width();
+            let divider_w = 10.0;
+            let available_w = (total_w - divider_w).max(200.0);
+            (available_w * self.split_ratio).clamp(120.0, available_w - 120.0)
+        } else {
+            editor_rect.width()
+        };
+        let gutter_space = if self.show_line_numbers { 42.0 } else { 0.0 };
+        let text_area_w = (effective_editor_w - gutter_space - 8.0).max(100.0);
+        let max_cols = (text_area_w / cw).floor().max(15.0) as usize;
         let target_ed = if self.mode == Mode::Doc { &self.doc_ed } else { &self.ed };
         self.visual_lines = target_ed.compute_visual_lines(max_cols);
 
@@ -570,11 +595,64 @@ impl App {
                     (&mut self.ed, &mut self.scroll_y)
                 };
 
+                let is_preview_active = self.preview_open && self.mode == Mode::Normal;
+
+                let (actual_editor_rect, preview_rect_opt) = if is_preview_active {
+                    let total_w = editor_rect.width();
+                    let divider_w = 10.0;
+                    let available_w = (total_w - divider_w).max(200.0);
+                    let left_w = (available_w * self.split_ratio).clamp(120.0, available_w - 120.0);
+
+                    let left_rect = Rect::from_min_max(
+                        editor_rect.min,
+                        pos2(editor_rect.min.x + left_w, editor_rect.max.y),
+                    );
+                    let divider_rect = Rect::from_min_max(
+                        pos2(left_rect.max.x, editor_rect.min.y),
+                        pos2(left_rect.max.x + divider_w, editor_rect.max.y),
+                    );
+                    let right_rect = Rect::from_min_max(
+                        pos2(divider_rect.max.x, editor_rect.min.y),
+                        editor_rect.max,
+                    );
+
+                    // Draggable Knob / Splitter divider
+                    let is_divider_hovered = ui.rect_contains_pointer(divider_rect);
+                    if is_divider_hovered {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
+                    }
+                    if is_divider_hovered && ui.input(|i| i.pointer.primary_down()) {
+                        if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+                            let new_ratio = ((pos.x - editor_rect.min.x) / available_w).clamp(0.20, 0.80);
+                            self.split_ratio = new_ratio;
+                        }
+                    }
+
+                    // Draw sleek divider line and draggable capsule knob in center
+                    let divider_color = if is_divider_hovered {
+                        self.theme.accent
+                    } else {
+                        Color32::from_rgba_unmultiplied(self.theme.muted.r(), self.theme.muted.g(), self.theme.muted.b(), 65)
+                    };
+                    let mid_x = divider_rect.center().x;
+                    painter.line_segment(
+                        [pos2(mid_x, divider_rect.min.y + 4.0), pos2(mid_x, divider_rect.max.y - 4.0)],
+                        Stroke::new(1.0, divider_color),
+                    );
+                    // Center pill knob handle
+                    let knob_rect = Rect::from_center_size(divider_rect.center(), vec2(6.0, 36.0));
+                    painter.rect_filled(knob_rect, 3.0, divider_color);
+
+                    (left_rect, Some(right_rect))
+                } else {
+                    (editor_rect, None)
+                };
+
                 render_editor_body(
                     ui,
                     &painter,
                     bounds,
-                    editor_rect,
+                    actual_editor_rect,
                     target_ed_mut,
                     &self.visual_lines,
                     &mut self.caret,
@@ -588,12 +666,27 @@ impl App {
                     typed,
                     self.settings_open || self.search_open,
                     search_matches,
+                    self.show_line_numbers,
                 );
                 self.caret.kind = original_caret_kind;
 
+                // Render Live Markdown Preview side-by-side if active
+                if let Some(p_rect) = preview_rect_opt {
+                    let note_text = self.ed.text();
+                    render_markdown_preview(
+                        ui,
+                        &painter,
+                        p_rect,
+                        &note_text,
+                        &mut self.preview_scroll_y,
+                        &self.theme,
+                        self.font_size,
+                    );
+                }
+
                 // Floating Keystroke Card (Vim showcmd): large borderless capsule pill — bottom-right of editor
                 if self.editor_input_mode == EditorInputMode::Vim {
-                    let card_anchor = pos2(editor_rect.max.x - 16.0, editor_rect.max.y - 20.0);
+                    let card_anchor = pos2(actual_editor_rect.max.x - 16.0, actual_editor_rect.max.y - 20.0);
                     self.showcmd.render_card(&painter, card_anchor, self.theme.accent, now);
                 }
             }
@@ -949,7 +1042,17 @@ impl eframe::App for App {
             48.0
         };
         let editor_w = (screen_w - left_margin - 48.0).max(100.0);
-        let max_cols = ((editor_w - 8.0) / cw).floor().max(20.0) as usize;
+        let is_preview_active = self.preview_open && self.mode == Mode::Normal;
+        let effective_editor_w = if is_preview_active {
+            let divider_w = 10.0;
+            let available_w = (editor_w - divider_w).max(200.0);
+            (available_w * self.split_ratio).clamp(120.0, available_w - 120.0)
+        } else {
+            editor_w
+        };
+        let gutter_space = if self.show_line_numbers { 42.0 } else { 0.0 };
+        let text_area_w = (effective_editor_w - gutter_space - 8.0).max(100.0);
+        let max_cols = (text_area_w / cw).floor().max(15.0) as usize;
         let active_ed = if self.mode == Mode::Doc { &self.doc_ed } else { &self.ed };
         self.visual_lines = active_ed.compute_visual_lines(max_cols);
 

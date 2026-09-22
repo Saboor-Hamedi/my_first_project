@@ -9,6 +9,7 @@ MindForge provides an extensive suite of intuitive keyboard shortcuts so you can
 - Ctrl+N: Create a new blank note
 - Ctrl+S: Quick save active note to local database
 - Ctrl+B: Toggle notes sidebar open or closed
+- Ctrl+\: Toggle Live Markdown Preview side-by-side (with draggable divider knob)
 - Ctrl+P: Fuzzy search across all notes
 - Ctrl+R: Rename active note
 - Ctrl+Shift+D: Safely delete active note
@@ -54,10 +55,10 @@ When reading these built-in guides:
 
 ---
 
-## ShowCmd Keystroke & Command HUD
+## Line Numbers & Markdown Live Preview
 
-MindForge displays active and pending keyboard commands in the bottom-right HUD capsule:
-- **VIM**: Multi-key operators like `ci"`, `da(`, `40j`, `dd`, `dw`.
-- **VIS**: Visual selections like `vi"`, `va(`.
-- **FIND**: Search queries typed via `/` or `?`.
-- **CMD**: Command mode input typed via `:`.
+- `:nu` / `:set nu`: Expose line numbers gutter
+- `:nonu` / `:set nonu`: Hide line numbers gutter
+- `:preview` / `:set preview`: Toggle live markdown preview side-by-side
+- `:nopreview` / `:set nopreview`: Close live markdown preview
+- Drag the center pill knob between the editor and preview to smoothly resize the split ratio

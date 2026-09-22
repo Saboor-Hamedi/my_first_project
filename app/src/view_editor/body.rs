@@ -4,7 +4,7 @@ use super::ligatures::render_line_with_ligatures;
 use crate::caret::Caret;
 use crate::editor::{Editor, VisualLine};
 use crate::theme::Theme;
-use eframe::egui::{self, pos2, vec2, Color32, FontId, Rect};
+use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, Stroke};
 
 /// Renders the editor body with soft-wrapped visual lines, smooth scrolling, caret animation, and interactive scrollbar.
 pub fn render_editor_body(
@@ -25,6 +25,7 @@ pub fn render_editor_body(
     mut typed: bool,
     block_scroll: bool,
     search_matches: Option<(&[usize], usize)>,
+    show_line_numbers: bool,
 ) {
     let font = FontId::monospace(font_size);
     let font_h = painter.layout_no_wrap("M".to_owned(), font.clone(), Color32::WHITE).size().y;
@@ -49,9 +50,19 @@ pub fn render_editor_body(
         }
     }
 
+    let gutter_w = if show_line_numbers {
+        // Calculate digits needed for total lines
+        let total_lines = (ed.buf.iter().filter(|&&c| c == '\n').count() + 1).max(1);
+        let digits = total_lines.to_string().len().max(2);
+        (digits as f32 * cw + 18.0).max(34.0)
+    } else {
+        0.0
+    };
+
     let pad_x = 4.0;
     let pad_y = 2.0;
-    let ed_origin = editor_rect.min - vec2(0.0, *scroll_y) + vec2(pad_x, pad_y);
+    let text_left = editor_rect.min.x + gutter_w + pad_x;
+    let ed_origin = pos2(text_left, editor_rect.min.y - *scroll_y + pad_y);
 
     // Direct mouse click in editor moves cursor to clicked visual row and col
     if !block_scroll && ui.rect_contains_pointer(editor_rect) && ui.input(|i| i.pointer.primary_clicked()) {
@@ -194,6 +205,74 @@ pub fn render_editor_body(
             stroke_w,
             block_col,
         );
+    }
+
+    // Render line number gutter on the left side if enabled
+    if show_line_numbers && gutter_w > 0.0 {
+        let gutter_rect = Rect::from_min_max(
+            editor_rect.min,
+            pos2(editor_rect.min.x + gutter_w, editor_rect.max.y),
+        );
+        let gutter_painter = painter.with_clip_rect(gutter_rect);
+
+        // Subtle shaded gutter background
+        let gutter_bg = Color32::from_rgba_unmultiplied(
+            theme.bg.r().saturating_add(4),
+            theme.bg.g().saturating_add(5),
+            theme.bg.b().saturating_add(7),
+            140,
+        );
+        gutter_painter.rect_filled(gutter_rect, 0.0, gutter_bg);
+
+        // Right divider line separating line numbers from text
+        gutter_painter.line_segment(
+            [gutter_rect.right_top(), gutter_rect.right_bottom()],
+            Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 45)),
+        );
+
+        let num_font = FontId::monospace(font_size * 0.88);
+
+        // Compute physical line number for each visual line
+        let mut physical_line = 1;
+        let mut prev_char_end = 0;
+
+        for (r, v_line) in visual_lines.iter().enumerate() {
+            let line_y = ed_origin.y + r as f32 * lh;
+            let is_new_physical = r == 0 || (v_line.char_start > 0 && ed.buf.get(v_line.char_start.saturating_sub(1)) == Some(&'\n'));
+
+            if r > 0 && is_new_physical {
+                physical_line += 1;
+            }
+
+            if line_y + lh >= editor_rect.min.y && line_y <= editor_rect.max.y {
+                let is_current = r == row;
+                if is_new_physical {
+                    let num_str = physical_line.to_string();
+                    let color = if is_current {
+                        theme.accent
+                    } else {
+                        Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 130)
+                    };
+                    gutter_painter.text(
+                        pos2(gutter_rect.max.x - 8.0, line_y + y_pad),
+                        Align2::RIGHT_TOP,
+                        num_str,
+                        num_font.clone(),
+                        color,
+                    );
+                } else {
+                    // Wrapped continuation line indicator
+                    let wrap_color = Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 60);
+                    gutter_painter.text(
+                        pos2(gutter_rect.max.x - 8.0, line_y + y_pad),
+                        Align2::RIGHT_TOP,
+                        "·",
+                        num_font.clone(),
+                        wrap_color,
+                    );
+                }
+            }
+        }
     }
 
     // Interactive scrollbar indicator in the right margin gutter

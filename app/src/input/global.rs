@@ -14,7 +14,7 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
     }
 
     // Global Keyboard Shortcuts
-    let (ctrl_s, ctrl_n, ctrl_r, ctrl_p, ctrl_comma, ctrl_b, escape) = ctx.input(|i| (
+    let (ctrl_s, ctrl_n, ctrl_r, ctrl_p, ctrl_comma, ctrl_b, escape, ctrl_backslash) = ctx.input(|i| (
         i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::S),
         i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::N),
         i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::R),
@@ -22,6 +22,8 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
         i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::Comma),
         i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::B),
         i.key_pressed(egui::Key::Escape),
+        (i.modifiers.ctrl && (i.key_pressed(egui::Key::Backslash) || i.key_pressed(egui::Key::Pipe)))
+            || (i.modifiers.alt && i.key_pressed(egui::Key::Backslash)),
     ));
 
     // Delete Note (Ctrl+Shift+D or Ctrl+Shift+Delete)
@@ -235,6 +237,22 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
 
     if ctrl_b {
         app.sidebar_open = !app.sidebar_open;
+        return Some(false);
+    }
+
+    if ctrl_backslash {
+        app.preview_open = !app.preview_open;
+        let val = if app.preview_open { "true" } else { "false" };
+        let _ = app.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+            key: "preview".into(),
+            val: val.into(),
+        });
+        let msg = if app.preview_open {
+            "Markdown Live Preview ON (Ctrl + \\ to toggle, drag center knob)"
+        } else {
+            "Markdown Live Preview OFF (Ctrl + \\)"
+        };
+        app.set_status(msg, now);
         return Some(false);
     }
 
