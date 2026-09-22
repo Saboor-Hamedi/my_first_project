@@ -75,7 +75,19 @@ jobs:
 
       - name: Install NSIS
         shell: pwsh
-        run: choco install nsis -y --no-progress
+        run: |
+          choco install nsis -y --no-progress
+          $nsisDir = if (Test-Path "C:\Program Files (x86)\NSIS\makensis.exe") {
+            "C:\Program Files (x86)\NSIS"
+          } elseif (Test-Path "C:\Program Files\NSIS\makensis.exe") {
+            "C:\Program Files\NSIS"
+          } else {
+            (Get-ChildItem -Path "C:\Program Files*" -Filter "makensis.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1)?.DirectoryName
+          }
+          if ($nsisDir) {
+            echo "$nsisDir" | Out-File -FilePath $env:GITHUB_PATH -Append
+            Write-Host "Added $nsisDir to GITHUB_PATH"
+          }
 
       - name: Write installer.nsi
         shell: pwsh
@@ -149,7 +161,19 @@ jobs:
 
       - name: Build NSIS installer
         shell: pwsh
-        run: makensis installer.nsi
+        run: |
+          $makensis = (Get-Command makensis -ErrorAction SilentlyContinue)?.Source
+          if (-not $makensis) {
+            $makensis = @(
+              "C:\Program Files (x86)\NSIS\makensis.exe",
+              "C:\Program Files\NSIS\makensis.exe"
+            ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+          if (-not $makensis) {
+            throw "makensis.exe could not be found!"
+          }
+          Write-Host "Using makensis at: $makensis"
+          & $makensis installer.nsi
 
       - name: Upload
         uses: actions/upload-artifact@v4
