@@ -103,10 +103,10 @@ if let Some((sel_start, sel_end)) = sel_range {
     if line.char_start == line.char_end {
         // Empty line gap (\n\n):
         // Highlight a visible block when this empty line falls within active selection
-        if sel_start <= line.char_start && sel_end >= line.char_end {
+        if sel_start <= line.char_start && sel_end > line.char_end {
             let sel_w = cw.max(12.0);
-            let highlight_rect = Rect::from_min_size(pos2(ed_origin.x, line_y), vec2(sel_w, lh));
-            editor_painter.rect_filled(highlight_rect, 2.0, sel_color);
+            let highlight_rect = Rect::from_min_size(pos2(ed_origin.x, line_y), vec2(sel_w, lh + 0.5));
+            editor_painter.rect_filled(highlight_rect, 0.0, sel_color);
         }
     } else {
         let intersect_start = sel_start.max(line.char_start);
@@ -120,8 +120,8 @@ if let Some((sel_start, sel_end)) = sel_range {
             if sel_end > line.char_end {
                 sel_w += cw.max(10.0);
             }
-            let highlight_rect = Rect::from_min_size(pos2(sel_x, line_y), vec2(sel_w, lh));
-            editor_painter.rect_filled(highlight_rect, 2.0, sel_color);
+            let highlight_rect = Rect::from_min_size(pos2(sel_x, line_y), vec2(sel_w, lh + 0.5));
+            editor_painter.rect_filled(highlight_rect, 0.0, sel_color);
         }
     }
 }
@@ -129,4 +129,5 @@ if let Some((sel_start, sel_end)) = sel_range {
 This guarantees that:
 1. Normal text selection is pixel-perfect to character boundaries.
 2. Trailing newlines visually indicate line span.
-3. Completely empty lines between paragraphs display a visible highlight block matching modern editors.
+3. Multi-line selections (`Ctrl+A` or drag/visual select) touch edge-to-edge vertically without seams or rounded notches (using `0.0` corner radius and `lh + 0.5` subpixel bleed).
+4. Completely empty lines between paragraphs display a visible highlight block matching modern editors.

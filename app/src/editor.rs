@@ -640,12 +640,6 @@ impl Editor {
             }
 
             if line_end >= self.buf.len() {
-                if line_end > 0 && self.buf[line_end - 1] == '\n' {
-                    lines.push(VisualLine {
-                        char_start: line_end,
-                        char_end: line_end,
-                    });
-                }
                 break;
             }
             line_start = line_end + 1;
@@ -691,7 +685,11 @@ impl Editor {
         if row == 0 {
             return;
         }
-        let target_line = &lines[row - 1];
+        let mut target_row = row - 1;
+        while target_row > 0 && lines[target_row].char_start == self.cur && lines[target_row].char_end == self.cur {
+            target_row -= 1;
+        }
+        let target_line = &lines[target_row];
         let line_len = target_line.char_end.saturating_sub(target_line.char_start);
         self.cur = target_line.char_start + col.min(line_len);
     }
@@ -708,7 +706,11 @@ impl Editor {
         if row == 0 {
             return;
         }
-        let target_line = &lines[row - 1];
+        let mut target_row = row - 1;
+        while target_row > 0 && lines[target_row].char_start == self.cur && lines[target_row].char_end == self.cur {
+            target_row -= 1;
+        }
+        let target_line = &lines[target_row];
         let line_len = target_line.char_end.saturating_sub(target_line.char_start);
         self.cur = target_line.char_start + col.min(line_len);
     }
@@ -968,4 +970,46 @@ mod tests {
         assert!(col_after > 0);
         assert_eq!(ed.buf[ed.cur], 'x');
     }
+
+    #[test]
+    fn test_up_visual_from_trailing_empty_line() {
+        let mut ed = Editor::new();
+        ed.insert_str("Hello World\n");
+        let lines = ed.compute_visual_lines(80);
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0].char_start, 0);
+        assert_eq!(lines[0].char_end, 11);
+        assert_eq!(lines[1].char_start, 12);
+        assert_eq!(lines[1].char_end, 12);
+
+        // Position cursor at the very bottom (trailing empty line)
+        ed.cur = ed.buf.len();
+        let (r_bottom, _) = ed.visual_row_col(&lines);
+        assert_eq!(r_bottom, 1);
+
+        // Press 'k' (up_visual) - should move immediately to previous line without needing 'h'
+        ed.up_visual(&lines);
+        let (r_up, _) = ed.visual_row_col(&lines);
+        assert_eq!(r_up, 0);
+        assert_eq!(ed.cur, 0);
+    }
+
+    #[test]
+    fn test_compute_visual_lines_trailing_newlines() {
+        let mut ed = Editor::new();
+        ed.insert_str("Line 1\nLine 2\n");
+        let lines = ed.compute_visual_lines(80);
+        assert_eq!(lines.len(), 3);
+        assert_eq!(lines[0], VisualLine { char_start: 0, char_end: 6 });
+        assert_eq!(lines[1], VisualLine { char_start: 7, char_end: 13 });
+        assert_eq!(lines[2], VisualLine { char_start: 14, char_end: 14 });
+
+        // Cursor at bottom trailing line
+        ed.cur = 14;
+        ed.up_visual(&lines);
+        let (r, _) = ed.visual_row_col(&lines);
+        assert_eq!(r, 1);
+        assert_eq!(ed.cur, 7);
+    }
 }
+

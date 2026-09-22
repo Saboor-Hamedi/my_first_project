@@ -164,8 +164,8 @@ pub fn render_editor_body(
                 // Highlight a visible block only when the active selection spans across this empty line.
                 if sel_start <= line.char_start && sel_end > line.char_end {
                     let sel_w = cw.max(12.0);
-                    let highlight_rect = Rect::from_min_size(pos2(ed_origin.x, line_y), vec2(sel_w, lh));
-                    editor_painter.rect_filled(highlight_rect, 2.0, sel_color);
+                    let highlight_rect = Rect::from_min_size(pos2(ed_origin.x, line_y), vec2(sel_w, lh + 0.5));
+                    editor_painter.rect_filled(highlight_rect, 0.0, sel_color);
                 }
             } else {
                 let intersect_start = sel_start.max(line.char_start);
@@ -180,8 +180,8 @@ pub fn render_editor_body(
                     if sel_end > line.char_end {
                         sel_w += cw.max(10.0);
                     }
-                    let highlight_rect = Rect::from_min_size(pos2(sel_x, line_y), vec2(sel_w, lh));
-                    editor_painter.rect_filled(highlight_rect, 2.0, sel_color);
+                    let highlight_rect = Rect::from_min_size(pos2(sel_x, line_y), vec2(sel_w, lh + 0.5));
+                    editor_painter.rect_filled(highlight_rect, 0.0, sel_color);
                 }
             }
         }
