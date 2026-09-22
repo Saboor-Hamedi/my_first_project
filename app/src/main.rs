@@ -27,8 +27,9 @@ fn main() -> eframe::Result<()> {
         viewport: egui::ViewportBuilder::default()
             .with_decorations(false) // Borderless: NO title bar, NO borders
             .with_transparent(true)  // Enables opacity and rounded edges
-            .with_inner_size([1040.0, 680.0])
-            .with_min_inner_size([480.0, 320.0])
+            .with_inner_size([1120.0, 740.0])
+            .with_min_inner_size([700.0, 500.0])
+            .with_max_inner_size([2560.0, 1440.0])
             .with_resizable(true),
         vsync: true,
         ..Default::default()

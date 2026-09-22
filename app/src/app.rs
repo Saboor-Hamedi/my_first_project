@@ -497,6 +497,7 @@ impl App {
         };
 
         render_bottom_dock(
+            ui,
             &painter,
             cmd_bar_rect,
             content_left_margin,

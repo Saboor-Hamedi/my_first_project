@@ -767,7 +767,15 @@ impl Editor {
         self.selection = None;
         let (row, _) = self.visual_row_col(lines);
         if let Some(line) = lines.get(row) {
-            self.cur = line.char_end;
+            if line.char_end > line.char_start {
+                let mut target = line.char_end - 1;
+                while target > line.char_start && self.buf[target].is_whitespace() {
+                    target -= 1;
+                }
+                self.cur = target;
+            } else {
+                self.cur = line.char_start;
+            }
         }
     }
 
@@ -937,5 +945,27 @@ mod tests {
         // Undo brings it back
         assert!(ed.undo());
         assert_eq!(ed.text(), "Hello brave world");
+    }
+
+    #[test]
+    fn test_end_visual_paragraph_line() {
+        let mut ed = Editor::new();
+        ed.insert_str("The quick brown fox jumps over the lazy dog and runs away");
+        let lines = ed.compute_visual_lines(20);
+        assert!(lines.len() > 1);
+
+        // Start at col 0 of line 0
+        ed.cur = 0;
+        let (row_before, _) = ed.visual_row_col(&lines);
+        assert_eq!(row_before, 0);
+
+        // Press '$' (end_visual)
+        ed.end_visual(&lines);
+        let (row_after, col_after) = ed.visual_row_col(&lines);
+
+        // Must stay strictly on line 0, not jump to line 1!
+        assert_eq!(row_after, 0);
+        assert!(col_after > 0);
+        assert_eq!(ed.buf[ed.cur], 'x');
     }
 }

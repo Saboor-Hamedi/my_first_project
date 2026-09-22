@@ -3,6 +3,7 @@
 use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, Stroke};
 
 pub fn render_bottom_dock(
+    ui: &egui::Ui,
     painter: &egui::Painter,
     dock_rect: Rect,
     content_left_margin: f32,
@@ -131,7 +132,47 @@ pub fn render_bottom_dock(
         }
     }
 
-    // Right side stats: Line, Col, word count (responsive)
+    // Interactive window resize knob in the bottom-right corner
+    let knob_size = 22.0;
+    let knob_rect = Rect::from_min_max(
+        pos2(dock_rect.max.x - knob_size, dock_rect.max.y - knob_size),
+        dock_rect.max,
+    );
+    let is_knob_hovered = ui.rect_contains_pointer(knob_rect);
+
+    if is_knob_hovered {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeSouthEast);
+    }
+
+    if is_knob_hovered && ui.input(|i| i.pointer.primary_down()) {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeSouthEast);
+        let delta = ui.input(|i| i.pointer.delta());
+        if delta != egui::Vec2::ZERO {
+            let current_size = ui.ctx().screen_rect().size();
+            let new_w = (current_size.x + delta.x).clamp(700.0, 2560.0);
+            let new_h = (current_size.y + delta.y).clamp(500.0, 1440.0);
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::InnerSize(vec2(new_w, new_h)));
+        }
+    }
+
+    let knob_color = if is_knob_hovered {
+        accent
+    } else {
+        Color32::from_gray(75)
+    };
+
+    // 3 tactile diagonal gripper ridges
+    for &d in &[4.0, 8.0, 12.0] {
+        painter.line_segment(
+            [
+                pos2(dock_rect.max.x - d, dock_rect.max.y - 3.5),
+                pos2(dock_rect.max.x - 3.5, dock_rect.max.y - d),
+            ],
+            Stroke::new(1.4, knob_color),
+        );
+    }
+
+    // Right side stats: Line, Col, word count (padded before resize knob)
     let stats = if dock_rect.width() > 620.0 {
         format!("Ln {}, Col {}  ·  {} words", cursor_row + 1, cursor_col + 1, total_words)
     } else {
@@ -139,7 +180,7 @@ pub fn render_bottom_dock(
     };
 
     painter.text(
-        pos2(dock_rect.max.x - 20.0, cmd_y),
+        pos2(dock_rect.max.x - 28.0, cmd_y),
         Align2::RIGHT_TOP,
         stats,
         FontId::monospace(12.0),
