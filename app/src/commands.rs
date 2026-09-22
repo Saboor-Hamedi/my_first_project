@@ -23,9 +23,93 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
     match cmd.as_str() {
         "help" => {
             app.set_status(
-                ":w | :clear | :backup | :vim [on/off] | :mode [hybrid/vim] | :export | :import",
+                ":w | :d | :set showcmd [on/off] | :vim [on/off] | :theme | :sound | :clear",
                 now,
             );
+        }
+        "set" => {
+            let opt = args.to_lowercase();
+            let opt = opt.trim();
+            match opt {
+                "showcmd" | "sc" => {
+                    app.showcmd.enabled = true;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "showcmd".into(),
+                        val: "true".into(),
+                    });
+                    app.set_status(":set showcmd (Keystroke card ON)", now);
+                }
+                "noshowcmd" | "nosc" => {
+                    app.showcmd.enabled = false;
+                    app.showcmd.clear();
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "showcmd".into(),
+                        val: "false".into(),
+                    });
+                    app.set_status(":set noshowcmd (Keystroke card OFF)", now);
+                }
+                "showcmd!" | "sc!" => {
+                    app.showcmd.enabled = !app.showcmd.enabled;
+                    if !app.showcmd.enabled {
+                        app.showcmd.clear();
+                    }
+                    let val = if app.showcmd.enabled { "true" } else { "false" };
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "showcmd".into(),
+                        val: val.into(),
+                    });
+                    let msg = if app.showcmd.enabled {
+                        ":set showcmd (Keystroke card ON)"
+                    } else {
+                        ":set noshowcmd (Keystroke card OFF)"
+                    };
+                    app.set_status(msg, now);
+                }
+                _ => {
+                    app.set_status(
+                        format!("Unknown option: :set {}. Try :set showcmd or :set noshowcmd", opt),
+                        now,
+                    );
+                }
+            }
+        }
+        "showcmd" => {
+            match args.to_lowercase().trim() {
+                "off" | "disable" | "0" => {
+                    app.showcmd.enabled = false;
+                    app.showcmd.clear();
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "showcmd".into(),
+                        val: "false".into(),
+                    });
+                    app.set_status("showcmd disabled (Keystroke card OFF)", now);
+                }
+                "on" | "enable" | "1" => {
+                    app.showcmd.enabled = true;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "showcmd".into(),
+                        val: "true".into(),
+                    });
+                    app.set_status("showcmd enabled (Keystroke card ON)", now);
+                }
+                _ => {
+                    app.showcmd.enabled = !app.showcmd.enabled;
+                    if !app.showcmd.enabled {
+                        app.showcmd.clear();
+                    }
+                    let val = if app.showcmd.enabled { "true" } else { "false" };
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "showcmd".into(),
+                        val: val.into(),
+                    });
+                    let msg = if app.showcmd.enabled {
+                        "showcmd enabled (Keystroke card ON)"
+                    } else {
+                        "showcmd disabled (Keystroke card OFF)"
+                    };
+                    app.set_status(msg, now);
+                }
+            }
         }
         "vim" => {
             match args.to_lowercase().trim() {
@@ -116,7 +200,8 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
             }
         }
         "d" | "delete" | "rm" => {
-            app.delete_active_note(now);
+            app.delete_confirm_open = true;
+            app.delete_just_opened = true;
         }
         "export" => {
             let clean_arg = args.trim_matches(|c| c == '"' || c == '\'').trim();

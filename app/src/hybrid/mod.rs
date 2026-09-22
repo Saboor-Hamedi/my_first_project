@@ -72,6 +72,14 @@ impl HybridEngine {
                     ed.duplicate_line();
                     return true;
                 }
+                Key::OpenBracket => {
+                    ed.dedent_line();
+                    return true;
+                }
+                Key::CloseBracket => {
+                    ed.indent_line();
+                    return true;
+                }
                 _ => {}
             }
         }

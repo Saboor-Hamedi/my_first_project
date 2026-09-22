@@ -1,5 +1,30 @@
+use crate::app::EditorInputMode;
+use crate::vim::VimSubMode;
 use eframe::egui::{self, pos2, vec2, Color32, Pos2, Rect, Stroke, Vec2};
 use std::collections::VecDeque;
+
+/// Resolves the active caret style strictly from editor mode and preferences.
+/// Buffer content (e.g. whitespace, blank lines) NEVER alters the caret style.
+pub fn resolve_caret_kind(
+    input_mode: EditorInputMode,
+    vim_mode: Option<VimSubMode>,
+    custom_kind: CaretKind,
+) -> CaretKind {
+    match input_mode {
+        EditorInputMode::Vim => match vim_mode.unwrap_or(VimSubMode::Normal) {
+            VimSubMode::Insert => CaretKind::Beam,
+            VimSubMode::Normal | VimSubMode::Visual | VimSubMode::VisualLine => {
+                if custom_kind == CaretKind::Beam {
+                    CaretKind::Block
+                } else {
+                    custom_kind
+                }
+            }
+            VimSubMode::Search { .. } => CaretKind::Beam,
+        },
+        EditorInputMode::Hybrid => custom_kind,
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CaretKind {

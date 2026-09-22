@@ -1,0 +1,411 @@
+//! In-app GitHub updater for MindForge.
+//!
+//! Provides background checking for releases, downloading updates with live
+//! progress, and restarting the application to apply the downloaded binary.
+
+use serde::Deserialize;
+use std::io::Read;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+
+/// Current status of the updater.
+#[derive(Debug, Clone, PartialEq)]
+pub enum UpdateStatus {
+    Idle,
+    Checking,
+    UpToDate {
+        version: String,
+    },
+    UpdateAvailable {
+        new_version: String,
+        current_version: String,
+        release_notes: String,
+        asset_url: String,
+        asset_name: String,
+        asset_size: u64,
+    },
+    Downloading {
+        new_version: String,
+        progress: f32,
+        downloaded_bytes: u64,
+        total_bytes: u64,
+    },
+    ReadyToRestart {
+        new_version: String,
+        downloaded_path: PathBuf,
+    },
+    Error(String),
+}
+
+#[derive(Debug, Deserialize)]
+struct GithubRelease {
+    tag_name: String,
+    body: Option<String>,
+    assets: Vec<GithubAsset>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GithubAsset {
+    name: String,
+    size: u64,
+    browser_download_url: String,
+}
+
+#[derive(Clone)]
+pub struct UpdateManager {
+    status: Arc<Mutex<UpdateStatus>>,
+}
+
+impl Default for UpdateManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl UpdateManager {
+    pub fn new() -> Self {
+        Self {
+            status: Arc::new(Mutex::new(UpdateStatus::Idle)),
+        }
+    }
+
+    pub fn status(&self) -> UpdateStatus {
+        self.status.lock().map(|s| s.clone()).unwrap_or(UpdateStatus::Idle)
+    }
+
+    #[allow(dead_code)]
+    pub fn set_error(&self, msg: impl Into<String>) {
+        if let Ok(mut s) = self.status.lock() {
+            *s = UpdateStatus::Error(msg.into());
+        }
+    }
+
+    /// Triggers an asynchronous check for updates against the GitHub repo.
+    pub fn check_for_updates(&self, current_version: &str) {
+        let status = self.status.clone();
+        let cur_ver = current_version.to_string();
+
+        if let Ok(mut s) = status.lock() {
+            *s = UpdateStatus::Checking;
+        }
+
+        std::thread::spawn(move || {
+            let repo = "Saboor-Hamedi/my_first_project";
+            let url = format!("https://api.github.com/repos/{repo}/releases/latest");
+
+            let agent = ureq::builder()
+                .timeout(std::time::Duration::from_secs(12))
+                .user_agent("mindforge-updater/1.0")
+                .build();
+
+            let response = match agent.get(&url).call() {
+                Ok(resp) => resp,
+                Err(ureq::Error::Status(404, _)) => {
+                    if let Ok(mut s) = status.lock() {
+                        *s = UpdateStatus::UpToDate {
+                            version: cur_ver.clone(),
+                        };
+                    }
+                    return;
+                }
+                Err(e) => {
+                    if let Ok(mut s) = status.lock() {
+                        *s = UpdateStatus::Error(format!("Failed to query GitHub: {e}"));
+                    }
+                    return;
+                }
+            };
+
+            let release: GithubRelease = match response.into_json() {
+                Ok(rel) => rel,
+                Err(e) => {
+                    if let Ok(mut s) = status.lock() {
+                        *s = UpdateStatus::Error(format!("Failed to parse release: {e}"));
+                    }
+                    return;
+                }
+            };
+
+            let remote_version = release.tag_name.trim_start_matches('v').to_string();
+            let is_newer = is_version_newer(&cur_ver, &remote_version);
+
+            if is_newer {
+                let os_asset = find_platform_asset(&release.assets);
+                if let Some(asset) = os_asset {
+                    if let Ok(mut s) = status.lock() {
+                        *s = UpdateStatus::UpdateAvailable {
+                            new_version: remote_version,
+                            current_version: cur_ver,
+                            release_notes: release.body.unwrap_or_default(),
+                            asset_url: asset.browser_download_url.clone(),
+                            asset_name: asset.name.clone(),
+                            asset_size: asset.size,
+                        };
+                    }
+                } else {
+                    if let Ok(mut s) = status.lock() {
+                        *s = UpdateStatus::Error(format!(
+                            "Update v{} is available, but no matching asset found for this OS.",
+                            remote_version
+                        ));
+                    }
+                }
+            } else {
+                if let Ok(mut s) = status.lock() {
+                    *s = UpdateStatus::UpToDate {
+                        version: cur_ver,
+                    };
+                }
+            }
+        });
+    }
+
+    /// Downloads the available update with streaming progress updates.
+    pub fn start_download(&self) {
+        let (asset_url, new_version, asset_name, total_size) = {
+            let s = self.status();
+            match s {
+                UpdateStatus::UpdateAvailable {
+                    asset_url,
+                    new_version,
+                    asset_name,
+                    asset_size,
+                    ..
+                } => (asset_url, new_version, asset_name, asset_size),
+                _ => return,
+            }
+        };
+
+        let status = self.status.clone();
+        if let Ok(mut s) = status.lock() {
+            *s = UpdateStatus::Downloading {
+                new_version: new_version.clone(),
+                progress: 0.0,
+                downloaded_bytes: 0,
+                total_bytes: total_size,
+            };
+        }
+
+        std::thread::spawn(move || {
+            let agent = ureq::builder()
+                .timeout(std::time::Duration::from_secs(300))
+                .user_agent("mindforge-updater/1.0")
+                .build();
+
+            let response = match agent.get(&asset_url).call() {
+                Ok(r) => r,
+                Err(e) => {
+                    if let Ok(mut s) = status.lock() {
+                        *s = UpdateStatus::Error(format!("Download failed to connect: {e}"));
+                    }
+                    return;
+                }
+            };
+
+            let content_len: u64 = response
+                .header("Content-Length")
+                .and_then(|h| h.parse().ok())
+                .unwrap_or(total_size);
+
+            let temp_dir = std::env::temp_dir();
+            let dest_path = temp_dir.join(format!("mindforge_update_{new_version}_{asset_name}"));
+
+            let mut reader = response.into_reader();
+            let mut file = match std::fs::File::create(&dest_path) {
+                Ok(f) => f,
+                Err(e) => {
+                    if let Ok(mut s) = status.lock() {
+                        *s = UpdateStatus::Error(format!("Failed to create destination file: {e}"));
+                    }
+                    return;
+                }
+            };
+
+            let mut buffer = [0u8; 64 * 1024];
+            let mut downloaded: u64 = 0;
+
+            loop {
+                match reader.read(&mut buffer) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        use std::io::Write;
+                        if let Err(e) = file.write_all(&buffer[..n]) {
+                            if let Ok(mut s) = status.lock() {
+                                *s = UpdateStatus::Error(format!("Write error: {e}"));
+                            }
+                            return;
+                        }
+                        downloaded += n as u64;
+                        let progress = if content_len > 0 {
+                            (downloaded as f32 / content_len as f32).clamp(0.0, 1.0)
+                        } else {
+                            0.5
+                        };
+
+                        if let Ok(mut s) = status.lock() {
+                            *s = UpdateStatus::Downloading {
+                                new_version: new_version.clone(),
+                                progress,
+                                downloaded_bytes: downloaded,
+                                total_bytes: content_len,
+                            };
+                        }
+                    }
+                    Err(e) => {
+                        if let Ok(mut s) = status.lock() {
+                            *s = UpdateStatus::Error(format!("Streaming read error: {e}"));
+                        }
+                        return;
+                    }
+                }
+            }
+
+            // Flush file
+            use std::io::Write;
+            let _ = file.flush();
+            drop(file);
+
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mut perms = std::fs::metadata(&dest_path)
+                    .map(|m| m.permissions())
+                    .unwrap_or_else(|_| std::fs::Permissions::from_mode(0o755));
+                perms.set_mode(0o755);
+                let _ = std::fs::set_permissions(&dest_path, perms);
+            }
+
+            if let Ok(mut s) = status.lock() {
+                *s = UpdateStatus::ReadyToRestart {
+                    new_version,
+                    downloaded_path: dest_path,
+                };
+            }
+        });
+    }
+
+    /// Relaunches the application with the downloaded updated executable.
+    pub fn restart_and_apply(&self) -> Result<(), String> {
+        let downloaded_path = match self.status() {
+            UpdateStatus::ReadyToRestart { downloaded_path, .. } => downloaded_path,
+            _ => return Err("No downloaded update is ready to restart.".to_string()),
+        };
+
+        let current_exe = std::env::current_exe()
+            .map_err(|e| format!("Could not get current executable path: {e}"))?;
+
+        #[cfg(target_os = "windows")]
+        {
+            let current_str = current_exe.to_string_lossy().to_string();
+            let new_str = downloaded_path.to_string_lossy().to_string();
+
+            // Use cmd.exe to wait for current process to exit, copy new file over, and launch
+            let script = format!(
+                "ping 127.0.0.1 -n 2 > nul & copy /y \"{}\" \"{}\" & start \"\" \"{}\"",
+                new_str, current_str, current_str
+            );
+
+            std::process::Command::new("cmd")
+                .args(["/C", &script])
+                .spawn()
+                .map_err(|e| format!("Failed to spawn updater command: {e}"))?;
+
+            std::process::exit(0);
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            // On Unix, replace binary and exec
+            std::fs::copy(&downloaded_path, &current_exe)
+                .map_err(|e| format!("Failed to replace executable: {e}"))?;
+
+            std::process::Command::new(&current_exe)
+                .spawn()
+                .map_err(|e| format!("Failed to spawn updated application: {e}"))?;
+
+            std::process::exit(0);
+        }
+    }
+}
+
+/// Simple semantic version comparison: returns true if remote > current.
+fn is_version_newer(current: &str, remote: &str) -> bool {
+    let parse_parts = |v: &str| -> Vec<u64> {
+        v.trim_start_matches('v')
+            .split('.')
+            .filter_map(|s| s.split('-').next()) // ignore pre-release tags like -beta
+            .filter_map(|s| s.parse::<u64>().ok())
+            .collect()
+    };
+
+    let cur = parse_parts(current);
+    let rem = parse_parts(remote);
+
+    for (c, r) in cur.iter().zip(rem.iter()) {
+        if r > c {
+            return true;
+        } else if r < c {
+            return false;
+        }
+    }
+    rem.len() > cur.len()
+}
+
+/// Finds the most suitable release asset for the current OS and architecture.
+fn find_platform_asset<'a>(assets: &'a [GithubAsset]) -> Option<&'a GithubAsset> {
+    #[cfg(target_os = "windows")]
+    {
+        assets
+            .iter()
+            .find(|a| {
+                let n = a.name.to_lowercase();
+                (n.ends_with(".exe") || n.ends_with(".zip"))
+                    && (n.contains("win") || n.contains("x86_64") || n.contains("x64"))
+            })
+            .or_else(|| assets.iter().find(|a| a.name.to_lowercase().ends_with(".exe")))
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        assets
+            .iter()
+            .find(|a| {
+                let n = a.name.to_lowercase();
+                (n.ends_with(".dmg") || n.ends_with(".tar.gz") || n.ends_with(".zip"))
+                    && (n.contains("mac") || n.contains("darwin") || n.contains("apple"))
+            })
+            .or_else(|| assets.iter().find(|a| a.name.to_lowercase().ends_with(".dmg")))
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        assets
+            .iter()
+            .find(|a| {
+                let n = a.name.to_lowercase();
+                (n.ends_with(".deb") || n.ends_with(".tar.gz") || n.ends_with(".appimage"))
+                    && (n.contains("linux") || n.contains("x86_64"))
+            })
+            .or_else(|| assets.iter().find(|a| a.name.to_lowercase().ends_with(".tar.gz")))
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    {
+        assets.first()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_version_comparison() {
+        assert!(is_version_newer("0.1.0", "0.2.0"));
+        assert!(is_version_newer("0.1.0", "0.1.1"));
+        assert!(is_version_newer("0.1.0", "1.0.0"));
+        assert!(!is_version_newer("0.2.0", "0.1.0"));
+        assert!(!is_version_newer("0.1.0", "0.1.0"));
+        assert!(is_version_newer("0.1.0", "0.1.0.1"));
+    }
+}

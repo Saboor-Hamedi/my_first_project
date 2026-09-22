@@ -44,6 +44,14 @@ pub struct VimEngine {
     pub register_is_line: bool,
     /// Temporary feedback or search status notification.
     pub status_feedback: Option<String>,
+    /// Pending register selection prefix (`"` waiting for register name).
+    pub pending_register: Option<char>,
+    /// Keystroke HUD buffer tracking pending/partial commands (e.g. `d`, `2j`, `gg`, `"a`).
+    pub pending_keys: String,
+    /// Timestamp when pending_keys was last updated (for ~1s timeoutlen).
+    pub pending_keys_time: f64,
+    /// Last completed action (e.g. "ci\"", "vi\"", "40j", "dw", "x") for HUD flash.
+    pub last_completed_action: Option<String>,
 }
 
 impl Default for VimEngine {
@@ -66,6 +74,10 @@ impl VimEngine {
             register: String::new(),
             register_is_line: false,
             status_feedback: None,
+            pending_register: None,
+            pending_keys: String::new(),
+            pending_keys_time: 0.0,
+            last_completed_action: None,
         }
     }
 
@@ -108,6 +120,8 @@ impl VimEngine {
         self.pending_text_object_scope = None;
         self.pending_prefix = None;
         self.count_accumulator = None;
+        self.pending_register = None;
+        self.pending_keys.clear();
 
         match mode {
             VimSubMode::Normal => {
@@ -130,6 +144,27 @@ impl VimEngine {
         }
     }
 
+    /// Clears pending keys on timeout (~1s timeoutlen).
+    pub fn update_hud(&mut self, now: f64) {
+        if !self.pending_keys.is_empty() && (now - self.pending_keys_time) > 1.0 {
+            self.pending_keys.clear();
+            self.pending_op = None;
+            self.pending_text_object_scope = None;
+            self.pending_prefix = None;
+            self.pending_register = None;
+            self.count_accumulator = None;
+        }
+    }
+
+    /// Returns the active pending keys for HUD display (empty in Insert mode).
+    pub fn pending_keys(&self) -> &str {
+        if self.mode == VimSubMode::Insert {
+            ""
+        } else {
+            &self.pending_keys
+        }
+    }
+
     /// Handles keyboard events according to active Vim mode.
     /// Returns `true` if consumed, `false` otherwise.
     pub fn handle_key(
@@ -147,6 +182,37 @@ impl VimEngine {
                 self.search.cancel(ed);
             }
             self.set_mode(VimSubMode::Normal, ed);
+            self.pending_keys.clear();
+            return true;
+        }
+
+        // ── Tab / Shift+Tab handling across all Vim modes ────────────────────
+        if key == Key::Tab && !ctrl && !modifiers.alt {
+            self.pending_keys.clear();
+            match self.mode {
+                VimSubMode::Insert => {
+                    if modifiers.shift {
+                        ed.dedent();
+                    } else {
+                        ed.indent();
+                    }
+                    return true;
+                }
+                VimSubMode::Normal | VimSubMode::Visual | VimSubMode::VisualLine => {
+                    if modifiers.shift {
+                        ed.dedent_line();
+                    } else {
+                        ed.indent_line();
+                    }
+                    return true;
+                }
+                VimSubMode::Search { .. } => {}
+            }
+        }
+
+        // ── Ctrl+W prefix ────────────────────────────────────────────────────
+        if ctrl && key == Key::W && (self.mode == VimSubMode::Normal || self.mode == VimSubMode::Visual) {
+            self.pending_keys = "^W".to_string();
             return true;
         }
 
@@ -189,6 +255,7 @@ impl VimEngine {
                 if let Some(action) = self.keymap.lookup_normal(&stroke) {
                     let count = self.count_accumulator.take().unwrap_or(1);
                     self.execute_normal_action(ed, lines, action, count);
+                    self.pending_keys.clear();
                     return true;
                 }
                 false
@@ -198,6 +265,7 @@ impl VimEngine {
                 if let Some(action) = self.keymap.lookup_visual(&stroke) {
                     let count = self.count_accumulator.take().unwrap_or(1);
                     self.execute_visual_action(ed, lines, action, count);
+                    self.pending_keys.clear();
                     return true;
                 }
                 false
@@ -224,10 +292,27 @@ impl VimEngine {
     }
 
     fn handle_normal_char(&mut self, ed: &mut Editor, lines: &[VisualLine], c: char) -> bool {
+        // ── 0. Pending Register Selection (e.g. `"a`) ───────────────────────
+        if self.pending_op.is_none() {
+            if let Some(prefix) = self.pending_register.take() {
+                if prefix == '"' {
+                    self.pending_keys.push(c);
+                    return true;
+                }
+            }
+            if c == '"' {
+                self.pending_register = Some('"');
+                self.pending_keys = "\"".to_string();
+                return true;
+            }
+        }
+
         // ── 1. Pending Text Object Handling (e.g. `di"`, `ca(`, `ciw`) ────────
         if let Some(op) = self.pending_op {
             if let Some(inner) = self.pending_text_object_scope {
+                self.pending_keys.push(c);
                 if let Some(kind) = keymap::char_to_text_object_kind(c) {
+                    let full_cmd = self.pending_keys.clone();
                     if let Some(extracted) = apply_text_object_operator(ed, op, inner, kind) {
                         self.register = extracted;
                         self.register_is_line = false;
@@ -237,10 +322,13 @@ impl VimEngine {
                     } else {
                         self.set_mode(VimSubMode::Normal, ed);
                     }
+                    self.last_completed_action = Some(full_cmd);
+                    self.pending_keys.clear();
                     return true;
                 } else {
                     // Invalid delimiter target, cancel operator
                     self.set_mode(VimSubMode::Normal, ed);
+                    self.pending_keys.clear();
                     return true;
                 }
             }
@@ -248,10 +336,12 @@ impl VimEngine {
             // Scope selectors: 'i' (inner) or 'a' (around)
             if c == 'i' {
                 self.pending_text_object_scope = Some(true);
+                self.pending_keys.push('i');
                 return true;
             }
             if c == 'a' {
                 self.pending_text_object_scope = Some(false);
+                self.pending_keys.push('a');
                 return true;
             }
 
@@ -259,6 +349,7 @@ impl VimEngine {
             if c.is_ascii_digit() && (c != '0' || self.count_accumulator.is_some()) {
                 let d = c.to_digit(10).unwrap() as usize;
                 self.count_accumulator = Some(self.count_accumulator.unwrap_or(0) * 10 + d);
+                self.pending_keys.push(c);
                 return true;
             }
 
@@ -266,6 +357,9 @@ impl VimEngine {
 
             // Two-key operators (e.g. `dd`, `yy`, `cc`)
             if let Some(action) = self.keymap.lookup_operator(op, c) {
+                let full_cmd = format!("{}{}", self.pending_keys, c);
+                self.last_completed_action = Some(full_cmd);
+                self.pending_keys.clear();
                 match action {
                     VimAction::OperatorLine(VimOperator::Delete) => {
                         let mut deleted = String::new();
@@ -325,6 +419,9 @@ impl VimEngine {
 
             // Motion after operator (e.g. `d$`, `d0`, `dj`, `dk`)
             if let Some(VimAction::Motion(m)) = self.keymap.lookup_normal(&c.into()) {
+                let full_cmd = format!("{}{}", self.pending_keys, c);
+                self.last_completed_action = Some(full_cmd);
+                self.pending_keys.clear();
                 let initial_cur = ed.cur;
                 execute_normal_motion(ed, lines, m, count);
                 let motion_cur = ed.cur;
@@ -355,6 +452,7 @@ impl VimEngine {
 
             // Unknown motion / operator combo, cancel
             self.set_mode(VimSubMode::Normal, ed);
+            self.pending_keys.clear();
             return true;
         }
 
@@ -363,11 +461,14 @@ impl VimEngine {
             if prefix == 'g' && c == 'g' {
                 ed.cur = 0;
                 ed.clear_selection();
+                self.last_completed_action = Some("gg".to_string());
+                self.pending_keys.clear();
                 return true;
             }
         }
         if c == 'g' {
             self.pending_prefix = Some('g');
+            self.pending_keys = "g".to_string();
             return true;
         }
 
@@ -375,6 +476,7 @@ impl VimEngine {
         if c.is_ascii_digit() && (c != '0' || self.count_accumulator.is_some()) {
             let d = c.to_digit(10).unwrap() as usize;
             self.count_accumulator = Some(self.count_accumulator.unwrap_or(0) * 10 + d);
+            self.pending_keys.push(c);
             return true;
         }
 
@@ -391,12 +493,20 @@ impl VimEngine {
             if count > 1 {
                 self.count_accumulator = Some(count);
             }
+            self.pending_keys.push(c);
             return true;
         }
 
         // ── 5. Standard Normal Action Dispatch ───────────────────────────────
         if let Some(action) = self.keymap.lookup_normal(&c.into()) {
+            let full_cmd = if !self.pending_keys.is_empty() {
+                format!("{}{}", self.pending_keys, c)
+            } else {
+                c.to_string()
+            };
             self.execute_normal_action(ed, lines, action, count);
+            self.last_completed_action = Some(full_cmd);
+            self.pending_keys.clear();
             return true;
         }
 
@@ -523,16 +633,21 @@ impl VimEngine {
         // Text object selection in Visual mode (e.g. `vi"`, `va(`, `viw`)
         if let Some(inner) = self.pending_text_object_scope.take() {
             if let Some(kind) = keymap::char_to_text_object_kind(c) {
+                let full_cmd = format!("{}{}", self.pending_keys, c);
                 select_text_object(ed, inner, kind);
+                self.last_completed_action = Some(full_cmd);
+                self.pending_keys.clear();
                 return true;
             }
         }
         if c == 'i' {
             self.pending_text_object_scope = Some(true);
+            self.pending_keys = "vi".to_string();
             return true;
         }
         if c == 'a' {
             self.pending_text_object_scope = Some(false);
+            self.pending_keys = "va".to_string();
             return true;
         }
 
@@ -540,13 +655,21 @@ impl VimEngine {
         if c.is_ascii_digit() && (c != '0' || self.count_accumulator.is_some()) {
             let d = c.to_digit(10).unwrap() as usize;
             self.count_accumulator = Some(self.count_accumulator.unwrap_or(0) * 10 + d);
+            self.pending_keys.push(c);
             return true;
         }
 
         let count = self.count_accumulator.take().unwrap_or(1);
 
         if let Some(action) = self.keymap.lookup_visual(&c.into()) {
+            let full_cmd = if !self.pending_keys.is_empty() {
+                format!("{}{}", self.pending_keys, c)
+            } else {
+                format!("v{}", c)
+            };
             self.execute_visual_action(ed, lines, action, count);
+            self.last_completed_action = Some(full_cmd);
+            self.pending_keys.clear();
             return true;
         }
 
@@ -727,5 +850,86 @@ mod tests {
         // Press 'N' -> previous match (wraps to 17)
         assert!(vim.handle_char(&mut ed, &[], 'N'));
         assert_eq!(ed.cur, 17);
+    }
+
+    #[test]
+    fn test_vim_keystroke_hud() {
+        let mut ed = Editor::new();
+        ed.insert_str("line 1\nline 2\nline 3\n");
+        ed.cur = 0;
+        let mut vim = VimEngine::new();
+
+        // 1. Partial operator 'd'
+        assert!(vim.handle_char(&mut ed, &[], 'd'));
+        assert_eq!(vim.pending_keys(), "d");
+
+        // Complete 'dw'
+        assert!(vim.handle_char(&mut ed, &[], 'w'));
+        assert_eq!(vim.pending_keys(), "");
+
+        // 2. Multiplier '2'
+        assert!(vim.handle_char(&mut ed, &[], '2'));
+        assert_eq!(vim.pending_keys(), "2");
+
+        // Complete '2j'
+        assert!(vim.handle_char(&mut ed, &[], 'j'));
+        assert_eq!(vim.pending_keys(), "");
+
+        // 3. Prefix 'g'
+        assert!(vim.handle_char(&mut ed, &[], 'g'));
+        assert_eq!(vim.pending_keys(), "g");
+
+        // Complete 'gg'
+        assert!(vim.handle_char(&mut ed, &[], 'g'));
+        assert_eq!(vim.pending_keys(), "");
+
+        // 4. Register prefix '"' then 'a'
+        assert!(vim.handle_char(&mut ed, &[], '"'));
+        assert_eq!(vim.pending_keys(), "\"");
+        assert!(vim.handle_char(&mut ed, &[], 'a'));
+        assert_eq!(vim.pending_keys(), "\"a");
+
+        // Cancel with Escape
+        assert!(vim.handle_key(&mut ed, &[], Key::Escape, Modifiers::default()));
+        assert_eq!(vim.pending_keys(), "");
+
+        // 5. HUD empty in Insert mode
+        vim.set_mode(VimSubMode::Insert, &mut ed);
+        assert_eq!(vim.pending_keys(), "");
+        vim.set_mode(VimSubMode::Normal, &mut ed);
+
+        // 6. Timeout after 1.0s clears pending keys
+        assert!(vim.handle_char(&mut ed, &[], 'd'));
+        assert_eq!(vim.pending_keys(), "d");
+        vim.pending_keys_time = 100.0;
+        vim.update_hud(101.5);
+        assert_eq!(vim.pending_keys(), "");
+    }
+
+    #[test]
+    fn test_vim_tab_indentation() {
+        let mut ed = Editor::new();
+        let mut vim = VimEngine::new();
+
+        // In Insert mode at line start: Tab inserts 4 spaces
+        vim.set_mode(VimSubMode::Insert, &mut ed);
+        assert!(vim.handle_key(&mut ed, &[], Key::Tab, Modifiers::default()));
+        assert_eq!(ed.text(), "    ");
+
+        // Shift+Tab dedents line
+        let mut shift_mod = Modifiers::default();
+        shift_mod.shift = true;
+        assert!(vim.handle_key(&mut ed, &[], Key::Tab, shift_mod));
+        assert_eq!(ed.text(), "");
+
+        // In Normal mode: Tab indents line
+        ed.insert_str("hello");
+        vim.set_mode(VimSubMode::Normal, &mut ed);
+        assert!(vim.handle_key(&mut ed, &[], Key::Tab, Modifiers::default()));
+        assert_eq!(ed.text(), "    hello");
+
+        // In Normal mode: Shift+Tab dedents line
+        assert!(vim.handle_key(&mut ed, &[], Key::Tab, shift_mod));
+        assert_eq!(ed.text(), "hello");
     }
 }

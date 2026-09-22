@@ -21,6 +21,7 @@ pub fn render_sidebar(
     notes: &[Note],
     notes_limit: usize,
     total_notes_count: usize,
+    is_dirty: bool,
     accent: Color32,
     text_color: Color32,
     muted_color: Color32,
@@ -77,7 +78,11 @@ pub fn render_sidebar(
             painter.rect_filled(
                 btn_rect,
                 4.0,
-                if is_sel { Color32::from_rgb(26, 34, 30) } else { Color32::from_rgb(20, 20, 24) },
+                if is_sel {
+                    Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 35)
+                } else {
+                    Color32::from_rgb(20, 20, 24)
+                },
             );
             if is_hovered && ui.input(|inp| inp.pointer.primary_clicked()) {
                 action = Some(SidebarAction::SwitchMode(*mode_idx));
@@ -147,7 +152,11 @@ pub fn render_sidebar(
                         ui.painter().rect_filled(
                             rect,
                             4.0,
-                            if is_active { Color32::from_rgb(20, 32, 24) } else { Color32::from_rgb(22, 22, 26) },
+                            if is_active {
+                                Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 35)
+                            } else {
+                                Color32::from_rgb(22, 22, 26)
+                            },
                         );
                         // Left accent border on active note
                         if is_active {
@@ -180,6 +189,19 @@ pub fn render_sidebar(
                         FontId::monospace(12.0),
                         if is_active { accent } else { Color32::from_gray(180) },
                     );
+
+                    // GitHub-style unsaved document indicator ●
+                    if is_active && is_dirty {
+                        let dot_color = Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 180);
+                        let dot_x = if hovered { rect.max.x - del_w - 10.0 } else { rect.max.x - 14.0 };
+                        ui.painter().text(
+                            pos2(dot_x, rect.min.y + 4.0),
+                            Align2::CENTER_TOP,
+                            "●",
+                            FontId::monospace(11.0),
+                            dot_color,
+                        );
+                    }
 
                     if hovered {
                         if del_hover {

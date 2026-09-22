@@ -15,9 +15,14 @@ mod settingtabs;
 mod sidebar;
 mod sound;
 mod theme;
+mod types;
 mod view_editor;
 mod view_stats;
 mod vim;
+mod showcmd;
+mod updater;
+
+pub use types::{snapshot, visual_line};
 
 use app::App;
 use eframe::egui::{self, FontData, FontDefinitions, FontFamily};

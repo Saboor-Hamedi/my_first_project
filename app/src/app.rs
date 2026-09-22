@@ -18,6 +18,7 @@ use crate::theme::{Theme, ThemeKind};
 use crate::view_editor::{render_editor_body, render_editor_header};
 use crate::view_stats::render_stats;
 use crate::vim::VimEngine;
+use crate::updater::UpdateManager;
 
 use chrono::Local;
 use core::{DailyActivity, Database, Note};
@@ -78,8 +79,9 @@ pub struct App {
     pub rename_input: String,
     pub rename_just_opened: bool,
 
-    // Delete confirmation modal (Ctrl+D)
+    // Delete confirmation modal (Ctrl+Shift+D or :d)
     pub delete_confirm_open: bool,
+    pub delete_just_opened: bool,
 
     // Active document & sidebar limits
     pub active_note_id: Option<i64>,
@@ -101,6 +103,7 @@ pub struct App {
     pub editor_input_mode: EditorInputMode,
     pub hybrid: HybridEngine,
     pub vim: VimEngine,
+    pub showcmd: crate::showcmd::ShowCmdState,
 
     // Daily Activity & Writing Story tracking
     pub pending_secs: f32,
@@ -112,6 +115,9 @@ pub struct App {
     pub today_activity: DailyActivity,
     pub activity_history: Vec<DailyActivity>,
     pub lifetime_activity: (u64, u64, u64, usize),
+
+    // In-app auto-updater
+    pub updater: UpdateManager,
 }
 
 impl App {
@@ -150,6 +156,7 @@ impl App {
             rename_input: String::new(),
             rename_just_opened: false,
             delete_confirm_open: false,
+            delete_just_opened: false,
             active_note_id: None,
             active_note_title: "Untitled Note".to_string(),
             notes_list: Vec::new(),
@@ -163,6 +170,7 @@ impl App {
             editor_input_mode: EditorInputMode::Hybrid,
             hybrid: HybridEngine::new(),
             vim: VimEngine::new(),
+            showcmd: crate::showcmd::ShowCmdState::new(true),
             pending_secs: 0.0,
             pending_keys: 0,
             pending_words: 0,
@@ -172,6 +180,7 @@ impl App {
             today_activity: DailyActivity::default(),
             activity_history: Vec::new(),
             lifetime_activity: (0, 0, 0, 0),
+            updater: UpdateManager::new(),
         };
 
         app.load_settings();
@@ -224,7 +233,18 @@ impl App {
                     self.editor_input_mode = EditorInputMode::Hybrid;
                 }
             }
+            if let Ok(Some(s)) = db.get_setting("showcmd") {
+                self.showcmd.enabled = s != "off" && s != "false";
+            }
         }
+    }
+
+    pub fn save_active_note_id(&self) {
+        let val = self.active_note_id.map(|id| id.to_string()).unwrap_or_default();
+        let _ = self.db_tx.send(DbMsg::SaveSetting {
+            key: "last_active_note_id".to_string(),
+            val,
+        });
     }
 
     pub fn reload_db_state(&mut self) {
@@ -238,10 +258,24 @@ impl App {
             if let Ok(notes) = db.get_recent_notes(self.sidebar_notes_limit) {
                 self.notes_list = notes;
                 if self.active_note_id.is_none() {
-                    if let Some(first) = self.notes_list.first() {
-                        let clean = first.body.replace("\r\n", "\n").replace('\r', "\n");
-                        self.active_note_id = Some(first.id);
-                        self.active_note_title = first.topic.clone();
+                    let saved_note_id = db
+                        .get_setting("last_active_note_id")
+                        .ok()
+                        .flatten()
+                        .and_then(|s| s.parse::<i64>().ok());
+
+                    let target_note = saved_note_id.and_then(|id| {
+                        self.notes_list
+                            .iter()
+                            .find(|n| n.id == id)
+                            .cloned()
+                            .or_else(|| db.get_note(id).ok().flatten())
+                    });
+
+                    if let Some(target) = target_note.or_else(|| self.notes_list.first().cloned()) {
+                        let clean = target.body.replace("\r\n", "\n").replace('\r', "\n");
+                        self.active_note_id = Some(target.id);
+                        self.active_note_title = target.topic.clone();
                         self.ed.set_text(&clean);
                         self.ed.cur = 0;
                         self.is_dirty = false;
@@ -360,16 +394,22 @@ impl App {
 
         let (cw, lh) = *self.cell.get_or_insert_with(|| {
             let g = painter.layout_no_wrap("M".to_owned(), font.clone(), Color32::WHITE);
-            (g.size().x, g.size().y)
+            (g.size().x, (g.size().y * 1.30).round())
         });
 
         let bounds = ui.max_rect();
 
         // 5px Rounded window background frame
+        let win_bg = Color32::from_rgba_unmultiplied(
+            self.theme.bg.r(),
+            self.theme.bg.g(),
+            self.theme.bg.b(),
+            (self.opacity * 255.0) as u8,
+        );
         painter.rect(
             bounds,
             5.0,
-            Color32::from_rgba_unmultiplied(12, 12, 14, (self.opacity * 255.0) as u8),
+            win_bg,
             eframe::egui::Stroke::new(1.0, Color32::from_rgb(32, 34, 40)),
             egui::StrokeKind::Inside,
         );
@@ -404,6 +444,7 @@ impl App {
                 content_left_margin,
                 content_right_margin,
                 &self.active_note_title,
+                self.is_dirty,
                 &self.theme,
             );
         }
@@ -412,13 +453,16 @@ impl App {
         match self.mode {
             Mode::Normal => {
                 let original_caret_kind = self.caret.kind;
-                if self.editor_input_mode == EditorInputMode::Vim {
-                    if self.vim.mode == crate::vim::VimSubMode::Insert {
-                        self.caret.kind = crate::caret::CaretKind::Beam;
-                    } else if self.caret.kind == crate::caret::CaretKind::Beam {
-                        self.caret.kind = crate::caret::CaretKind::Block;
-                    }
-                }
+                let active_vim_mode = if self.editor_input_mode == EditorInputMode::Vim {
+                    Some(self.vim.mode)
+                } else {
+                    None
+                };
+                self.caret.kind = crate::caret::resolve_caret_kind(
+                    self.editor_input_mode,
+                    active_vim_mode,
+                    original_caret_kind,
+                );
 
                 let search_matches = if self.editor_input_mode == EditorInputMode::Vim
                     && (!self.vim.search.match_indices.is_empty() || self.vim.is_searching())
@@ -457,6 +501,14 @@ impl App {
                     search_matches,
                 );
                 self.caret.kind = original_caret_kind;
+
+                // Floating Keystroke Card (Vim showcmd): large borderless capsule pill — bottom-right of editor
+                if self.editor_input_mode == EditorInputMode::Vim {
+                    // Anchor: 16px from right, 20px from bottom of editor area
+                    let card_anchor = pos2(editor_rect.max.x - 16.0, editor_rect.max.y - 20.0);
+                    self.showcmd.render_card(&painter, card_anchor, self.theme.accent, now);
+                }
+
             }
             Mode::Stats => {
                 let today_str = Local::now().date_naive().format("%Y-%m-%d").to_string();
@@ -477,12 +529,18 @@ impl App {
             }
         }
 
+        // Update Vim keystroke HUD and ShowCmd card timeout
+        if self.editor_input_mode == EditorInputMode::Vim {
+            self.vim.update_hud(now);
+            self.showcmd.update(now);
+        }
+
         // Check for search status feedback from Vim engine
         if let Some(msg) = self.vim.status_feedback.take() {
             self.set_status(msg, now);
         }
 
-        // Bottom Dock (Shows active editing mode badge, status feedback, and word stats)
+        // Bottom Dock (Shows active editing mode badge, status feedback, word stats)
         let (row, col) = self.ed.visual_row_col(&self.visual_lines);
         let mode_badge_str = match self.editor_input_mode {
             EditorInputMode::Vim => self.vim.compact_label(),
@@ -530,6 +588,7 @@ impl App {
                 &self.notes_list,
                 self.sidebar_notes_limit,
                 self.total_notes_count,
+                self.is_dirty,
                 self.theme.accent,
                 self.theme.text,
                 self.theme.muted,
@@ -549,19 +608,23 @@ impl App {
                     SidebarAction::LoadNote { id, topic, body } => {
                         let clean = body.replace("\r\n", "\n").replace('\r', "\n");
                         self.active_note_id = Some(id);
+                        self.save_active_note_id();
                         self.active_note_title = topic.clone();
                         self.ed.set_text(&clean);
                         self.ed.cur = 0;
                         self.mode = Mode::Normal;
+                        self.vim.set_mode(crate::vim::VimSubMode::Normal, &mut self.ed);
                         self.is_dirty = false;
                         self.scroll_y = 0.0;
                         self.set_status("Opened note", now);
                     }
                     SidebarAction::NewNote => {
                         self.active_note_id = None;
+                        self.save_active_note_id();
                         self.active_note_title = "Untitled Note".to_string();
                         self.ed.clear();
                         self.mode = Mode::Normal;
+                        self.vim.set_mode(crate::vim::VimSubMode::Normal, &mut self.ed);
                         self.is_dirty = false;
                         self.scroll_y = 0.0;
                         self.set_status("Created new note", now);
@@ -570,6 +633,7 @@ impl App {
                         let _ = self.db_tx.send(DbMsg::DeleteNote { id });
                         if self.active_note_id == Some(id) {
                             self.active_note_id = None;
+                            self.save_active_note_id();
                             self.active_note_title = "Untitled Note".to_string();
                             self.ed.clear();
                             self.is_dirty = false;
@@ -636,12 +700,26 @@ impl App {
                 &mut self.theme,
                 &mut self.backup_dir,
                 self.last_backup_status.as_deref(),
+                &self.updater,
                 &mut on_save,
             );
 
-            if let Some(SettingPanelAction::TriggerBackup) = panel_action {
-                self.trigger_backup(now);
+            match panel_action {
+                Some(SettingPanelAction::TriggerBackup) => {
+                    self.trigger_backup(now);
+                }
+                Some(SettingPanelAction::CheckUpdates) => {
+                    self.updater.check_for_updates(env!("CARGO_PKG_VERSION"));
+                }
+                Some(SettingPanelAction::DownloadUpdate) => {
+                    self.updater.start_download();
+                }
+                Some(SettingPanelAction::RestartToApply) => {
+                    let _ = self.updater.restart_and_apply();
+                }
+                None => {}
             }
+
         }
 
         // Fuzzy Search Modal (Ctrl+P)
@@ -664,10 +742,12 @@ impl App {
                         if let Some(note) = self.notes_list.iter().find(|n| n.id == item.id) {
                             let clean = note.body.replace("\r\n", "\n").replace('\r', "\n");
                             self.active_note_id = Some(note.id);
+                            self.save_active_note_id();
                             self.active_note_title = note.topic.clone();
                             self.ed.set_text(&clean);
                             self.ed.cur = 0;
                             self.mode = Mode::Normal;
+                            self.vim.set_mode(crate::vim::VimSubMode::Normal, &mut self.ed);
                             self.is_dirty = false;
                             self.scroll_y = 0.0;
                             self.set_status("Opened note", now);
@@ -700,14 +780,17 @@ impl App {
             }
         }
 
-        // Delete Confirmation Modal (Ctrl+Shift+D)
+        // Delete Confirmation Modal (Ctrl+Shift+D or :d / :delete / :rm)
         if self.delete_confirm_open {
             let action = render_delete_confirm_modal(
                 ui,
                 &painter,
                 bounds,
                 &self.active_note_title,
+                self.delete_just_opened,
             );
+            self.delete_just_opened = false;
+
             if action.confirmed {
                 self.delete_active_note(now);
                 self.delete_confirm_open = false;
@@ -738,7 +821,7 @@ impl eframe::App for App {
         let (cw, _) = *self.cell.get_or_insert_with(|| {
             let font = FontId::monospace(self.font_size);
             let g = ctx.fonts(|f| f.layout_no_wrap("M".to_owned(), font, Color32::WHITE));
-            (g.size().x, g.size().y)
+            (g.size().x, (g.size().y * 1.30).round())
         });
         let screen_w = ctx.screen_rect().width();
         let left_margin = if self.sidebar_open { 280.0 } else { 48.0 };
@@ -789,6 +872,7 @@ impl eframe::App for App {
         let focused = ctx.input(|i| i.focused);
         if focused
             && (self.caret.is_animating(now)
+                || !self.showcmd.text.is_empty()
                 || self.search_open
                 || self.settings_open
                 || self.rename_open

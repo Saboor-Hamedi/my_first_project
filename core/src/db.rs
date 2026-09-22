@@ -327,6 +327,29 @@ impl Database {
         Ok(list)
     }
 
+    pub fn get_note(&self, id: i64) -> Result<Option<Note>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, topic, body, struggled_with, created_at FROM notes WHERE id = ?1",
+        )?;
+        let mut iter = stmt.query_map(params![id], |row| {
+            let dt_str: String = row.get(4)?;
+            let created_at =
+                NaiveDateTime::parse_from_str(&dt_str, "%Y-%m-%d %H:%M:%S").unwrap_or_default();
+            Ok(Note {
+                id: row.get(0)?,
+                topic: row.get(1)?,
+                body: row.get(2)?,
+                struggled_with: row.get(3)?,
+                created_at,
+            })
+        })?;
+        if let Some(n) = iter.next() {
+            Ok(Some(n?))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn get_all_notes(&self) -> Result<Vec<Note>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, topic, body, struggled_with, created_at FROM notes ORDER BY id DESC",

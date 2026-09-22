@@ -9,20 +9,25 @@ Both engines operate on a unified, high-performance character-buffer `Editor` (`
 
 ---
 
-## 🧩 The Core Editor Buffer (`app/src/editor.rs`)
+## 🧩 The Core Editor & Type Architecture
 
-The `Editor` struct maintains:
-- `buf: Vec<char>`: Complete Unicode-aware text buffer.
-- `cur: usize`: Active cursor index within `0..=buf.len()`.
-- `selection: Option<usize>`: Selection anchor index. When `Some(anchor)` and `anchor != cur`, the selection range is `(cur.min(anchor), cur.max(anchor))`.
-- `undo_stack: Vec<UndoSnapshot>`: Snapshot-based undo history capturing buffer content and cursor location.
-- `redo_stack: Vec<UndoSnapshot>`: Snapshot-based redo history.
+The editor engine is organized into clean, behavior-split modules and dedicated type definitions:
 
-### Undo & Redo Snapshots
-Snapshots are recorded when:
-- Whitespace is typed (word-boundary grouping).
-- Significant operations take place (pasting, deletion, duplicate line, backspace on non-empty buffer, clear).
-- Dedicated undo/redo key combinations (`Ctrl+Z`, `Ctrl+Shift+Z`, `Ctrl+Y`, and Vim `u`, `Ctrl+R`) step through the stacks with audio feedback.
+### 1. Data Models & Types (`app/src/types/`)
+- **`app/src/types/snapshot.rs`**: `EditorSnapshot` struct (`buf: Vec<char>`, `cur: usize`).
+- **`app/src/types/visual_line.rs`**: `VisualLine` struct (`char_start: usize`, `char_end: usize`).
+- **`app/src/types/mod.rs`**: Re-exports `EditorSnapshot` and `VisualLine`.
+
+### 2. Behavior-Split Editor Subsystem (`app/src/editor/`)
+The `Editor` struct is implemented across focused, single-responsibility modules:
+- `mod.rs`: `Editor` struct definition, buffer lifecycle (`new`, `clear`, `set_text`, `text`, `row_col`, `row_col_of`).
+- `editing.rs`: Character and string insertion, deletion, auto-pairing (`auto_pair`), and indentation (`indent`, `dedent`).
+- `movement.rs`: Cursor navigation (`left`, `right`, `up`, `down`, `home`, `end`), word jumps (`word_left`, `word_right`), and coordinate mapping.
+- `selection.rs`: Range calculation (`selected_range`, `has_selection`), select-all, and selection deletion.
+- `lines.rs`: Line-level operations (`insert_line_below`, `duplicate_line`, `move_line_up`, `move_line_down`, `delete_line`, `yank_line`).
+- `undo.rs`: Snapshot management (`save_undo_snapshot`), multi-level undo (`undo`), and redo (`redo`).
+- `visual.rs`: Soft line wrapping (`compute_visual_lines`) and visual line/column navigation (`visual_row_col`, `up_visual`, `down_visual`, `home_visual`, `end_visual`, `page_up_visual`, `page_down_visual`).
+- `tests.rs`: Comprehensive test suite verifying typing, visual wrapping, EOF empty line navigation, and undo/redo.
 
 ---
 

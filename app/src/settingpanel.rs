@@ -5,6 +5,7 @@ use crate::caret::{Caret, CaretKind};
 use crate::settingtabs::SettingTab;
 use crate::sound::{SoundEngine, SoundProfile};
 use crate::theme::{Theme, ThemeKind};
+use crate::updater::{UpdateManager, UpdateStatus};
 use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, Stroke};
 
 // ─── Per-style accent colors shown as indicator dots on each caret chip ───────
@@ -41,6 +42,9 @@ fn sound_wave_heights(profile: SoundProfile) -> [f32; 7] {
 
 pub enum SettingPanelAction {
     TriggerBackup,
+    CheckUpdates,
+    DownloadUpdate,
+    RestartToApply,
 }
 
 pub fn render_setting_panel(
@@ -54,6 +58,7 @@ pub fn render_setting_panel(
     theme: &mut Theme,
     backup_dir: &mut String,
     last_backup_status: Option<&str>,
+    updater: &UpdateManager,
     on_save_setting: &mut dyn FnMut(&str, &str),
 ) -> Option<SettingPanelAction> {
     let mut action = None;
@@ -105,7 +110,7 @@ pub fn render_setting_panel(
 
                 // Chip background — no border, use bg fill only
                 let bg = if is_selected {
-                    Color32::from_rgb(22, 40, 28)
+                    Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 35)
                 } else if hovered {
                     Color32::from_rgb(22, 22, 28)
                 } else {
@@ -184,7 +189,11 @@ pub fn render_setting_panel(
                 pill_rect,
                 pill_h * 0.5,
                 if anim_on {
-                    if pill_hover { Color32::from_rgb(25, 52, 32) } else { Color32::from_rgb(18, 40, 24) }
+                    if pill_hover {
+                        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 55)
+                    } else {
+                        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 35)
+                    }
                 } else {
                     if pill_hover { Color32::from_rgb(30, 30, 38) } else { Color32::from_rgb(20, 20, 26) }
                 },
@@ -315,7 +324,7 @@ pub fn render_setting_panel(
             }
 
             let hybrid_bg = if is_hybrid {
-                Color32::from_rgb(18, 30, 24)
+                Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 30)
             } else if hybrid_hover {
                 Color32::from_rgb(20, 22, 28)
             } else {
@@ -372,7 +381,7 @@ pub fn render_setting_panel(
             }
 
             let vim_bg = if is_vim {
-                Color32::from_rgb(18, 30, 24)
+                Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 30)
             } else if vim_hover {
                 Color32::from_rgb(20, 22, 28)
             } else {
@@ -496,7 +505,7 @@ pub fn render_setting_panel(
                 let s_hovered = ui.rect_contains_pointer(s_rect);
 
                 let bg = if is_sel {
-                    Color32::from_rgb(22, 40, 28)
+                    Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 35)
                 } else if s_hovered {
                     Color32::from_rgb(22, 22, 28)
                 } else {
@@ -588,93 +597,101 @@ pub fn render_setting_panel(
             painter.text(
                 p_origin + vec2(0.0, 22.0),
                 Align2::LEFT_TOP,
-                "Choose accent colors for distraction-free writing",
+                "Curated developer palettes that transform the entire interface",
                 FontId::monospace(11.5),
                 theme.muted,
             );
 
-            let theme_start_y = p_origin.y + 62.0;
-            // (name, kind, bg_stripe, text_stripe, accent_stripe)
-            let themes: [(&str, ThemeKind, Color32, Color32, Color32); 4] = [
-                ("Green", ThemeKind::Green,
-                    Color32::from_rgb(12, 20, 14),
-                    Color32::from_rgb(180, 240, 200),
-                    Color32::from_rgb(51, 255, 102)),
-                ("Amber", ThemeKind::Amber,
-                    Color32::from_rgb(22, 16, 8),
-                    Color32::from_rgb(255, 220, 160),
-                    Color32::from_rgb(255, 175, 45)),
-                ("White", ThemeKind::White,
-                    Color32::from_rgb(20, 20, 24),
-                    Color32::from_rgb(220, 220, 220),
-                    Color32::from_rgb(255, 255, 255)),
-                ("Ice", ThemeKind::Ice,
-                    Color32::from_rgb(10, 18, 26),
-                    Color32::from_rgb(195, 235, 255),
-                    Color32::from_rgb(80, 210, 255)),
-            ];
+            let theme_start_y = p_origin.y + 54.0;
+            let col_gap = 10.0;
+            let row_gap = 8.0;
+            let card_w = (panel_rect.width() - 56.0 - col_gap) * 0.5;
+            let card_h = 58.0;
 
-            let swatch_w = 100.0;
-            let swatch_h = 60.0;
-            let swatch_gap = 14.0;
-
-            for (i, (t_name, t_kind, bg_col, text_col, accent_col)) in themes.iter().enumerate() {
+            for (i, &t_kind) in ThemeKind::ALL.iter().enumerate() {
+                let col = i % 2;
+                let row = i / 2;
+                let t_preset = Theme::from_kind(t_kind);
                 let t_rect = Rect::from_min_size(
-                    pos2(p_origin.x + i as f32 * (swatch_w + swatch_gap), theme_start_y),
-                    vec2(swatch_w, swatch_h),
+                    pos2(
+                        p_origin.x + col as f32 * (card_w + col_gap),
+                        theme_start_y + row as f32 * (card_h + row_gap),
+                    ),
+                    vec2(card_w, card_h),
                 );
-                let is_sel = theme.kind == *t_kind;
+
+                let is_sel = theme.kind == t_kind;
                 let hovered = ui.rect_contains_pointer(t_rect);
 
-                let outer_border = if is_sel {
-                    Stroke::new(1.5, *accent_col)
+                let bg = if is_sel {
+                    Color32::from_rgba_unmultiplied(t_preset.accent.r(), t_preset.accent.g(), t_preset.accent.b(), 26)
+                } else if hovered {
+                    Color32::from_rgb(22, 24, 30)
+                } else {
+                    Color32::from_rgb(15, 16, 21)
+                };
+
+                let border = if is_sel {
+                    Stroke::new(1.5, t_preset.accent)
                 } else if hovered {
                     Stroke::new(1.0, Color32::from_gray(75))
                 } else {
-                    Stroke::new(1.0, Color32::from_gray(35))
+                    Stroke::new(1.0, Color32::from_rgb(32, 35, 45))
                 };
 
-                // Outer card
-                painter.rect(
-                    t_rect,
-                    6.0,
-                    if is_sel { Color32::from_rgba_unmultiplied(accent_col.r(), accent_col.g(), accent_col.b(), 15) } else { Color32::from_rgb(14, 15, 18) },
-                    outer_border,
-                    egui::StrokeKind::Inside,
-                );
+                painter.rect(t_rect, 6.0, bg, border, egui::StrokeKind::Inside);
 
-                // Three horizontal stripes: bg / text / accent
-                let stripe_h = 12.0;
-                let stripe_y0 = t_rect.min.y + 10.0;
-                let stripe_x = t_rect.min.x + 10.0;
-                let stripe_w = t_rect.width() - 20.0;
+                // Top accent stripe on selected card
+                if is_sel {
+                    let stripe = Rect::from_min_size(t_rect.min, vec2(t_rect.width(), 2.5));
+                    painter.rect_filled(stripe, egui::CornerRadius { nw: 6, ne: 6, sw: 0, se: 0 }, t_preset.accent);
+                }
 
-                painter.rect_filled(Rect::from_min_size(pos2(stripe_x, stripe_y0), vec2(stripe_w, stripe_h)), 3.0, *bg_col);
-                painter.rect_filled(Rect::from_min_size(pos2(stripe_x, stripe_y0 + stripe_h + 2.0), vec2(stripe_w, stripe_h)), 3.0, *text_col);
-                painter.rect_filled(Rect::from_min_size(pos2(stripe_x, stripe_y0 + (stripe_h + 2.0) * 2.0), vec2(stripe_w, stripe_h)), 3.0, *accent_col);
-
-                // Label at bottom
+                // Header line: Theme Name (left) and Status / Checkmark (right)
                 painter.text(
-                    pos2(t_rect.center().x, t_rect.max.y - 6.0),
-                    Align2::CENTER_BOTTOM,
-                    *t_name,
-                    FontId::monospace(11.0),
-                    if is_sel { *accent_col } else { Color32::from_gray(150) },
+                    pos2(t_rect.min.x + 12.0, t_rect.min.y + 11.0),
+                    Align2::LEFT_TOP,
+                    t_kind.display_name(),
+                    FontId::monospace(12.0),
+                    if is_sel { t_preset.accent } else { Color32::from_gray(215) },
                 );
 
-                // Checkmark when selected
                 if is_sel {
                     painter.text(
-                        pos2(t_rect.max.x - 8.0, t_rect.min.y + 8.0),
+                        pos2(t_rect.max.x - 12.0, t_rect.min.y + 11.0),
                         Align2::RIGHT_TOP,
-                        "✓",
-                        FontId::monospace(11.0),
-                        *accent_col,
+                        "● ACTIVE",
+                        FontId::monospace(10.0),
+                        t_preset.accent,
+                    );
+                }
+
+                // Palette preview swatches: bg, text, accent, highlight
+                let swatches = [
+                    t_preset.bg,
+                    t_preset.text,
+                    t_preset.accent,
+                    t_preset.highlight,
+                ];
+                let sw_y = t_rect.min.y + 32.0;
+                let sw_h = 15.0;
+                let sw_w = ((card_w - 24.0) - 3.0 * 6.0) / 4.0;
+
+                for (s_idx, color) in swatches.iter().enumerate() {
+                    let sw_x = t_rect.min.x + 12.0 + s_idx as f32 * (sw_w + 6.0);
+                    let sw_rect = Rect::from_min_size(pos2(sw_x, sw_y), vec2(sw_w, sw_h));
+                    painter.rect_filled(sw_rect, 3.0, *color);
+                    painter.rect(
+                        sw_rect,
+                        3.0,
+                        Color32::TRANSPARENT,
+                        Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 255, 255, 30)),
+                        egui::StrokeKind::Inside,
                     );
                 }
 
                 if hovered && ui.input(|inp| inp.pointer.primary_clicked()) {
-                    *theme = Theme::from_kind(*t_kind);
+                    *theme = Theme::from_kind(t_kind);
                     on_save_setting("theme", t_kind.name());
                 }
             }
@@ -707,6 +724,7 @@ pub fn render_setting_panel(
                     ("Ctrl + R",      "Rename document"),
                     ("Ctrl + D",      "Delete active document"),
                     ("Ctrl + Enter",  "Insert line below"),
+                    ("Ctrl + [ / ]",  "Move text left / right (dedent/indent)"),
                 ]),
                 ("NAVIGATION", &[
                     ("Ctrl + P",   "Fuzzy search"),
@@ -1007,6 +1025,234 @@ pub fn render_setting_panel(
                     FontId::monospace(10.0),
                     Color32::from_gray(160),
                 );
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // UPDATES TAB
+        // ═══════════════════════════════════════════════════════════════════════
+        SettingTab::Updates => {
+            let status = updater.status();
+            let card_w = panel_rect.width() - 56.0;
+
+            // ── Header ───────────────────────────────────────────────────────
+            painter.text(
+                p_origin,
+                Align2::LEFT_TOP,
+                "SOFTWARE UPDATES",
+                FontId::monospace(14.5),
+                theme.highlight,
+            );
+            painter.text(
+                p_origin + vec2(0.0, 22.0),
+                Align2::LEFT_TOP,
+                "Manage updates for MindForge",
+                FontId::monospace(11.5),
+                theme.muted,
+            );
+
+            // Version info card
+            let ver_card = Rect::from_min_size(pos2(p_origin.x, p_origin.y + 54.0), vec2(card_w, 64.0));
+            painter.rect(
+                ver_card,
+                5.0,
+                Color32::from_rgb(14, 15, 20),
+                Stroke::new(1.0, Color32::from_rgb(26, 28, 36)),
+                egui::StrokeKind::Inside,
+            );
+            painter.text(
+                ver_card.min + vec2(16.0, 12.0),
+                Align2::LEFT_TOP,
+                "Current Version",
+                FontId::monospace(10.5),
+                theme.muted,
+            );
+            painter.text(
+                ver_card.min + vec2(16.0, 30.0),
+                Align2::LEFT_TOP,
+                &format!("v{}", env!("CARGO_PKG_VERSION")),
+                FontId::monospace(13.5),
+                theme.accent,
+            );
+
+            // Status card
+            let status_card = Rect::from_min_size(pos2(p_origin.x, p_origin.y + 132.0), vec2(card_w, 120.0));
+            painter.rect(
+                status_card,
+                5.0,
+                Color32::from_rgb(14, 15, 20),
+                Stroke::new(1.0, Color32::from_rgb(26, 28, 36)),
+                egui::StrokeKind::Inside,
+            );
+
+            match &status {
+                UpdateStatus::Idle => {
+                    painter.text(
+                        status_card.min + vec2(16.0, 20.0),
+                        Align2::LEFT_TOP,
+                        "⟳  Ready to check for updates",
+                        FontId::monospace(12.0),
+                        Color32::from_gray(160),
+                    );
+                }
+                UpdateStatus::Checking => {
+                    painter.text(
+                        status_card.min + vec2(16.0, 20.0),
+                        Align2::LEFT_TOP,
+                        "⟳  Checking GitHub for latest release...",
+                        FontId::monospace(12.0),
+                        theme.accent,
+                    );
+                }
+                UpdateStatus::UpToDate { version } => {
+                    painter.text(
+                        status_card.min + vec2(16.0, 20.0),
+                        Align2::LEFT_TOP,
+                        &format!("✓  You are on the latest version (v{})", version),
+                        FontId::monospace(12.0),
+                        Color32::from_rgb(80, 200, 120),
+                    );
+                }
+                UpdateStatus::UpdateAvailable { new_version, release_notes, .. } => {
+                    painter.text(
+                        status_card.min + vec2(16.0, 12.0),
+                        Align2::LEFT_TOP,
+                        &format!("🔔  Update available: v{}", new_version),
+                        FontId::monospace(12.5),
+                        Color32::from_rgb(255, 200, 60),
+                    );
+                    // Truncate release notes to 2 lines
+                    let notes: String = release_notes.lines().take(2).collect::<Vec<_>>().join(" • ");
+                    let notes_short = if notes.len() > 80 { format!("{}…", &notes[..80]) } else { notes };
+                    painter.text(
+                        status_card.min + vec2(16.0, 36.0),
+                        Align2::LEFT_TOP,
+                        &notes_short,
+                        FontId::monospace(10.5),
+                        Color32::from_gray(150),
+                    );
+                }
+                UpdateStatus::Downloading { new_version, progress, downloaded_bytes, total_bytes } => {
+                    painter.text(
+                        status_card.min + vec2(16.0, 12.0),
+                        Align2::LEFT_TOP,
+                        &format!("⬇  Downloading v{}…", new_version),
+                        FontId::monospace(12.0),
+                        theme.accent,
+                    );
+                    // Progress bar
+                    let bar_bg = Rect::from_min_size(
+                        status_card.min + vec2(16.0, 40.0),
+                        vec2(card_w - 32.0, 10.0),
+                    );
+                    painter.rect_filled(bar_bg, 5.0, Color32::from_rgb(25, 28, 36));
+                    if *progress > 0.0 {
+                        let fill_w = (bar_bg.width() * progress).max(10.0);
+                        let bar_fill = Rect::from_min_size(bar_bg.min, vec2(fill_w, bar_bg.height()));
+                        painter.rect_filled(bar_fill, 5.0, theme.accent);
+                    }
+                    let mb_done = *downloaded_bytes as f64 / 1_048_576.0;
+                    let mb_total = *total_bytes as f64 / 1_048_576.0;
+                    painter.text(
+                        status_card.min + vec2(16.0, 60.0),
+                        Align2::LEFT_TOP,
+                        &format!("{:.1} MB / {:.1} MB  ({:.0}%)", mb_done, mb_total, progress * 100.0),
+                        FontId::monospace(10.5),
+                        theme.muted,
+                    );
+                }
+                UpdateStatus::ReadyToRestart { new_version, .. } => {
+                    painter.text(
+                        status_card.min + vec2(16.0, 20.0),
+                        Align2::LEFT_TOP,
+                        &format!("✓  v{} downloaded — restart to apply", new_version),
+                        FontId::monospace(12.0),
+                        Color32::from_rgb(80, 200, 120),
+                    );
+                }
+                UpdateStatus::Error(msg) => {
+                    let short = if msg.len() > 90 { format!("{}…", &msg[..90]) } else { msg.clone() };
+                    painter.text(
+                        status_card.min + vec2(16.0, 16.0),
+                        Align2::LEFT_TOP,
+                        &format!("✗  {}", short),
+                        FontId::monospace(11.0),
+                        Color32::from_rgb(220, 70, 70),
+                    );
+                }
+            }
+
+            // ── Action button — morphs per state ─────────────────────────────
+            let (btn_label, btn_color, btn_border, can_click) = match &status {
+                UpdateStatus::Idle | UpdateStatus::UpToDate { .. } | UpdateStatus::Error(_) => (
+                    "⟳  Check for Updates",
+                    Color32::from_rgb(18, 32, 50),
+                    Color32::from_rgb(36, 68, 100),
+                    true,
+                ),
+                UpdateStatus::Checking => (
+                    "⟳  Checking…",
+                    Color32::from_rgb(14, 20, 36),
+                    Color32::from_rgb(30, 50, 80),
+                    false,
+                ),
+                UpdateStatus::UpdateAvailable { .. } => (
+                    "⬇  Download Update",
+                    Color32::from_rgb(40, 50, 14),
+                    Color32::from_rgb(100, 130, 30),
+                    true,
+                ),
+                UpdateStatus::Downloading { .. } => (
+                    "⬇  Downloading…",
+                    Color32::from_rgb(14, 20, 36),
+                    Color32::from_rgb(30, 50, 80),
+                    false,
+                ),
+                UpdateStatus::ReadyToRestart { .. } => (
+                    "↺  Restart to Apply Update",
+                    Color32::from_rgb(14, 36, 20),
+                    Color32::from_rgb(36, 120, 60),
+                    true,
+                ),
+            };
+
+            let btn_rect = Rect::from_min_size(
+                pos2(p_origin.x, p_origin.y + 270.0),
+                vec2(card_w, 42.0),
+            );
+            let btn_hov = can_click && ui.rect_contains_pointer(btn_rect);
+            let bg = if btn_hov { Color32::from_rgb(btn_color.r().saturating_add(12), btn_color.g().saturating_add(12), btn_color.b().saturating_add(12)) } else { btn_color };
+            painter.rect(
+                btn_rect,
+                6.0,
+                bg,
+                Stroke::new(1.0, btn_border),
+                egui::StrokeKind::Inside,
+            );
+            painter.text(
+                btn_rect.center(),
+                Align2::CENTER_CENTER,
+                btn_label,
+                FontId::monospace(12.5),
+                if can_click { theme.accent } else { theme.muted },
+            );
+
+            if btn_hov && ui.input(|i| i.pointer.primary_clicked()) {
+                let act = match &status {
+                    UpdateStatus::Idle | UpdateStatus::UpToDate { .. } | UpdateStatus::Error(_) => {
+                        Some(SettingPanelAction::CheckUpdates)
+                    }
+                    UpdateStatus::UpdateAvailable { .. } => {
+                        Some(SettingPanelAction::DownloadUpdate)
+                    }
+                    UpdateStatus::ReadyToRestart { .. } => {
+                        Some(SettingPanelAction::RestartToApply)
+                    }
+                    _ => None,
+                };
+                if let Some(a) = act {
+                    action = Some(a);
+                }
             }
         }
     }

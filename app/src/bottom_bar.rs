@@ -133,7 +133,7 @@ pub fn render_bottom_dock(
     }
 
     // Interactive window resize knob in the bottom-right corner
-    let knob_size = 22.0;
+    let knob_size = 28.0;
     let knob_rect = Rect::from_min_max(
         pos2(dock_rect.max.x - knob_size, dock_rect.max.y - knob_size),
         dock_rect.max,
@@ -144,15 +144,8 @@ pub fn render_bottom_dock(
         ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeSouthEast);
     }
 
-    if is_knob_hovered && ui.input(|i| i.pointer.primary_down()) {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeSouthEast);
-        let delta = ui.input(|i| i.pointer.delta());
-        if delta != egui::Vec2::ZERO {
-            let current_size = ui.ctx().screen_rect().size();
-            let new_w = (current_size.x + delta.x).clamp(700.0, 2560.0);
-            let new_h = (current_size.y + delta.y).clamp(500.0, 1440.0);
-            ui.ctx().send_viewport_cmd(egui::ViewportCommand::InnerSize(vec2(new_w, new_h)));
-        }
+    if is_knob_hovered && ui.input(|i| i.pointer.primary_down() || i.pointer.primary_pressed()) {
+        ui.ctx().send_viewport_cmd(egui::ViewportCommand::BeginResize(egui::ResizeDirection::SouthEast));
     }
 
     let knob_color = if is_knob_hovered {
@@ -161,12 +154,12 @@ pub fn render_bottom_dock(
         Color32::from_gray(75)
     };
 
-    // 3 tactile diagonal gripper ridges
-    for &d in &[4.0, 8.0, 12.0] {
+    // Tactile diagonal gripper ridges
+    for &d in &[5.0, 9.0, 13.0, 17.0] {
         painter.line_segment(
             [
-                pos2(dock_rect.max.x - d, dock_rect.max.y - 3.5),
-                pos2(dock_rect.max.x - 3.5, dock_rect.max.y - d),
+                pos2(dock_rect.max.x - d, dock_rect.max.y - 4.0),
+                pos2(dock_rect.max.x - 4.0, dock_rect.max.y - d),
             ],
             Stroke::new(1.4, knob_color),
         );
@@ -179,11 +172,11 @@ pub fn render_bottom_dock(
         format!("Ln {}, Col {}", cursor_row + 1, cursor_col + 1)
     };
 
-    painter.text(
-        pos2(dock_rect.max.x - 28.0, cmd_y),
-        Align2::RIGHT_TOP,
-        stats,
-        FontId::monospace(12.0),
+    let stats_galley = painter.layout_no_wrap(stats, FontId::monospace(12.0), Color32::from_gray(120));
+    let stats_pos = pos2(dock_rect.max.x - 34.0, cmd_y);
+    painter.galley(
+        pos2(stats_pos.x - stats_galley.size().x, stats_pos.y),
+        stats_galley,
         Color32::from_gray(120),
     );
 }

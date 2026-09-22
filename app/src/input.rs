@@ -72,6 +72,55 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
         return false;
     }
 
+    // Move text left / right (Ctrl + [ to dedent left, Ctrl + ] to indent right)
+    let ctrl_indent = ctx.input(|i| i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::CloseBracket));
+    let ctrl_dedent = ctx.input(|i| i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::OpenBracket));
+    if ctrl_indent {
+        if !app.in_command {
+            app.ed.indent_line();
+            app.is_dirty = true;
+            app.sound.play();
+            app.set_status("Indented line (Ctrl + ])", now);
+            return true;
+        }
+    }
+    if ctrl_dedent {
+        if !app.in_command {
+            app.ed.dedent_line();
+            app.is_dirty = true;
+            app.sound.play();
+            app.set_status("Dedented line (Ctrl + [)", now);
+            return true;
+        }
+    }
+
+    // Tab / Shift+Tab — polled directly so egui focus-cycling can never intercept it.
+    let (tab_pressed, shift_tab_pressed) = ctx.input(|i| {
+        let tab = !i.modifiers.ctrl && !i.modifiers.alt && i.key_pressed(egui::Key::Tab);
+        (tab && !i.modifiers.shift, tab && i.modifiers.shift)
+    });
+    if (tab_pressed || shift_tab_pressed) && !app.in_command && app.mode == Mode::Normal {
+        use crate::app::EditorInputMode;
+        let modifiers = if shift_tab_pressed {
+            let mut m = egui::Modifiers::default();
+            m.shift = true;
+            m
+        } else {
+            egui::Modifiers::default()
+        };
+        if app.editor_input_mode == EditorInputMode::Vim {
+            app.vim.handle_key(&mut app.ed, &app.visual_lines, egui::Key::Tab, modifiers);
+        } else if app.editor_input_mode == EditorInputMode::Hybrid {
+            app.hybrid.handle_key(&mut app.ed, egui::Key::Tab, modifiers);
+        } else {
+            if shift_tab_pressed { app.ed.dedent(); } else { app.ed.indent(); }
+        }
+        app.is_dirty = true;
+        app.sound.play();
+        app.last_char_time = now;
+        return true;
+    }
+
     // Select All (Ctrl+A)
     let ctrl_a = ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::A));
     if ctrl_a {
@@ -135,6 +184,7 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
         app.active_note_title = "Untitled Note".to_string();
         app.ed.clear();
         app.mode = Mode::Normal;
+        app.vim.set_mode(crate::vim::VimSubMode::Normal, &mut app.ed);
         app.is_dirty = false;
         app.scroll_y = 0.0;
         app.set_status("Created new note", now);
@@ -150,6 +200,7 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
 
     if ctrl_shift_d {
         app.delete_confirm_open = true;
+        app.delete_just_opened = true;
         return false;
     }
 
@@ -201,6 +252,7 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
     }
 
     if escape {
+        app.showcmd.clear();
         if app.editor_input_mode == crate::app::EditorInputMode::Vim && app.vim.mode != crate::vim::VimSubMode::Normal {
             if app.vim.is_searching() {
                 app.vim.search.cancel(&mut app.ed);
@@ -227,6 +279,12 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
         }
     }
 
+    // Suppress egui tab focus navigation so Tab key reaches the editor
+    ctx.input_mut(|i| {
+        i.consume_key(egui::Modifiers::NONE, egui::Key::Tab);
+        i.consume_key(egui::Modifiers::SHIFT, egui::Key::Tab);
+    });
+
     // Editor and Command input processing
     ctx.input(|i| {
         for ev in &i.events {
@@ -245,6 +303,10 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                                 continue;
                             }
                             app.ed.insert(c);
+                        }
+                        // Play ONE sound for the entire paste — not per character.
+                        // Pasting 20k chars must not fire the audio engine 20k times.
+                        if !s.is_empty() {
                             app.sound.play();
                         }
                         typed = true;
@@ -257,21 +319,35 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                         for c in s.chars() {
                             app.cmd_ed.insert(c);
                         }
+                        app.showcmd.set_command(&app.cmd_ed.text(), now);
                         app.last_char_time = now;
                     } else if app.editor_input_mode == crate::app::EditorInputMode::Vim && app.mode == Mode::Normal {
                         if s == ":" && app.vim.mode == crate::vim::VimSubMode::Normal {
                             app.in_command = true;
                             app.cmd_ed.clear();
+                            app.showcmd.set_command("", now);
                         } else {
                             for c in s.chars() {
                                 if c == '\r' || c == '\n' {
                                     continue;
                                 }
+                                app.vim.pending_keys_time = now;
                                 if app.vim.handle_char(&mut app.ed, &app.visual_lines, c) {
                                     typed = true;
                                     app.sound.play();
                                     app.last_char_time = now;
                                     app.is_dirty = true;
+                                    if app.vim.is_searching() {
+                                        let sym = if app.vim.search.backward { "?" } else { "/" };
+                                        app.showcmd.set_search(sym, &app.vim.search.query, now);
+                                    } else if let Some(action_str) = app.vim.last_completed_action.take() {
+                                        app.showcmd.record_action(&action_str, now);
+                                    } else {
+                                        let pending_after = app.vim.pending_keys();
+                                        if !pending_after.is_empty() {
+                                            app.showcmd.set_pending(pending_after, now);
+                                        }
+                                    }
                                 } else if app.vim.mode == crate::vim::VimSubMode::Insert {
                                     app.ed.insert(c);
                                     typed = true;
@@ -313,10 +389,25 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                 } => {
                     if !app.in_command && app.mode == Mode::Normal {
                         if app.editor_input_mode == crate::app::EditorInputMode::Vim {
+                            app.vim.pending_keys_time = now;
                             if app.vim.handle_key(&mut app.ed, &app.visual_lines, *key, *modifiers) {
                                 typed = true;
                                 app.sound.play();
                                 app.last_char_time = now;
+                                app.is_dirty = true;
+                                if app.vim.is_searching() {
+                                    let sym = if app.vim.search.backward { "?" } else { "/" };
+                                    app.showcmd.set_search(sym, &app.vim.search.query, now);
+                                } else if let Some(action_str) = app.vim.last_completed_action.take() {
+                                    app.showcmd.record_action(&action_str, now);
+                                } else {
+                                    let pending_after = app.vim.pending_keys();
+                                    if !pending_after.is_empty() {
+                                        app.showcmd.set_pending(pending_after, now);
+                                    } else if *key == egui::Key::Escape {
+                                        app.showcmd.clear();
+                                    }
+                                }
                                 continue;
                             }
                         } else if app.editor_input_mode == crate::app::EditorInputMode::Hybrid {
@@ -346,6 +437,7 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                                 let cmd = app.cmd_ed.text();
                                 app.in_command = false;
                                 app.cmd_ed.clear();
+                                app.showcmd.record_action(&format!(":{}", cmd), now);
                                 execute_command(app, &cmd, now);
                             } else {
                                 handle_mode_enter(app, now);
@@ -359,6 +451,7 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                         Backspace if modifiers.ctrl => {
                             if app.in_command {
                                 app.cmd_ed.delete_word();
+                                app.showcmd.set_command(&app.cmd_ed.text(), now);
                             } else {
                                 app.ed.delete_word();
                                 app.is_dirty = true;
@@ -372,8 +465,10 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                             if app.in_command {
                                 if app.cmd_ed.cur == 0 {
                                     app.in_command = false;
+                                    app.showcmd.clear();
                                 } else {
                                     app.cmd_ed.backspace();
+                                    app.showcmd.set_command(&app.cmd_ed.text(), now);
                                 }
                             } else {
                                 app.ed.backspace();
@@ -495,7 +590,7 @@ pub fn handle_mode_enter(app: &mut App, _now: f64) {
 }
 
 pub fn window_shortcuts(ctx: &egui::Context) {
-    use egui::{Key, ViewportCommand};
+    use egui::{CursorIcon, Key, ResizeDirection, ViewportCommand};
     let (drag, f11, quit, is_fs) = ctx.input(|i| (
         i.modifiers.alt && i.pointer.primary_pressed(),
         i.key_pressed(Key::F11),
@@ -511,5 +606,37 @@ pub fn window_shortcuts(ctx: &egui::Context) {
     }
     if quit {
         ctx.send_viewport_cmd(ViewportCommand::Close);
+    }
+
+    // Borderless window edge & corner resize grips (6px borders)
+    if !is_fs {
+        let screen = ctx.screen_rect();
+        if let Some(pos) = ctx.input(|i| i.pointer.latest_pos()) {
+            let margin = 6.0;
+            let on_right = pos.x >= screen.max.x - margin && pos.x <= screen.max.x + 2.0;
+            let on_bottom = pos.y >= screen.max.y - margin && pos.y <= screen.max.y + 2.0;
+            let on_left = pos.x <= screen.min.x + margin && pos.x >= screen.min.x - 2.0;
+
+            let resize_dir = if on_right && on_bottom {
+                Some((ResizeDirection::SouthEast, CursorIcon::ResizeSouthEast))
+            } else if on_left && on_bottom {
+                Some((ResizeDirection::SouthWest, CursorIcon::ResizeSouthWest))
+            } else if on_right {
+                Some((ResizeDirection::East, CursorIcon::ResizeEast))
+            } else if on_bottom {
+                Some((ResizeDirection::South, CursorIcon::ResizeSouth))
+            } else if on_left {
+                Some((ResizeDirection::West, CursorIcon::ResizeWest))
+            } else {
+                None
+            };
+
+            if let Some((dir, cursor)) = resize_dir {
+                ctx.set_cursor_icon(cursor);
+                if ctx.input(|i| i.pointer.primary_pressed()) {
+                    ctx.send_viewport_cmd(ViewportCommand::BeginResize(dir));
+                }
+            }
+        }
     }
 }

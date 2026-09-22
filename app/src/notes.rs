@@ -17,6 +17,7 @@ pub fn quick_save_active_note(app: &mut App, now: f64) {
             if let Some(n) = app.notes_list.iter_mut().find(|n| n.id == id) {
                 n.body = content.clone();
             }
+            app.save_active_note_id();
             app.set_status("Saved", now);
         } else {
             let topic = if app.active_note_title.trim().is_empty() {
@@ -27,6 +28,7 @@ pub fn quick_save_active_note(app: &mut App, now: f64) {
             let dt = Local::now().naive_local();
             if let Ok(new_id) = db.add_note(&topic, &content, None, dt) {
                 app.active_note_id = Some(new_id);
+                app.save_active_note_id();
                 app.is_dirty = false;
                 app.last_saved_time = now;
                 app.pending_created += 1;
@@ -52,15 +54,33 @@ pub fn delete_active_note(app: &mut App, now: f64) {
         if let Some(ref db) = app.db {
             let _ = db.delete_note(id);
         }
+        let _ = app.db_tx.send(crate::db_worker::DbMsg::DeleteNote { id });
         app.notes_list.retain(|n| n.id != id);
         app.active_note_id = None;
+        app.save_active_note_id();
         app.active_note_title = "Untitled Note".to_string();
         app.ed.clear();
         app.is_dirty = false;
         app.set_status("Deleted", now);
+        app.reload_db_state();
+
+        // Load the next available note if one exists
+        if let Some(first) = app.notes_list.first() {
+            let first_id = first.id;
+            let topic = first.topic.clone();
+            let body = first.body.clone();
+            let clean = body.replace("\r\n", "\n").replace('\r', "\n");
+            app.active_note_id = Some(first_id);
+            app.save_active_note_id();
+            app.active_note_title = topic;
+            app.ed.set_text(&clean);
+            app.ed.cur = 0;
+            app.is_dirty = false;
+        }
     } else {
         app.ed.clear();
         app.is_dirty = false;
+        app.set_status("Cleared note", now);
     }
 }
 
