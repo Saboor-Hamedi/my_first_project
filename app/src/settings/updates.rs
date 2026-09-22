@@ -1,0 +1,241 @@
+//! Software update settings tab.
+
+use super::SettingPanelAction;
+use crate::theme::Theme;
+use crate::updater::{UpdateManager, UpdateStatus};
+use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Pos2, Rect, Stroke};
+
+pub fn render_updates_tab(
+    ui: &egui::Ui,
+    painter: &egui::Painter,
+    panel_rect: Rect,
+    p_origin: Pos2,
+    updater: &UpdateManager,
+    theme: &Theme,
+) -> Option<SettingPanelAction> {
+    let mut action = None;
+    let status = updater.status();
+    let card_w = panel_rect.width() - 56.0;
+
+    // ── Header ───────────────────────────────────────────────────────
+    painter.text(
+        p_origin,
+        Align2::LEFT_TOP,
+        "SOFTWARE UPDATES",
+        FontId::monospace(14.5),
+        theme.highlight,
+    );
+    painter.text(
+        p_origin + vec2(0.0, 22.0),
+        Align2::LEFT_TOP,
+        "Manage updates for MindForge",
+        FontId::monospace(11.5),
+        theme.muted,
+    );
+
+    // Version info card
+    let ver_card = Rect::from_min_size(pos2(p_origin.x, p_origin.y + 54.0), vec2(card_w, 64.0));
+    painter.rect(
+        ver_card,
+        5.0,
+        Color32::from_rgb(14, 15, 20),
+        Stroke::new(1.0, Color32::from_rgb(26, 28, 36)),
+        egui::StrokeKind::Inside,
+    );
+    painter.text(
+        ver_card.min + vec2(16.0, 12.0),
+        Align2::LEFT_TOP,
+        "Current Version",
+        FontId::monospace(10.5),
+        theme.muted,
+    );
+    painter.text(
+        ver_card.min + vec2(16.0, 30.0),
+        Align2::LEFT_TOP,
+        &format!("v{}", env!("CARGO_PKG_VERSION")),
+        FontId::monospace(13.5),
+        theme.accent,
+    );
+
+    // Status card
+    let status_card = Rect::from_min_size(pos2(p_origin.x, p_origin.y + 132.0), vec2(card_w, 120.0));
+    painter.rect(
+        status_card,
+        5.0,
+        Color32::from_rgb(14, 15, 20),
+        Stroke::new(1.0, Color32::from_rgb(26, 28, 36)),
+        egui::StrokeKind::Inside,
+    );
+
+    match &status {
+        UpdateStatus::Idle => {
+            painter.text(
+                status_card.min + vec2(16.0, 20.0),
+                Align2::LEFT_TOP,
+                "⟳  Ready to check for updates",
+                FontId::monospace(12.0),
+                Color32::from_gray(160),
+            );
+        }
+        UpdateStatus::Checking => {
+            painter.text(
+                status_card.min + vec2(16.0, 20.0),
+                Align2::LEFT_TOP,
+                "⟳  Checking GitHub for latest release...",
+                FontId::monospace(12.0),
+                theme.accent,
+            );
+        }
+        UpdateStatus::UpToDate { version } => {
+            painter.text(
+                status_card.min + vec2(16.0, 20.0),
+                Align2::LEFT_TOP,
+                &format!("✓  You are on the latest version (v{})", version),
+                FontId::monospace(12.0),
+                Color32::from_rgb(80, 200, 120),
+            );
+        }
+        UpdateStatus::UpdateAvailable { new_version, release_notes, .. } => {
+            painter.text(
+                status_card.min + vec2(16.0, 12.0),
+                Align2::LEFT_TOP,
+                &format!("🔔  Update available: v{}", new_version),
+                FontId::monospace(12.5),
+                Color32::from_rgb(255, 200, 60),
+            );
+            // Truncate release notes to 2 lines
+            let notes: String = release_notes.lines().take(2).collect::<Vec<_>>().join(" • ");
+            let notes_short = if notes.len() > 80 { format!("{}…", &notes[..80]) } else { notes };
+            painter.text(
+                status_card.min + vec2(16.0, 36.0),
+                Align2::LEFT_TOP,
+                &notes_short,
+                FontId::monospace(10.5),
+                Color32::from_gray(150),
+            );
+        }
+        UpdateStatus::Downloading { new_version, progress, downloaded_bytes, total_bytes } => {
+            painter.text(
+                status_card.min + vec2(16.0, 12.0),
+                Align2::LEFT_TOP,
+                &format!("⬇  Downloading v{}…", new_version),
+                FontId::monospace(12.0),
+                theme.accent,
+            );
+            // Progress bar
+            let bar_bg = Rect::from_min_size(
+                status_card.min + vec2(16.0, 40.0),
+                vec2(card_w - 32.0, 10.0),
+            );
+            painter.rect_filled(bar_bg, 5.0, Color32::from_rgb(25, 28, 36));
+            if *progress > 0.0 {
+                let fill_w = (bar_bg.width() * progress).max(10.0);
+                let bar_fill = Rect::from_min_size(bar_bg.min, vec2(fill_w, bar_bg.height()));
+                painter.rect_filled(bar_fill, 5.0, theme.accent);
+            }
+            let mb_done = *downloaded_bytes as f64 / 1_048_576.0;
+            let mb_total = *total_bytes as f64 / 1_048_576.0;
+            painter.text(
+                status_card.min + vec2(16.0, 60.0),
+                Align2::LEFT_TOP,
+                &format!("{:.1} MB / {:.1} MB  ({:.0}%)", mb_done, mb_total, progress * 100.0),
+                FontId::monospace(10.5),
+                theme.muted,
+            );
+        }
+        UpdateStatus::ReadyToRestart { new_version, .. } => {
+            painter.text(
+                status_card.min + vec2(16.0, 20.0),
+                Align2::LEFT_TOP,
+                &format!("✓  v{} downloaded — restart to apply", new_version),
+                FontId::monospace(12.0),
+                Color32::from_rgb(80, 200, 120),
+            );
+        }
+        UpdateStatus::Error(msg) => {
+            let short = if msg.len() > 90 { format!("{}…", &msg[..90]) } else { msg.clone() };
+            painter.text(
+                status_card.min + vec2(16.0, 16.0),
+                Align2::LEFT_TOP,
+                &format!("✗  {}", short),
+                FontId::monospace(11.0),
+                Color32::from_rgb(220, 70, 70),
+            );
+        }
+    }
+
+    // ── Action button — morphs per state ─────────────────────────────
+    let (btn_label, btn_color, btn_border, can_click) = match &status {
+        UpdateStatus::Idle | UpdateStatus::UpToDate { .. } | UpdateStatus::Error(_) => (
+            "⟳  Check for Updates",
+            Color32::from_rgb(18, 32, 50),
+            Color32::from_rgb(36, 68, 100),
+            true,
+        ),
+        UpdateStatus::Checking => (
+            "⟳  Checking…",
+            Color32::from_rgb(14, 20, 36),
+            Color32::from_rgb(30, 50, 80),
+            false,
+        ),
+        UpdateStatus::UpdateAvailable { .. } => (
+            "⬇  Download Update",
+            Color32::from_rgb(40, 50, 14),
+            Color32::from_rgb(100, 130, 30),
+            true,
+        ),
+        UpdateStatus::Downloading { .. } => (
+            "⬇  Downloading…",
+            Color32::from_rgb(14, 20, 36),
+            Color32::from_rgb(30, 50, 80),
+            false,
+        ),
+        UpdateStatus::ReadyToRestart { .. } => (
+            "↺  Restart to Apply Update",
+            Color32::from_rgb(14, 36, 20),
+            Color32::from_rgb(36, 120, 60),
+            true,
+        ),
+    };
+
+    let btn_rect = Rect::from_min_size(
+        pos2(p_origin.x, p_origin.y + 270.0),
+        vec2(card_w, 42.0),
+    );
+    let btn_hov = can_click && ui.rect_contains_pointer(btn_rect);
+    let bg = if btn_hov { Color32::from_rgb(btn_color.r().saturating_add(12), btn_color.g().saturating_add(12), btn_color.b().saturating_add(12)) } else { btn_color };
+    painter.rect(
+        btn_rect,
+        6.0,
+        bg,
+        Stroke::new(1.0, btn_border),
+        egui::StrokeKind::Inside,
+    );
+    painter.text(
+        btn_rect.center(),
+        Align2::CENTER_CENTER,
+        btn_label,
+        FontId::monospace(12.5),
+        if can_click { theme.accent } else { theme.muted },
+    );
+
+    if btn_hov && ui.input(|i| i.pointer.primary_clicked()) {
+        let act = match &status {
+            UpdateStatus::Idle | UpdateStatus::UpToDate { .. } | UpdateStatus::Error(_) => {
+                Some(SettingPanelAction::CheckUpdates)
+            }
+            UpdateStatus::UpdateAvailable { .. } => {
+                Some(SettingPanelAction::DownloadUpdate)
+            }
+            UpdateStatus::ReadyToRestart { .. } => {
+                Some(SettingPanelAction::RestartToApply)
+            }
+            _ => None,
+        };
+        if let Some(a) = act {
+            action = Some(a);
+        }
+    }
+
+    action
+}

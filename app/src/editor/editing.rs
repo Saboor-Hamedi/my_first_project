@@ -95,25 +95,8 @@ impl Editor {
     }
 
     pub fn indent(&mut self) {
-        if let Some((start, end)) = self.selected_range() {
-            self.save_undo_snapshot();
-            let mut line_start = start;
-            while line_start > 0 && self.buf[line_start - 1] != '\n' {
-                line_start -= 1;
-            }
-            let mut i = line_start;
-            let mut added = 0;
-            while i <= end + added && i <= self.buf.len() {
-                if i == 0 || (i > 0 && i <= self.buf.len() && self.buf[i - 1] == '\n') {
-                    for _ in 0..4 {
-                        self.buf.insert(i, ' ');
-                        added += 1;
-                    }
-                    i += 4;
-                }
-                i += 1;
-            }
-            self.cur = (self.cur + 4).min(self.buf.len());
+        if self.has_selection() {
+            self.indent_line();
         } else {
             self.save_undo_snapshot();
             for _ in 0..4 {
@@ -124,40 +107,50 @@ impl Editor {
     }
 
     pub fn dedent(&mut self) {
-        self.save_undo_snapshot();
-        let mut line_start = self.cur;
-        while line_start > 0 && self.buf[line_start - 1] != '\n' {
-            line_start -= 1;
-        }
-        let mut removed = 0;
-        while removed < 4 && line_start < self.buf.len() && self.buf[line_start] == ' ' {
-            self.buf.remove(line_start);
-            removed += 1;
-        }
-        self.cur = self.cur.saturating_sub(removed);
-        self.selection = None;
+        self.dedent_line();
     }
 
     pub fn indent_line(&mut self) {
         self.save_undo_snapshot();
         if let Some((start, end)) = self.selected_range() {
-            let mut line_start = start;
-            while line_start > 0 && self.buf[line_start - 1] != '\n' {
-                line_start -= 1;
+            let mut anchor = self.selection.unwrap();
+            let mut cur = self.cur;
+
+            let mut first_line_start = start;
+            while first_line_start > 0 && self.buf[first_line_start - 1] != '\n' {
+                first_line_start -= 1;
             }
-            let mut i = line_start;
-            let mut added = 0;
-            while i <= end + added && i <= self.buf.len() {
-                if i == 0 || (i > 0 && i <= self.buf.len() && self.buf[i - 1] == '\n') {
-                    for _ in 0..4 {
-                        self.buf.insert(i, ' ');
-                        added += 1;
+
+            let mut line_starts = Vec::new();
+            let mut i = first_line_start;
+            while i <= self.buf.len() {
+                line_starts.push(i);
+                if let Some(nl) = self.buf[i..].iter().position(|&c| c == '\n') {
+                    let next_start = i + nl + 1;
+                    if next_start > end || (next_start == end && end > start) {
+                        break;
                     }
-                    i += 4;
+                    i = next_start;
+                } else {
+                    break;
                 }
-                i += 1;
             }
-            self.cur = (self.cur + 4).min(self.buf.len());
+
+            line_starts.reverse();
+            for ls in line_starts {
+                for _ in 0..4 {
+                    self.buf.insert(ls, ' ');
+                }
+                if anchor >= ls {
+                    anchor += 4;
+                }
+                if cur >= ls {
+                    cur += 4;
+                }
+            }
+
+            self.cur = cur.min(self.buf.len());
+            self.selection = Some(anchor.min(self.buf.len()));
         } else {
             let mut line_start = self.cur;
             while line_start > 0 && self.buf[line_start - 1] != '\n' {
@@ -167,41 +160,85 @@ impl Editor {
                 self.buf.insert(line_start, ' ');
             }
             self.cur = (self.cur + 4).min(self.buf.len());
+            self.selection = None;
         }
     }
 
     pub fn dedent_line(&mut self) {
         self.save_undo_snapshot();
         if let Some((start, end)) = self.selected_range() {
-            let mut line_start = start;
-            while line_start > 0 && self.buf[line_start - 1] != '\n' {
-                line_start -= 1;
+            let mut anchor = self.selection.unwrap();
+            let mut cur = self.cur;
+
+            let mut first_line_start = start;
+            while first_line_start > 0 && self.buf[first_line_start - 1] != '\n' {
+                first_line_start -= 1;
             }
-            let mut i = line_start;
-            let mut removed_total = 0;
-            while i < self.buf.len() && i <= end.saturating_sub(removed_total) {
-                if i == 0 || self.buf[i - 1] == '\n' {
-                    let mut count = 0;
-                    while count < 4 && i < self.buf.len() && self.buf[i] == ' ' {
-                        self.buf.remove(i);
-                        count += 1;
-                        removed_total += 1;
+
+            let mut line_starts = Vec::new();
+            let mut i = first_line_start;
+            while i <= self.buf.len() {
+                line_starts.push(i);
+                if let Some(nl) = self.buf[i..].iter().position(|&c| c == '\n') {
+                    let next_start = i + nl + 1;
+                    if next_start > end || (next_start == end && end > start) {
+                        break;
+                    }
+                    i = next_start;
+                } else {
+                    break;
+                }
+            }
+
+            line_starts.reverse();
+            for ls in line_starts {
+                let mut spaces = 0;
+                while spaces < 4 && ls + spaces < self.buf.len() && self.buf[ls + spaces] == ' ' {
+                    spaces += 1;
+                }
+                if spaces > 0 {
+                    for _ in 0..spaces {
+                        self.buf.remove(ls);
+                    }
+                    if anchor >= ls + spaces {
+                        anchor -= spaces;
+                    } else if anchor > ls {
+                        anchor = ls;
+                    }
+
+                    if cur >= ls + spaces {
+                        cur -= spaces;
+                    } else if cur > ls {
+                        cur = ls;
                     }
                 }
-                i += 1;
             }
-            self.cur = self.cur.saturating_sub(4);
+
+            self.cur = cur.min(self.buf.len());
+            self.selection = if anchor != self.cur {
+                Some(anchor.min(self.buf.len()))
+            } else {
+                None
+            };
         } else {
             let mut line_start = self.cur;
             while line_start > 0 && self.buf[line_start - 1] != '\n' {
                 line_start -= 1;
             }
-            let mut removed = 0;
-            while removed < 4 && line_start < self.buf.len() && self.buf[line_start] == ' ' {
-                self.buf.remove(line_start);
-                removed += 1;
+            let mut spaces = 0;
+            while spaces < 4 && line_start + spaces < self.buf.len() && self.buf[line_start + spaces] == ' ' {
+                spaces += 1;
             }
-            self.cur = self.cur.saturating_sub(removed);
+            if spaces > 0 {
+                for _ in 0..spaces {
+                    self.buf.remove(line_start);
+                }
+                if self.cur >= line_start + spaces {
+                    self.cur -= spaces;
+                } else if self.cur > line_start {
+                    self.cur = line_start;
+                }
+            }
             self.selection = None;
         }
     }

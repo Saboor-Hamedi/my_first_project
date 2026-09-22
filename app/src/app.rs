@@ -7,11 +7,11 @@ use crate::editor::{Editor, VisualLine};
 use crate::fuzzy::SearchItem;
 use crate::input::{handle_input, window_shortcuts};
 use crate::modals::{render_delete_confirm_modal, render_rename_modal, render_search_modal};
+use crate::help_panel::render_help_panel;
 use crate::hybrid::HybridEngine;
 use crate::mode::Mode;
 use crate::notes::{delete_active_note, quick_save_active_note, rename_active_note, update_search_results};
-use crate::settingpanel::{render_setting_panel, SettingPanelAction};
-use crate::settingtabs::{render_setting_tabs, SettingTab};
+use crate::settings::{render_setting_panel, render_setting_tabs, SettingPanelAction, SettingTab};
 use crate::sidebar::{render_sidebar, SidebarAction};
 use crate::sound::{SoundEngine, SoundProfile};
 use crate::theme::{Theme, ThemeKind};
@@ -42,6 +42,7 @@ pub fn default_backup_dir() -> std::path::PathBuf {
 
 pub struct App {
     pub ed: Editor,
+    pub doc_ed: Editor,
     pub cmd_ed: Editor,
     pub in_command: bool,
     pub caret: Caret,
@@ -83,6 +84,12 @@ pub struct App {
     pub delete_confirm_open: bool,
     pub delete_just_opened: bool,
 
+    // Guidance & Help modal (:help or F1)
+    pub help_open: bool,
+    pub help_just_opened: bool,
+    pub help_tab: usize,
+    pub help_scroll_y: f32,
+
     // Active document & sidebar limits
     pub active_note_id: Option<i64>,
     pub active_note_title: String,
@@ -92,6 +99,7 @@ pub struct App {
 
     // Scrolling & auto-save
     pub scroll_y: f32,
+    pub doc_scroll_y: f32,
     pub is_dirty: bool,
     pub last_saved_time: f64,
 
@@ -129,6 +137,7 @@ impl App {
 
         let mut app = Self {
             ed: Editor::new(),
+            doc_ed: Editor::new(),
             cmd_ed: Editor::new(),
             in_command: false,
             caret: Caret::new(CaretKind::Beam),
@@ -158,12 +167,17 @@ impl App {
             rename_just_opened: false,
             delete_confirm_open: false,
             delete_just_opened: false,
+            help_open: false,
+            help_just_opened: false,
+            help_tab: 0,
+            help_scroll_y: 0.0,
             active_note_id: None,
             active_note_title: "Untitled Note".to_string(),
             notes_list: Vec::new(),
             sidebar_notes_limit: 50,
             total_notes_count: 0,
             scroll_y: 0.0,
+            doc_scroll_y: 0.0,
             is_dirty: false,
             last_saved_time: 0.0,
             db,
@@ -361,12 +375,10 @@ impl App {
         let idx = self.active_doc_idx.min(docs.len().saturating_sub(1));
         if let Some(doc) = docs.get(idx) {
             let clean = crate::docs::format_doc_for_reader(doc.content);
-            self.ed.set_text(&clean);
-            self.ed.cur = 0;
-            self.active_note_title = doc.title.to_string();
-            self.is_dirty = false;
-            self.scroll_y = 0.0;
-            self.vim.set_mode(crate::vim::VimSubMode::Normal, &mut self.ed);
+            self.doc_ed.set_text(&clean);
+            self.doc_ed.cur = 0;
+            self.doc_scroll_y = 0.0;
+            self.vim.set_mode(crate::vim::VimSubMode::Normal, &mut self.doc_ed);
             self.set_status(format!("Opened Guide: {}", doc.title), now);
         }
     }
@@ -444,14 +456,19 @@ impl App {
             bounds.max,
         );
 
-        let doc_sidebar_w = 210.0;
+        let sidebar_w = 230.0;
+        let sidebar_gap_x = 14.0;
+        let sidebar_top = bounds.min.y + 12.0;
+        let sidebar_bottom = cmd_bar_rect.min.y - 8.0;
+
         let (content_left_margin, doc_sidebar_rect) = if self.mode == Mode::Doc {
-            (doc_sidebar_w + 36.0, Some(Rect::from_min_max(
-                pos2(bounds.min.x, bounds.min.y),
-                pos2(bounds.min.x + doc_sidebar_w, cmd_bar_rect.min.y),
-            )))
+            let sb_rect = Rect::from_min_max(
+                pos2(bounds.min.x + sidebar_gap_x, sidebar_top),
+                pos2(bounds.min.x + sidebar_gap_x + sidebar_w, sidebar_bottom),
+            );
+            (sidebar_gap_x + sidebar_w + 24.0, Some(sb_rect))
         } else if self.sidebar_open {
-            (280.0, None)
+            (sidebar_gap_x + sidebar_w + 24.0, None)
         } else {
             (48.0, None)
         };
@@ -489,14 +506,19 @@ impl App {
 
         // Keep visual lines updated to exact editor width
         let max_cols = ((editor_rect.width() - 8.0) / cw).floor().max(20.0) as usize;
-        self.visual_lines = self.ed.compute_visual_lines(max_cols);
+        let target_ed = if self.mode == Mode::Doc { &self.doc_ed } else { &self.ed };
+        self.visual_lines = target_ed.compute_visual_lines(max_cols);
 
         // Clean Header (Zero Clunky Buttons! Purely keyboard shortcut driven with top-right drag gripper)
         if self.mode == Mode::Normal || self.mode == Mode::Doc {
-            let header_title = if self.mode == Mode::Doc {
-                format!("📖 {}  [GUIDE]", self.active_note_title)
+            let (header_title, header_dirty) = if self.mode == Mode::Doc {
+                let doc_title = crate::docs::get_docs()
+                    .get(self.active_doc_idx)
+                    .map(|d| d.title)
+                    .unwrap_or("Documentation");
+                (format!("📖 {}  [DOCS]", doc_title), false)
             } else {
-                self.active_note_title.clone()
+                (self.active_note_title.clone(), self.is_dirty)
             };
             render_editor_header(
                 ui,
@@ -505,7 +527,7 @@ impl App {
                 content_left_margin,
                 content_right_margin,
                 &header_title,
-                self.is_dirty,
+                header_dirty,
                 &self.theme,
             );
         }
@@ -542,15 +564,21 @@ impl App {
                     None
                 };
 
+                let (target_ed_mut, target_scroll_y) = if self.mode == Mode::Doc {
+                    (&mut self.doc_ed, &mut self.doc_scroll_y)
+                } else {
+                    (&mut self.ed, &mut self.scroll_y)
+                };
+
                 render_editor_body(
                     ui,
                     &painter,
                     bounds,
                     editor_rect,
-                    &mut self.ed,
+                    target_ed_mut,
                     &self.visual_lines,
                     &mut self.caret,
-                    &mut self.scroll_y,
+                    target_scroll_y,
                     &self.theme,
                     self.font_size,
                     cw,
@@ -600,7 +628,16 @@ impl App {
         }
 
         // Bottom Dock (Shows active editing mode badge, status feedback, word stats)
-        let (row, col) = self.ed.visual_row_col(&self.visual_lines);
+        let (row, col) = if self.mode == Mode::Doc {
+            self.doc_ed.visual_row_col(&self.visual_lines)
+        } else {
+            self.ed.visual_row_col(&self.visual_lines)
+        };
+        let word_count = if self.mode == Mode::Doc {
+            self.doc_ed.text().split_whitespace().count()
+        } else {
+            self.ed.text().split_whitespace().count()
+        };
         let mode_badge_str = match self.editor_input_mode {
             EditorInputMode::Vim => self.vim.compact_label(),
             EditorInputMode::Hybrid => "HYBRID".to_string(),
@@ -625,7 +662,7 @@ impl App {
             now,
             row + 1,
             col + 1,
-            self.ed.text().split_whitespace().count(),
+            word_count,
             Some(mode_badge_str.as_str()),
             search_prompt,
             self.theme.accent,
@@ -854,6 +891,32 @@ impl App {
                 self.delete_confirm_open = false;
             }
         }
+
+        // Help & Guidance Center Modal (:help or F1)
+        if self.help_open {
+            let action = render_help_panel(
+                ui,
+                &painter,
+                bounds,
+                &mut self.help_tab,
+                &mut self.help_scroll_y,
+                self.theme.accent,
+                self.help_just_opened,
+            );
+            self.help_just_opened = false;
+
+            if action.open_docs {
+                self.help_open = false;
+                self.open_docs_mode(now);
+            }
+            if action.open_settings {
+                self.help_open = false;
+                self.settings_open = true;
+            }
+            if action.should_close {
+                self.help_open = false;
+            }
+        }
     }
 }
 
@@ -880,10 +943,15 @@ impl eframe::App for App {
             (g.size().x, (g.size().y * 1.30).round())
         });
         let screen_w = ctx.screen_rect().width();
-        let left_margin = if self.sidebar_open { 280.0 } else { 48.0 };
+        let left_margin = if self.mode == Mode::Doc || self.sidebar_open {
+            14.0 + 230.0 + 24.0
+        } else {
+            48.0
+        };
         let editor_w = (screen_w - left_margin - 48.0).max(100.0);
         let max_cols = ((editor_w - 8.0) / cw).floor().max(20.0) as usize;
-        self.visual_lines = self.ed.compute_visual_lines(max_cols);
+        let active_ed = if self.mode == Mode::Doc { &self.doc_ed } else { &self.ed };
+        self.visual_lines = active_ed.compute_visual_lines(max_cols);
 
         let typed = handle_input(self, ctx, now);
 
@@ -931,6 +999,7 @@ impl eframe::App for App {
                 || !self.showcmd.text.is_empty()
                 || self.search_open
                 || self.settings_open
+                || self.help_open
                 || self.rename_open
                 || self.delete_confirm_open)
         {

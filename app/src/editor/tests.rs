@@ -177,6 +177,44 @@ fn test_indent_and_dedent_line() {
 }
 
 #[test]
+fn test_indent_and_dedent_preserves_selection() {
+    let mut ed = Editor::new();
+    ed.insert_str("fn main() {\n    let x = 1;\n}");
+
+    // Select the word "let" (indices 16..19 in "    let x = 1;\n")
+    // "fn main() {\n" is 12 chars. "    let" starts at 12 + 4 = 16.
+    ed.selection = Some(16);
+    ed.cur = 19;
+    assert_eq!(ed.selected_text().as_deref(), Some("let"));
+    let orig_sel_len = ed.selected_text().unwrap().len();
+
+    // Indent (Ctrl + ]) -> shifts line right by 4 spaces
+    ed.indent_line();
+    assert_eq!(ed.selected_text().as_deref(), Some("let"));
+    assert_eq!(ed.selected_text().unwrap().len(), orig_sel_len);
+
+    // Indent again
+    ed.indent_line();
+    assert_eq!(ed.selected_text().as_deref(), Some("let"));
+    assert_eq!(ed.selected_text().unwrap().len(), orig_sel_len);
+
+    // Dedent (Ctrl + [) -> shifts line left by 4 spaces
+    ed.dedent_line();
+    assert_eq!(ed.selected_text().as_deref(), Some("let"));
+    assert_eq!(ed.selected_text().unwrap().len(), orig_sel_len);
+
+    // Dedent back to original
+    ed.dedent_line();
+    assert_eq!(ed.selected_text().as_deref(), Some("let"));
+    assert_eq!(ed.selected_text().unwrap().len(), orig_sel_len);
+
+    // Dedent to column 0
+    ed.dedent_line();
+    assert_eq!(ed.selected_text().as_deref(), Some("let"));
+    assert_eq!(ed.selected_text().unwrap().len(), orig_sel_len);
+}
+
+#[test]
 fn test_caret_kind_on_whitespace() {
     let mut ed = Editor::new();
     ed.insert_str("line1\n\nline3");
@@ -219,4 +257,48 @@ fn test_caret_kind_on_whitespace() {
     assert_eq!(style_row2, style_row0);
 }
 
+#[test]
+fn test_vim_caret_consistent_across_submodes() {
+    let custom = crate::caret::CaretKind::Neon;
+    let normal = crate::caret::resolve_caret_kind(
+        crate::app::EditorInputMode::Vim,
+        Some(crate::vim::VimSubMode::Normal),
+        custom,
+    );
+    let insert = crate::caret::resolve_caret_kind(
+        crate::app::EditorInputMode::Vim,
+        Some(crate::vim::VimSubMode::Insert),
+        custom,
+    );
+    let visual = crate::caret::resolve_caret_kind(
+        crate::app::EditorInputMode::Vim,
+        Some(crate::vim::VimSubMode::Visual),
+        custom,
+    );
+    let visual_line = crate::caret::resolve_caret_kind(
+        crate::app::EditorInputMode::Vim,
+        Some(crate::vim::VimSubMode::VisualLine),
+        custom,
+    );
 
+    assert_eq!(normal, custom);
+    assert_eq!(insert, normal);
+    assert_eq!(visual, normal);
+    assert_eq!(visual_line, normal);
+}
+
+#[test]
+fn test_caret_kinds_parsing_and_properties() {
+    assert_eq!(crate::caret::CaretKind::parse("snow"), Some(crate::caret::CaretKind::Snow));
+    assert_eq!(crate::caret::CaretKind::parse("water"), Some(crate::caret::CaretKind::Water));
+    assert_eq!(crate::caret::CaretKind::parse("fire"), Some(crate::caret::CaretKind::Fire));
+    assert_eq!(crate::caret::CaretKind::parse("candle"), Some(crate::caret::CaretKind::Candle));
+    assert_eq!(crate::caret::CaretKind::parse("ice"), Some(crate::caret::CaretKind::Ice));
+    assert_eq!(crate::caret::CaretKind::parse("neon"), Some(crate::caret::CaretKind::Neon));
+
+    for &kind in crate::caret::CaretKind::ALL {
+        assert!(!kind.name().is_empty());
+        assert!(!kind.description().is_empty());
+        assert_eq!(crate::caret::CaretKind::parse(kind.name()), Some(kind));
+    }
+}

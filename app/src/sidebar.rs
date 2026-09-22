@@ -26,11 +26,13 @@ pub fn render_sidebar(
     text_color: Color32,
     muted_color: Color32,
 ) -> Option<SidebarAction> {
-    let gap = 16.0;
+    let gap = 14.0;
     let sidebar_w = 230.0;
+    let sb_top = bounds.min.y + 12.0;
+    let sb_bottom = bounds.max.y - 36.0 - 8.0;
     let sb_rect = Rect::from_min_max(
-        pos2(bounds.min.x + gap, bounds.min.y + gap),
-        pos2(bounds.min.x + gap + sidebar_w, bounds.max.y - gap),
+        pos2(bounds.min.x + gap, sb_top),
+        pos2(bounds.min.x + gap + sidebar_w, sb_bottom),
     );
 
     // Floating panel background with subtle border (5px round)

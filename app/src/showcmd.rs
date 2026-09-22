@@ -148,12 +148,12 @@ impl ShowCmdState {
     }
 
     /// Renders the card anchored at `anchor_bottom_right` (bottom-right corner of card).
-    /// Borderless capsule pill — no visible stroke, no shimmer line, single soft shadow.
+    /// Sleek, borderless glass micro-capsule HUD with crisp typography and subtle mode badge.
     pub fn render_card(
         &self,
         painter: &egui::Painter,
         anchor_bottom_right: Pos2,
-        _accent: Color32,
+        accent: Color32,
         now: f64,
     ) -> Option<Rect> {
         if !self.enabled || self.text.is_empty() {
@@ -166,9 +166,9 @@ impl ShowCmdState {
             return None;
         }
 
-        // Smooth fade-out over the last 0.4 s
+        // Smooth fade-out over the last 0.35 s
         let alpha = {
-            let fade = 0.4f64;
+            let fade = 0.35f64;
             if elapsed > timeout - fade {
                 let frac = (timeout - elapsed) / fade;
                 (frac.clamp(0.0, 1.0) * 255.0) as u8
@@ -178,90 +178,91 @@ impl ShowCmdState {
         };
 
         // ── Per-mode palette ─────────────────────────────────────────────────
-        let (badge, main_color) = match self.kind {
-            ShowCmdKind::Command   => ("CMD",  Color32::from_rgb(100, 200, 255)),
-            ShowCmdKind::Search    => ("FIND", Color32::from_rgb(255, 215, 60)),
-            ShowCmdKind::Visual    => ("VIS",  Color32::from_rgb(190, 130, 255)),
-            ShowCmdKind::Keystroke => ("VIM",  Color32::WHITE),
+        let (badge, badge_color) = match self.kind {
+            ShowCmdKind::Command   => ("CMD",  Color32::from_rgb(100, 210, 255)),
+            ShowCmdKind::Search    => ("FIND", Color32::from_rgb(255, 210, 70)),
+            ShowCmdKind::Visual    => ("VIS",  Color32::from_rgb(200, 140, 255)),
+            ShowCmdKind::Keystroke => ("VIM",  accent),
         };
 
-        let accent_a = Color32::from_rgba_unmultiplied(
-            main_color.r(), main_color.g(), main_color.b(), alpha,
+        let badge_a = Color32::from_rgba_unmultiplied(
+            badge_color.r(), badge_color.g(), badge_color.b(), alpha,
         );
-        let muted_a  = Color32::from_rgba_unmultiplied(90, 100, 120, alpha);
-        let white_a  = Color32::from_rgba_unmultiplied(255, 255, 255, alpha);
-
-        // ── Text layout (badge · command) ────────────────────────────────────
-        let mut job = egui::text::LayoutJob::default();
-
-        // Badge label — small, accent-coloured
-        job.append(
-            badge,
-            0.0,
-            egui::text::TextFormat {
-                font_id: FontId::monospace(10.0),
-                color: accent_a,
-                ..Default::default()
-            },
+        let badge_bg = Color32::from_rgba_unmultiplied(
+            badge_color.r(), badge_color.g(), badge_color.b(), (alpha as f32 * 0.16) as u8,
         );
+        let text_color = Color32::from_rgba_unmultiplied(240, 244, 252, alpha);
 
-        // Separator " · "
-        job.append(
-            " · ",
-            0.0,
-            egui::text::TextFormat {
-                font_id: FontId::monospace(11.0),
-                color: muted_a,
-                ..Default::default()
-            },
-        );
+        // Pre-layout galleys for crisp rendering
+        let font_badge = FontId::monospace(10.5);
+        let font_text = FontId::monospace(14.0);
 
-        // Command text — larger, bright
-        job.append(
-            &self.text,
-            0.0,
-            egui::text::TextFormat {
-                font_id: FontId::monospace(15.0),
-                color: white_a,
-                ..Default::default()
-            },
-        );
+        let badge_galley = painter.layout_no_wrap(badge.to_string(), font_badge, badge_a);
+        let text_galley = painter.layout_no_wrap(self.text.clone(), font_text, text_color);
 
-        let galley = painter.layout_job(job);
+        // Generous, comfortable dimensions with 5px corner radius and NO border
+        let card_h = 34.0f32;
+        let pad_x = 10.0f32;
+        let badge_w = badge_galley.size().x + 12.0;
+        let badge_h = 20.0f32;
+        let gap = 8.0f32;
+        let pulse_dot_w = if self.is_pending { 10.0 } else { 0.0 };
 
-        // ── Card geometry ────────────────────────────────────────────────────
-        let card_h = 42.0f32;
-        let h_pad  = 20.0f32;
-        let card_w = (galley.size().x + h_pad * 2.0).max(120.0);
+        let content_w = pad_x + badge_w + gap + text_galley.size().x + pulse_dot_w + pad_x;
+        let card_w = content_w.max(80.0);
 
         let card_rect = Rect::from_min_max(
             Pos2::new(anchor_bottom_right.x - card_w, anchor_bottom_right.y - card_h),
             anchor_bottom_right,
         );
 
-        // ── Single soft diffuse shadow — NOT a border ring ───────────────────
-        // One large, very transparent rect gives a glow without looking like a stroke.
+        // 1. Soft dark drop-shadow (5px rounded)
         painter.rect(
-            card_rect.expand(6.0),
-            card_h * 0.5 + 6.0,
-            Color32::from_rgba_unmultiplied(0, 0, 0, (alpha as f32 * 0.28) as u8),
+            card_rect.expand(3.0),
+            5.0,
+            Color32::from_rgba_unmultiplied(0, 0, 0, (alpha as f32 * 0.40) as u8),
             Stroke::NONE,
             egui::StrokeKind::Outside,
         );
 
-        // ── Frosted obsidian glass body — absolutely no border ───────────────
+        // 2. Frosted dark obsidian body — 5px round, ABSOLUTELY NO BORDER
         painter.rect(
             card_rect,
-            card_h * 0.5,          // full capsule pill
-            Color32::from_rgba_unmultiplied(14, 16, 22, (alpha as f32 * 0.97) as u8),
-            Stroke::NONE,           // zero stroke
+            5.0,
+            Color32::from_rgba_unmultiplied(16, 18, 24, (alpha as f32 * 0.96) as u8),
+            Stroke::NONE,
             egui::StrokeKind::Inside,
         );
 
-        // ── Galley centered vertically & horizontally ────────────────────────
-        let text_x = card_rect.min.x + (card_rect.width()  - galley.size().x) * 0.5;
-        let text_y = card_rect.min.y + (card_rect.height() - galley.size().y) * 0.5;
-        painter.galley(Pos2::new(text_x, text_y), galley, Color32::WHITE);
+        // 3. Render Badge Micro-Pill (borderless tinted badge, 4px round)
+        let badge_x = card_rect.min.x + pad_x;
+        let badge_y = card_rect.center().y - badge_h * 0.5;
+        let badge_rect = Rect::from_min_size(eframe::egui::pos2(badge_x, badge_y), eframe::egui::vec2(badge_w, badge_h));
+        painter.rect(badge_rect, 4.0, badge_bg, Stroke::NONE, egui::StrokeKind::Inside);
+        let badge_text_pos = eframe::egui::pos2(
+            badge_rect.center().x - badge_galley.size().x * 0.5,
+            badge_rect.center().y - badge_galley.size().y * 0.5,
+        );
+        painter.galley(badge_text_pos, badge_galley, Color32::WHITE);
+
+        // 4. Render Command Text
+        let text_w = text_galley.size().x;
+        let text_x = badge_rect.max.x + gap;
+        let text_y = card_rect.center().y - text_galley.size().y * 0.5;
+        painter.galley(eframe::egui::pos2(text_x, text_y), text_galley, Color32::WHITE);
+
+        // 5. Breathing pending live dot indicator
+        if self.is_pending {
+            let dot_x = text_x + text_w + 6.0;
+            let dot_pulse = ((now * 8.0).sin() as f32 * 0.5 + 0.5) * 0.8 + 0.2;
+            let dot_color = Color32::from_rgba_unmultiplied(
+                badge_color.r(),
+                badge_color.g(),
+                badge_color.b(),
+                (alpha as f32 * dot_pulse) as u8,
+            );
+            painter.circle_filled(eframe::egui::pos2(dot_x, card_rect.center().y), 2.5, dot_color);
+        }
 
         Some(card_rect)
     }

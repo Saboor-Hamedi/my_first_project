@@ -21,61 +21,87 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
     };
 
     match cmd.as_str() {
-        "help" => {
-            app.set_status(
-                ":w | :d | :set showcmd [on/off] | :vim [on/off] | :theme | :sound | :clear",
-                now,
-            );
+        "help" | "guidance" | "guide" | "h" | "?" => {
+            app.help_open = true;
+            app.help_just_opened = true;
+            app.set_status("Guidance & Help Center opened (Esc to close)", now);
         }
         "set" => {
             let opt = args.to_lowercase();
             let opt = opt.trim();
-            match opt {
-                "showcmd" | "sc" => {
-                    app.showcmd.enabled = true;
-                    let _ = app.db_tx.send(DbMsg::SaveSetting {
-                        key: "showcmd".into(),
-                        val: "true".into(),
-                    });
-                    app.set_status(":set showcmd (Keystroke card ON)", now);
-                }
-                "noshowcmd" | "nosc" => {
-                    app.showcmd.enabled = false;
+            let is_disable = matches!(
+                opt,
+                "noshowcmd"
+                    | "nonshowcmd"
+                    | "nosc"
+                    | "nonsc"
+                    | "noshow"
+                    | "nonshow"
+                    | "no_showcmd"
+                    | "non_showcmd"
+                    | "showcmd off"
+                    | "showcmd=off"
+                    | "showcmd 0"
+                    | "showcmd=0"
+                    | "showcmd false"
+                    | "showcmd=false"
+                    | "showcmd disable"
+            );
+            let is_enable = matches!(
+                opt,
+                "showcmd"
+                    | "sc"
+                    | "showcmd on"
+                    | "showcmd=on"
+                    | "showcmd 1"
+                    | "showcmd=1"
+                    | "showcmd true"
+                    | "showcmd=true"
+                    | "showcmd enable"
+            );
+            let is_toggle = matches!(opt, "showcmd!" | "sc!");
+
+            if is_disable {
+                app.showcmd.enabled = false;
+                app.showcmd.clear();
+                let _ = app.db_tx.send(DbMsg::SaveSetting {
+                    key: "showcmd".into(),
+                    val: "false".into(),
+                });
+                app.set_status(":set noshowcmd (Keystroke card OFF)", now);
+            } else if is_enable {
+                app.showcmd.enabled = true;
+                let _ = app.db_tx.send(DbMsg::SaveSetting {
+                    key: "showcmd".into(),
+                    val: "true".into(),
+                });
+                app.set_status(":set showcmd (Keystroke card ON)", now);
+            } else if is_toggle {
+                app.showcmd.enabled = !app.showcmd.enabled;
+                if !app.showcmd.enabled {
                     app.showcmd.clear();
-                    let _ = app.db_tx.send(DbMsg::SaveSetting {
-                        key: "showcmd".into(),
-                        val: "false".into(),
-                    });
-                    app.set_status(":set noshowcmd (Keystroke card OFF)", now);
                 }
-                "showcmd!" | "sc!" => {
-                    app.showcmd.enabled = !app.showcmd.enabled;
-                    if !app.showcmd.enabled {
-                        app.showcmd.clear();
-                    }
-                    let val = if app.showcmd.enabled { "true" } else { "false" };
-                    let _ = app.db_tx.send(DbMsg::SaveSetting {
-                        key: "showcmd".into(),
-                        val: val.into(),
-                    });
-                    let msg = if app.showcmd.enabled {
-                        ":set showcmd (Keystroke card ON)"
-                    } else {
-                        ":set noshowcmd (Keystroke card OFF)"
-                    };
-                    app.set_status(msg, now);
-                }
-                _ => {
-                    app.set_status(
-                        format!("Unknown option: :set {}. Try :set showcmd or :set noshowcmd", opt),
-                        now,
-                    );
-                }
+                let val = if app.showcmd.enabled { "true" } else { "false" };
+                let _ = app.db_tx.send(DbMsg::SaveSetting {
+                    key: "showcmd".into(),
+                    val: val.into(),
+                });
+                let msg = if app.showcmd.enabled {
+                    ":set showcmd (Keystroke card ON)"
+                } else {
+                    ":set noshowcmd (Keystroke card OFF)"
+                };
+                app.set_status(msg, now);
+            } else {
+                app.set_status(
+                    format!("Unknown option: :set {}. Try :set showcmd or :set noshowcmd", opt),
+                    now,
+                );
             }
         }
         "showcmd" => {
             match args.to_lowercase().trim() {
-                "off" | "disable" | "0" => {
+                "off" | "disable" | "0" | "false" => {
                     app.showcmd.enabled = false;
                     app.showcmd.clear();
                     let _ = app.db_tx.send(DbMsg::SaveSetting {
@@ -84,7 +110,7 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
                     });
                     app.set_status("showcmd disabled (Keystroke card OFF)", now);
                 }
-                "on" | "enable" | "1" => {
+                "on" | "enable" | "1" | "true" => {
                     app.showcmd.enabled = true;
                     let _ = app.db_tx.send(DbMsg::SaveSetting {
                         key: "showcmd".into(),
@@ -110,6 +136,15 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
                     app.set_status(msg, now);
                 }
             }
+        }
+        "noshowcmd" | "nonshowcmd" | "nosc" | "nonsc" | "noshow" | "nonshow" => {
+            app.showcmd.enabled = false;
+            app.showcmd.clear();
+            let _ = app.db_tx.send(DbMsg::SaveSetting {
+                key: "showcmd".into(),
+                val: "false".into(),
+            });
+            app.set_status("showcmd disabled (Keystroke card OFF)", now);
         }
         "vim" => {
             match args.to_lowercase().trim() {

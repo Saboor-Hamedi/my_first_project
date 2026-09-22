@@ -255,74 +255,53 @@ pub fn render_doc_sidebar(
 ) -> Option<DocSidebarAction> {
     let mut action = None;
 
-    // Sidebar background panel
+    // Floating panel background with subtle border (5px round) - EXACT match to sidebar.rs
     painter.rect(
         rect,
-        0.0,
-        Color32::from_rgb(12, 13, 16),
-        Stroke::NONE,
+        5.0,
+        Color32::from_rgb(12, 12, 14),
+        Stroke::new(1.0, Color32::from_rgb(34, 34, 40)),
         egui::StrokeKind::Inside,
     );
 
-    // Subtle right vertical border
-    painter.line_segment(
-        [rect.right_top(), rect.right_bottom()],
-        Stroke::new(1.0, Color32::from_rgb(28, 30, 36)),
-    );
+    let origin = rect.min + vec2(16.0, 18.0);
 
-    let origin = rect.min + vec2(14.0, 16.0);
-
-    // Header
+    // Header matching sidebar.rs
     painter.text(
         origin,
         Align2::LEFT_TOP,
-        "DOCUMENTATION",
-        FontId::monospace(13.0),
+        "MINDFORGE",
+        FontId::monospace(15.0),
         accent,
     );
     painter.text(
-        origin + vec2(0.0, 18.0),
+        origin + vec2(0.0, 20.0),
         Align2::LEFT_TOP,
-        "User Guide & Tutorial",
-        FontId::monospace(10.5),
-        muted_color,
-    );
-
-    // Divider line below header
-    let div_y = origin.y + 38.0;
-    painter.line_segment(
-        [pos2(rect.min.x + 10.0, div_y), pos2(rect.max.x - 10.0, div_y)],
-        Stroke::new(1.0, Color32::from_rgb(24, 26, 32)),
+        "📖 User Guides",
+        FontId::monospace(11.0),
+        Color32::from_gray(100),
     );
 
     // Navigation items
-    let doc_icons = ["📖", "⚡", "⌨", "🎯", "✨"];
-    let start_y = div_y + 12.0;
+    let doc_icons = ["📖", "⚡", "⌨", "⚔", "✨"];
+    let start_y = origin.y + 48.0;
+    let item_w = rect.width() - 32.0;
 
     for (idx, doc) in BRAIN_DOCS.iter().enumerate() {
         let item_rect = Rect::from_min_size(
-            pos2(rect.min.x + 10.0, start_y + idx as f32 * 34.0),
-            vec2(rect.width() - 20.0, 28.0),
+            pos2(origin.x, start_y + idx as f32 * 32.0),
+            vec2(item_w, 26.0),
         );
         let is_active = idx == active_idx;
         let is_hovered = ui.rect_contains_pointer(item_rect);
 
         if is_active || is_hovered {
             let bg = if is_active {
-                Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 32)
+                Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 35)
             } else {
-                Color32::from_rgb(22, 24, 29)
+                Color32::from_rgb(20, 20, 24)
             };
             painter.rect_filled(item_rect, 4.0, bg);
-
-            if is_active {
-                // Accent pill indicator bar on the left edge
-                let bar = Rect::from_min_size(
-                    pos2(item_rect.min.x, item_rect.min.y + 5.0),
-                    vec2(3.0, item_rect.height() - 10.0),
-                );
-                painter.rect_filled(bar, 1.5, accent);
-            }
 
             if is_hovered && ui.input(|i| i.pointer.primary_clicked()) {
                 action = Some(DocSidebarAction::SelectDoc(idx));
@@ -332,18 +311,18 @@ pub fn render_doc_sidebar(
         let icon = doc_icons.get(idx).copied().unwrap_or("📄");
         let label = format!("{} {}", icon, doc.title);
         painter.text(
-            item_rect.min + vec2(10.0, 5.0),
+            item_rect.min + vec2(8.0, 4.0),
             Align2::LEFT_TOP,
             label,
-            FontId::monospace(12.5),
-            if is_active { Color32::WHITE } else { text_color },
+            FontId::monospace(12.0),
+            if is_active { accent } else { text_color },
         );
     }
 
     // Bottom "Return to Notes" button
     let back_rect = Rect::from_min_size(
-        pos2(rect.min.x + 10.0, rect.max.y - 42.0),
-        vec2(rect.width() - 20.0, 28.0),
+        pos2(origin.x, rect.max.y - 44.0),
+        vec2(item_w, 26.0),
     );
     let back_hovered = ui.rect_contains_pointer(back_rect);
 
@@ -356,8 +335,8 @@ pub fn render_doc_sidebar(
         painter.rect(
             back_rect,
             4.0,
-            Color32::from_rgb(16, 17, 21),
-            Stroke::new(1.0, Color32::from_rgb(28, 30, 36)),
+            Color32::from_rgb(18, 18, 22),
+            Stroke::new(1.0, Color32::from_rgb(34, 34, 42)),
             egui::StrokeKind::Inside,
         );
     }
@@ -365,7 +344,7 @@ pub fn render_doc_sidebar(
     painter.text(
         back_rect.center(),
         Align2::CENTER_CENTER,
-        "← Notes Editor",
+        "← Return to Notes",
         FontId::monospace(11.5),
         if back_hovered { accent } else { muted_color },
     );

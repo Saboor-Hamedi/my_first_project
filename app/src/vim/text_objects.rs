@@ -31,8 +31,17 @@ pub fn find_text_object_range(
 }
 
 /// Finds the range of quote-enclosed text on the current line.
+///
+/// Strategy (matching real Vim behaviour):
+/// 1. If cursor is on the opening quote  → select content until the next quote.
+/// 2. If cursor is on the closing quote  → search backward for the opening quote.
+/// 3. If cursor is inside                → search backward for opening, forward for closing.
+/// 4. If cursor is before any quote pair → use the first upcoming pair.
 fn find_quote_range(buf: &[char], cur: usize, quote: char, inner: bool) -> Option<(usize, usize)> {
-    let cur_pos = cur.min(buf.len());
+    if buf.is_empty() {
+        return None;
+    }
+    let cur_pos = cur.min(buf.len() - 1);
 
     // Locate current line boundaries to avoid multi-line quote matches
     let mut line_start = cur_pos;
@@ -44,34 +53,42 @@ fn find_quote_range(buf: &[char], cur: usize, quote: char, inner: bool) -> Optio
         line_end += 1;
     }
 
-    // Collect all indices of the target quote character on the current line
-    let quote_indices: Vec<usize> = (line_start..line_end)
-        .filter(|&i| buf[i] == quote)
-        .collect();
-
-    if quote_indices.len() < 2 {
-        return None;
+    // If cursor is on the opening quote: search forward for its closing partner.
+    if buf[cur_pos] == quote {
+        let close = (cur_pos + 1..line_end).find(|&i| buf[i] == quote)?;
+        return if inner {
+            Some((cur_pos + 1, close))
+        } else {
+            Some((cur_pos, close + 1))
+        };
     }
 
-    // Find the pair enclosing cur_pos, or the next available pair on the line
-    for chunk in quote_indices.chunks_exact(2) {
-        let open = chunk[0];
-        let close = chunk[1];
+    // Search backward from cursor for an opening quote on this line.
+    let open = (line_start..cur_pos).rfind(|&i| buf[i] == quote);
 
-        if (cur_pos >= open && cur_pos <= close) || cur_pos < open {
-            if inner {
-                if open + 1 <= close {
-                    return Some((open + 1, close));
+    if let Some(open) = open {
+        // Found an opening quote to the left — search forward for its closing partner.
+        if let Some(close) = (open + 1..line_end).find(|&i| buf[i] == quote) {
+            // Cursor must be inside [open, close].
+            if cur_pos <= close {
+                return if inner {
+                    Some((open + 1, close))
                 } else {
-                    return Some((open + 1, open + 1));
-                }
-            } else {
-                return Some((open, close + 1));
+                    Some((open, close + 1))
+                };
             }
+            // Cursor is after close — fall through to forward search.
         }
     }
 
-    None
+    // Cursor is before any pair or between closed pairs: use the next upcoming pair.
+    let first_quote = (cur_pos..line_end).find(|&i| buf[i] == quote)?;
+    let second_quote = (first_quote + 1..line_end).find(|&i| buf[i] == quote)?;
+    if inner {
+        Some((first_quote + 1, second_quote))
+    } else {
+        Some((first_quote, second_quote + 1))
+    }
 }
 
 /// Finds paired brackets accounting for nested depth (e.g. `(foo (bar) baz)`).

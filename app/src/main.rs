@@ -12,8 +12,7 @@ mod input;
 mod modals;
 mod mode;
 mod notes;
-mod settingpanel;
-mod settingtabs;
+pub mod settings;
 mod sidebar;
 mod sound;
 mod theme;
@@ -24,6 +23,7 @@ mod vim;
 mod showcmd;
 mod updater;
 mod docs;
+mod help_panel;
 
 pub use types::{snapshot, visual_line};
 

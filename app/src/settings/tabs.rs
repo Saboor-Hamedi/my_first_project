@@ -49,7 +49,6 @@ impl SettingTab {
     }
 }
 
-
 pub fn render_setting_tabs(
     ui: &egui::Ui,
     painter: &egui::Painter,

@@ -6,7 +6,7 @@ pub fn render_bottom_dock(
     ui: &egui::Ui,
     painter: &egui::Painter,
     dock_rect: Rect,
-    content_left_margin: f32,
+    _content_left_margin: f32,
     in_command: bool,
     cmd_text: &str,
     status_msg: &str,
@@ -39,7 +39,7 @@ pub fn render_bottom_dock(
     );
 
     let cmd_y = dock_rect.min.y + 9.0;
-    let cmd_x = dock_rect.min.x + content_left_margin;
+    let cmd_x = dock_rect.min.x + 24.0;
     let mut text_x = cmd_x;
 
     if in_command {
