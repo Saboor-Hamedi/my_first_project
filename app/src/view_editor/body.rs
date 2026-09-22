@@ -54,18 +54,23 @@ pub fn render_editor_body(
         // Calculate digits needed for total lines
         let total_lines = (ed.buf.iter().filter(|&&c| c == '\n').count() + 1).max(1);
         let digits = total_lines.to_string().len().max(2);
-        (digits as f32 * cw + 18.0).max(34.0)
+        (digits as f32 * cw + 10.0).max(22.0)
     } else {
         0.0
     };
 
-    let pad_x = 4.0;
+    let pad_x = 6.0;
     let pad_y = 2.0;
     let text_left = editor_rect.min.x + gutter_w + pad_x;
     let ed_origin = pos2(text_left, editor_rect.min.y - *scroll_y + pad_y);
 
-    // Direct mouse click in editor moves cursor to clicked visual row and col
-    if !block_scroll && ui.rect_contains_pointer(editor_rect) && ui.input(|i| i.pointer.primary_clicked()) {
+    // Direct mouse click in editor moves cursor to clicked visual row and col.
+    // Restricted strictly to text area (excluding gutter) and blocked when splitter is dragging.
+    let text_area_rect = Rect::from_min_max(
+        pos2(text_left, editor_rect.min.y),
+        editor_rect.max,
+    );
+    if !block_scroll && ui.rect_contains_pointer(text_area_rect) && ui.input(|i| i.pointer.primary_clicked()) {
         if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
             let clicked_row = ((pos.y - ed_origin.y) / lh).floor() as isize;
             if clicked_row >= 0 && (clicked_row as usize) < visual_lines.len() {
@@ -215,26 +220,25 @@ pub fn render_editor_body(
         );
         let gutter_painter = painter.with_clip_rect(gutter_rect);
 
-        // Subtle shaded gutter background
+        // Gutter background: cleanly tinted with theme.muted to seamlessly harmonize with ANY theme
         let gutter_bg = Color32::from_rgba_unmultiplied(
-            theme.bg.r().saturating_add(4),
-            theme.bg.g().saturating_add(5),
-            theme.bg.b().saturating_add(7),
-            140,
+            theme.muted.r(),
+            theme.muted.g(),
+            theme.muted.b(),
+            12,
         );
         gutter_painter.rect_filled(gutter_rect, 0.0, gutter_bg);
 
         // Right divider line separating line numbers from text
         gutter_painter.line_segment(
             [gutter_rect.right_top(), gutter_rect.right_bottom()],
-            Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 45)),
+            Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 35)),
         );
 
-        let num_font = FontId::monospace(font_size * 0.88);
+        let num_font = FontId::monospace(font_size * 0.82);
 
         // Compute physical line number for each visual line
         let mut physical_line = 1;
-        let mut prev_char_end = 0;
 
         for (r, v_line) in visual_lines.iter().enumerate() {
             let line_y = ed_origin.y + r as f32 * lh;
@@ -251,10 +255,10 @@ pub fn render_editor_body(
                     let color = if is_current {
                         theme.accent
                     } else {
-                        Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 130)
+                        Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 100)
                     };
                     gutter_painter.text(
-                        pos2(gutter_rect.max.x - 8.0, line_y + y_pad),
+                        pos2(gutter_rect.max.x - 5.0, line_y + y_pad),
                         Align2::RIGHT_TOP,
                         num_str,
                         num_font.clone(),
@@ -262,9 +266,13 @@ pub fn render_editor_body(
                     );
                 } else {
                     // Wrapped continuation line indicator
-                    let wrap_color = Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 60);
+                    let wrap_color = if is_current {
+                        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 110)
+                    } else {
+                        Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 50)
+                    };
                     gutter_painter.text(
-                        pos2(gutter_rect.max.x - 8.0, line_y + y_pad),
+                        pos2(gutter_rect.max.x - 5.0, line_y + y_pad),
                         Align2::RIGHT_TOP,
                         "·",
                         num_font.clone(),

@@ -187,6 +187,8 @@ impl VimEngine {
         if key == Key::Escape || (ctrl && key == Key::OpenBracket) {
             if self.is_searching() {
                 self.search.cancel(ed);
+            } else {
+                self.search.clear_matches();
             }
             self.set_mode(VimSubMode::Normal, ed);
             self.pending_keys.clear();
@@ -904,6 +906,13 @@ mod tests {
         // Press 'N' -> previous match (wraps to 17)
         assert!(vim.handle_char(&mut ed, &[], 'N'));
         assert_eq!(ed.cur, 17);
+
+        // Matches are still highlighted after confirming
+        assert!(!vim.search.match_indices.is_empty());
+
+        // Escape in normal mode clears search match highlighting (equivalent to :noh)
+        assert!(vim.handle_key(&mut ed, &[], Key::Escape, Modifiers::default()));
+        assert!(vim.search.match_indices.is_empty());
     }
 
     #[test]

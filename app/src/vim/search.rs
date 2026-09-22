@@ -72,6 +72,11 @@ impl VimSearchState {
         ed.cur = self.saved_cursor.min(ed.buf.len());
     }
 
+    /// Clears active match highlighting (e.g. on Escape or `:noh`).
+    pub fn clear_matches(&mut self) {
+        self.match_indices.clear();
+    }
+
     /// Confirms current search query, commits it to `last_query`, and ends search input mode.
     /// Returns `(current_match_idx_1_based, total_matches)` if matches exist.
     pub fn confirm(&mut self, ed: &mut Editor) -> Option<(usize, usize)> {

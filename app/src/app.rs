@@ -103,6 +103,7 @@ pub struct App {
     pub preview_scroll_y: f32,
     pub preview_open: bool,
     pub split_ratio: f32,
+    pub is_dragging_splitter: bool,
     pub show_line_numbers: bool,
     pub is_dirty: bool,
     pub last_saved_time: f64,
@@ -185,6 +186,7 @@ impl App {
             preview_scroll_y: 0.0,
             preview_open: false,
             split_ratio: 0.5,
+            is_dragging_splitter: false,
             show_line_numbers: true,
             is_dirty: false,
             last_saved_time: 0.0,
@@ -475,6 +477,8 @@ impl App {
         let sidebar_top = bounds.min.y + 12.0;
         let sidebar_bottom = cmd_bar_rect.min.y - 8.0;
 
+        let is_preview_active = self.preview_open && self.mode == Mode::Normal;
+
         let (content_left_margin, doc_sidebar_rect) = if self.mode == Mode::Doc {
             let sb_rect = Rect::from_min_max(
                 pos2(bounds.min.x + sidebar_gap_x, sidebar_top),
@@ -483,10 +487,12 @@ impl App {
             (sidebar_gap_x + sidebar_w + 24.0, Some(sb_rect))
         } else if self.sidebar_open {
             (sidebar_gap_x + sidebar_w + 24.0, None)
+        } else if is_preview_active {
+            (14.0, None)
         } else {
-            (48.0, None)
+            (24.0, None)
         };
-        let content_right_margin = 48.0;
+        let content_right_margin = if is_preview_active { 12.0 } else { 24.0 };
 
         let editor_top = bounds.min.y + 44.0;
         let editor_bottom = cmd_bar_rect.min.y - 8.0;
@@ -519,19 +525,25 @@ impl App {
         }
 
         // Keep visual lines updated to exact editor width (accounting for preview split and line numbers)
-        let is_preview_active = self.preview_open && self.mode == Mode::Normal;
+        let target_ed = if self.mode == Mode::Doc { &self.doc_ed } else { &self.ed };
+        let total_lines = (target_ed.buf.iter().filter(|&&c| c == '\n').count() + 1).max(1);
+        let digits = total_lines.to_string().len().max(2);
+        let gutter_space = if self.show_line_numbers {
+            (digits as f32 * cw + 10.0).max(22.0) + 6.0
+        } else {
+            0.0
+        };
+
+        let divider_w = 12.0;
         let effective_editor_w = if is_preview_active {
             let total_w = editor_rect.width();
-            let divider_w = 10.0;
             let available_w = (total_w - divider_w).max(200.0);
             (available_w * self.split_ratio).clamp(120.0, available_w - 120.0)
         } else {
             editor_rect.width()
         };
-        let gutter_space = if self.show_line_numbers { 42.0 } else { 0.0 };
         let text_area_w = (effective_editor_w - gutter_space - 8.0).max(100.0);
         let max_cols = (text_area_w / cw).floor().max(15.0) as usize;
-        let target_ed = if self.mode == Mode::Doc { &self.doc_ed } else { &self.ed };
         self.visual_lines = target_ed.compute_visual_lines(max_cols);
 
         // Clean Header (Zero Clunky Buttons! Purely keyboard shortcut driven with top-right drag gripper)
@@ -599,7 +611,7 @@ impl App {
 
                 let (actual_editor_rect, preview_rect_opt) = if is_preview_active {
                     let total_w = editor_rect.width();
-                    let divider_w = 10.0;
+                    let divider_w = 12.0;
                     let available_w = (total_w - divider_w).max(200.0);
                     let left_w = (available_w * self.split_ratio).clamp(120.0, available_w - 120.0);
 
@@ -616,20 +628,33 @@ impl App {
                         editor_rect.max,
                     );
 
-                    // Draggable Knob / Splitter divider
-                    let is_divider_hovered = ui.rect_contains_pointer(divider_rect);
-                    if is_divider_hovered {
-                        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
-                    }
-                    if is_divider_hovered && ui.input(|i| i.pointer.primary_down()) {
-                        if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
-                            let new_ratio = ((pos.x - editor_rect.min.x) / available_w).clamp(0.20, 0.80);
-                            self.split_ratio = new_ratio;
-                        }
+                    // Generous hit box for dragging so mouse never slips off (prevents drag dropping)
+                    let divider_hit_rect = divider_rect.expand2(vec2(8.0, 0.0));
+                    let is_divider_hovered = ui.rect_contains_pointer(divider_hit_rect);
+
+                    let primary_down = ui.input(|i| i.pointer.primary_down());
+                    let primary_pressed = ui.input(|i| i.pointer.primary_clicked() || i.pointer.button_pressed(egui::PointerButton::Primary));
+
+                    if is_divider_hovered && primary_pressed {
+                        self.is_dragging_splitter = true;
                     }
 
-                    // Draw sleek divider line and draggable capsule knob in center
-                    let divider_color = if is_divider_hovered {
+                    if self.is_dragging_splitter {
+                        if primary_down {
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
+                            if let Some(pos) = ui.input(|i| i.pointer.interact_pos().or_else(|| i.pointer.hover_pos())) {
+                                let new_ratio = ((pos.x - editor_rect.min.x - divider_w * 0.5) / available_w).clamp(0.15, 0.85);
+                                self.split_ratio = new_ratio;
+                            }
+                        } else {
+                            self.is_dragging_splitter = false;
+                        }
+                    } else if is_divider_hovered {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
+                    }
+
+                    let is_active = is_divider_hovered || self.is_dragging_splitter;
+                    let divider_color = if is_active {
                         self.theme.accent
                     } else {
                         Color32::from_rgba_unmultiplied(self.theme.muted.r(), self.theme.muted.g(), self.theme.muted.b(), 65)
@@ -639,12 +664,24 @@ impl App {
                         [pos2(mid_x, divider_rect.min.y + 4.0), pos2(mid_x, divider_rect.max.y - 4.0)],
                         Stroke::new(1.0, divider_color),
                     );
-                    // Center pill knob handle
-                    let knob_rect = Rect::from_center_size(divider_rect.center(), vec2(6.0, 36.0));
+                    // Center pill knob handle with tactile grip dots
+                    let knob_w = if is_active { 7.0 } else { 5.0 };
+                    let knob_h = 42.0;
+                    let knob_rect = Rect::from_center_size(divider_rect.center(), vec2(knob_w, knob_h));
                     painter.rect_filled(knob_rect, 3.0, divider_color);
+
+                    let knob_mid = knob_rect.center();
+                    let grip_color = self.theme.bg;
+                    for dy in [-6.0, 0.0, 6.0] {
+                        painter.line_segment(
+                            [pos2(knob_mid.x - 1.5, knob_mid.y + dy), pos2(knob_mid.x + 1.5, knob_mid.y + dy)],
+                            Stroke::new(1.0, grip_color),
+                        );
+                    }
 
                     (left_rect, Some(right_rect))
                 } else {
+                    self.is_dragging_splitter = false;
                     (editor_rect, None)
                 };
 
@@ -664,7 +701,7 @@ impl App {
                     dt,
                     now,
                     typed,
-                    self.settings_open || self.search_open,
+                    self.settings_open || self.search_open || self.is_dragging_splitter,
                     search_matches,
                     self.show_line_numbers,
                 );
