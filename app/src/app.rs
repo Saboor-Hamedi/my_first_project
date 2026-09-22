@@ -4,7 +4,7 @@ use crate::bottom_bar::render_bottom_dock;
 use crate::caret::{Caret, CaretKind};
 use crate::db_worker::{spawn_db_worker, DbMsg};
 use crate::editor::{Editor, VisualLine};
-use crate::fuzzy::{SearchItem, SearchResultKind};
+use crate::fuzzy::SearchItem;
 use crate::input::{handle_input, window_shortcuts};
 use crate::modals::{render_delete_confirm_modal, render_rename_modal, render_search_modal};
 use crate::hybrid::HybridEngine;
@@ -118,6 +118,7 @@ pub struct App {
 
     // In-app auto-updater
     pub updater: UpdateManager,
+    pub active_doc_idx: usize,
 }
 
 impl App {
@@ -181,6 +182,7 @@ impl App {
             activity_history: Vec::new(),
             lifetime_activity: (0, 0, 0, 0),
             updater: UpdateManager::new(),
+            active_doc_idx: 0,
         };
 
         app.load_settings();
@@ -353,6 +355,27 @@ impl App {
         update_search_results(self);
     }
 
+    pub fn open_docs_mode(&mut self, now: f64) {
+        self.mode = Mode::Doc;
+        let docs = crate::docs::get_docs();
+        let idx = self.active_doc_idx.min(docs.len().saturating_sub(1));
+        if let Some(doc) = docs.get(idx) {
+            let clean = crate::docs::format_doc_for_reader(doc.content);
+            self.ed.set_text(&clean);
+            self.ed.cur = 0;
+            self.active_note_title = doc.title.to_string();
+            self.is_dirty = false;
+            self.scroll_y = 0.0;
+            self.vim.set_mode(crate::vim::VimSubMode::Normal, &mut self.ed);
+            self.set_status(format!("Opened Guide: {}", doc.title), now);
+        }
+    }
+
+    pub fn load_doc_by_index(&mut self, idx: usize, now: f64) {
+        self.active_doc_idx = idx;
+        self.open_docs_mode(now);
+    }
+
     pub fn set_status(&mut self, msg: impl Into<String>, now: f64) {
         self.status_msg = msg.into();
         self.status_time = now;
@@ -414,15 +437,25 @@ impl App {
             egui::StrokeKind::Inside,
         );
 
-        let content_left_margin = if self.sidebar_open { 280.0 } else { 48.0 };
-        let content_right_margin = 48.0;
-
         // Bottom dock rectangle
         let cmd_bar_height = 36.0;
         let cmd_bar_rect = Rect::from_min_max(
             pos2(bounds.min.x, bounds.max.y - cmd_bar_height),
             bounds.max,
         );
+
+        let doc_sidebar_w = 210.0;
+        let (content_left_margin, doc_sidebar_rect) = if self.mode == Mode::Doc {
+            (doc_sidebar_w + 36.0, Some(Rect::from_min_max(
+                pos2(bounds.min.x, bounds.min.y),
+                pos2(bounds.min.x + doc_sidebar_w, cmd_bar_rect.min.y),
+            )))
+        } else if self.sidebar_open {
+            (280.0, None)
+        } else {
+            (48.0, None)
+        };
+        let content_right_margin = 48.0;
 
         let editor_top = bounds.min.y + 44.0;
         let editor_bottom = cmd_bar_rect.min.y - 8.0;
@@ -431,19 +464,47 @@ impl App {
             pos2(bounds.max.x - content_right_margin, editor_bottom),
         );
 
+        // Render Dedicated Documentation Sidebar on the left (inside Doc mode)
+        if let Some(sb_rect) = doc_sidebar_rect {
+            if let Some(action) = crate::docs::render_doc_sidebar(
+                ui,
+                &painter,
+                sb_rect,
+                self.active_doc_idx,
+                self.theme.accent,
+                self.theme.text,
+                self.theme.muted,
+            ) {
+                match action {
+                    crate::docs::DocSidebarAction::SelectDoc(idx) => {
+                        self.load_doc_by_index(idx, now);
+                    }
+                    crate::docs::DocSidebarAction::BackToEditor => {
+                        self.mode = Mode::Normal;
+                        self.set_status("Switched to Notes Editor", now);
+                    }
+                }
+            }
+        }
+
         // Keep visual lines updated to exact editor width
         let max_cols = ((editor_rect.width() - 8.0) / cw).floor().max(20.0) as usize;
         self.visual_lines = self.ed.compute_visual_lines(max_cols);
 
         // Clean Header (Zero Clunky Buttons! Purely keyboard shortcut driven with top-right drag gripper)
-        if self.mode == Mode::Normal {
+        if self.mode == Mode::Normal || self.mode == Mode::Doc {
+            let header_title = if self.mode == Mode::Doc {
+                format!("📖 {}  [GUIDE]", self.active_note_title)
+            } else {
+                self.active_note_title.clone()
+            };
             render_editor_header(
                 ui,
                 &painter,
                 bounds,
                 content_left_margin,
                 content_right_margin,
-                &self.active_note_title,
+                &header_title,
                 self.is_dirty,
                 &self.theme,
             );
@@ -451,7 +512,7 @@ impl App {
 
         // Active View rendering delegated to dedicated view modules
         match self.mode {
-            Mode::Normal => {
+            Mode::Normal | Mode::Doc => {
                 let original_caret_kind = self.caret.kind;
                 let active_vim_mode = if self.editor_input_mode == EditorInputMode::Vim {
                     Some(self.vim.mode)
@@ -504,11 +565,9 @@ impl App {
 
                 // Floating Keystroke Card (Vim showcmd): large borderless capsule pill — bottom-right of editor
                 if self.editor_input_mode == EditorInputMode::Vim {
-                    // Anchor: 16px from right, 20px from bottom of editor area
                     let card_anchor = pos2(editor_rect.max.x - 16.0, editor_rect.max.y - 20.0);
                     self.showcmd.render_card(&painter, card_anchor, self.theme.accent, now);
                 }
-
             }
             Mode::Stats => {
                 let today_str = Local::now().date_naive().format("%Y-%m-%d").to_string();
@@ -574,10 +633,11 @@ impl App {
         );
 
         // Sleek Sidebar (Ctrl+B)
-        if self.sidebar_open {
+        if self.sidebar_open && self.mode != Mode::Doc {
             let active_mode_idx = match self.mode {
                 Mode::Normal => 0,
                 Mode::Stats => 1,
+                Mode::Doc => 0,
             };
             let action = render_sidebar(
                 ui,
@@ -737,22 +797,18 @@ impl App {
             self.search_just_opened = false;
 
             if let Some(item) = action.selected_item {
-                match item.kind {
-                    SearchResultKind::Document => {
-                        if let Some(note) = self.notes_list.iter().find(|n| n.id == item.id) {
-                            let clean = note.body.replace("\r\n", "\n").replace('\r', "\n");
-                            self.active_note_id = Some(note.id);
-                            self.save_active_note_id();
-                            self.active_note_title = note.topic.clone();
-                            self.ed.set_text(&clean);
-                            self.ed.cur = 0;
-                            self.mode = Mode::Normal;
-                            self.vim.set_mode(crate::vim::VimSubMode::Normal, &mut self.ed);
-                            self.is_dirty = false;
-                            self.scroll_y = 0.0;
-                            self.set_status("Opened note", now);
-                        }
-                    }
+                if let Some(note) = self.notes_list.iter().find(|n| n.id == item.id) {
+                    let clean = note.body.replace("\r\n", "\n").replace('\r', "\n");
+                    self.active_note_id = Some(note.id);
+                    self.save_active_note_id();
+                    self.active_note_title = note.topic.clone();
+                    self.ed.set_text(&clean);
+                    self.ed.cur = 0;
+                    self.mode = Mode::Normal;
+                    self.vim.set_mode(crate::vim::VimSubMode::Normal, &mut self.ed);
+                    self.is_dirty = false;
+                    self.scroll_y = 0.0;
+                    self.set_status("Opened note", now);
                 }
             }
             if action.should_close {

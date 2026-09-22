@@ -1,7 +1,7 @@
 //! Synchronous note persistence, live search filtering, and note operations.
 
 use crate::app::App;
-use crate::fuzzy::{fuzzy_match, SearchItem, SearchResultKind};
+use crate::fuzzy::{fuzzy_match, SearchItem};
 use chrono::Local;
 use core::Note;
 
@@ -121,7 +121,6 @@ pub fn update_search_results(app: &mut App) {
                 note.body.replace('\n', " ")
             };
             results.push(SearchItem {
-                kind: SearchResultKind::Document,
                 id: note.id,
                 title: note.topic.clone(),
                 snippet,

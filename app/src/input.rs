@@ -99,7 +99,7 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
         let tab = !i.modifiers.ctrl && !i.modifiers.alt && i.key_pressed(egui::Key::Tab);
         (tab && !i.modifiers.shift, tab && i.modifiers.shift)
     });
-    if (tab_pressed || shift_tab_pressed) && !app.in_command && app.mode == Mode::Normal {
+    if (tab_pressed || shift_tab_pressed) && !app.in_command && (app.mode == Mode::Normal || app.mode == Mode::Doc) {
         use crate::app::EditorInputMode;
         let modifiers = if shift_tab_pressed {
             let mut m = egui::Modifiers::default();
@@ -115,7 +115,9 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
         } else {
             if shift_tab_pressed { app.ed.dedent(); } else { app.ed.indent(); }
         }
-        app.is_dirty = true;
+        if app.mode == Mode::Normal {
+            app.is_dirty = true;
+        }
         app.sound.play();
         app.last_char_time = now;
         return true;
@@ -172,6 +174,10 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
     }
 
     if ctrl_s {
+        if app.mode == Mode::Doc {
+            app.set_status("Documentation files are read-only (changes not saved).", now);
+            return false;
+        }
         app.quick_save_active_note(now);
         return false;
     }
@@ -192,6 +198,10 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
     }
 
     if ctrl_r {
+        if app.mode == Mode::Doc {
+            app.set_status("Documentation files are read-only and cannot be renamed.", now);
+            return false;
+        }
         app.rename_open = true;
         app.rename_input = app.active_note_title.clone();
         app.rename_just_opened = true;
@@ -199,6 +209,10 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
     }
 
     if ctrl_shift_d {
+        if app.mode == Mode::Doc {
+            app.set_status("Documentation files cannot be deleted.", now);
+            return false;
+        }
         app.delete_confirm_open = true;
         app.delete_just_opened = true;
         return false;
@@ -321,11 +335,44 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                         }
                         app.showcmd.set_command(&app.cmd_ed.text(), now);
                         app.last_char_time = now;
-                    } else if app.editor_input_mode == crate::app::EditorInputMode::Vim && app.mode == Mode::Normal {
+                    } else if app.editor_input_mode == crate::app::EditorInputMode::Vim && (app.mode == Mode::Normal || app.mode == Mode::Doc) {
                         if s == ":" && app.vim.mode == crate::vim::VimSubMode::Normal {
                             app.in_command = true;
                             app.cmd_ed.clear();
                             app.showcmd.set_command("", now);
+                        } else if app.mode == Mode::Doc {
+                            for c in s.chars() {
+                                if c == '\r' || c == '\n' {
+                                    continue;
+                                }
+                                match c {
+                                    'i' | 'I' | 'a' | 'A' | 'o' | 'O' | 's' | 'S' | 'c' | 'C' | 'r' | 'R' | 'd' | 'D' | 'x' | 'X' | 'p' | 'P' | 'u' => {
+                                        app.set_status("📖 Documentation is read-only (navigate with j, k, w, b, gg, G, or /)", now);
+                                        continue;
+                                    }
+                                    _ => {}
+                                }
+                                app.vim.pending_keys_time = now;
+                                if app.vim.handle_char(&mut app.ed, &app.visual_lines, c) {
+                                    typed = true;
+                                    app.sound.play();
+                                    app.last_char_time = now;
+                                    if app.vim.is_searching() {
+                                        let sym = if app.vim.search.backward { "?" } else { "/" };
+                                        app.showcmd.set_search(sym, &app.vim.search.query, now);
+                                    } else if let Some(action_str) = app.vim.last_completed_action.take() {
+                                        app.showcmd.record_action(&action_str, now);
+                                    } else {
+                                        let pending_after = app.vim.pending_keys();
+                                        if !pending_after.is_empty() {
+                                            app.showcmd.set_pending(pending_after, now);
+                                        }
+                                    }
+                                }
+                                if app.vim.mode == crate::vim::VimSubMode::Insert {
+                                    app.vim.set_mode(crate::vim::VimSubMode::Normal, &mut app.ed);
+                                }
+                            }
                         } else {
                             for c in s.chars() {
                                 if c == '\r' || c == '\n' {
@@ -357,23 +404,21 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                                 }
                             }
                         }
-                    } else if s == ":" && app.mode == Mode::Normal && app.ed.row_col().1 == 0 {
+                    } else if s == ":" && (app.mode == Mode::Normal || app.mode == Mode::Doc) && app.ed.row_col().1 == 0 {
                         app.in_command = true;
                         app.cmd_ed.clear();
+                    } else if app.mode == Mode::Doc {
+                        app.set_status("📖 Documentation is read-only.", now);
                     } else {
                         for c in s.chars() {
                             if c == '\n' || c == '\r' {
                                 continue;
                             }
                             if app.editor_input_mode == crate::app::EditorInputMode::Hybrid && app.hybrid.handle_char(&mut app.ed, c) {
-                                if app.mode == Mode::Normal {
-                                    app.sound.play();
-                                }
+                                app.sound.play();
                             } else {
                                 app.ed.insert(c);
-                                if app.mode == Mode::Normal {
-                                    app.sound.play();
-                                }
+                                app.sound.play();
                             }
                         }
                         typed = true;
@@ -387,14 +432,16 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                     modifiers,
                     ..
                 } => {
-                    if !app.in_command && app.mode == Mode::Normal {
+                    if !app.in_command && (app.mode == Mode::Normal || app.mode == Mode::Doc) {
                         if app.editor_input_mode == crate::app::EditorInputMode::Vim {
                             app.vim.pending_keys_time = now;
                             if app.vim.handle_key(&mut app.ed, &app.visual_lines, *key, *modifiers) {
                                 typed = true;
                                 app.sound.play();
                                 app.last_char_time = now;
-                                app.is_dirty = true;
+                                if app.mode == Mode::Normal {
+                                    app.is_dirty = true;
+                                }
                                 if app.vim.is_searching() {
                                     let sym = if app.vim.search.backward { "?" } else { "/" };
                                     app.showcmd.set_search(sym, &app.vim.search.query, now);
@@ -415,7 +462,9 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                                 typed = true;
                                 app.sound.play();
                                 app.last_char_time = now;
-                                app.is_dirty = true;
+                                if app.mode == Mode::Normal {
+                                    app.is_dirty = true;
+                                }
                                 continue;
                             }
                         }
@@ -439,12 +488,10 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                                 app.cmd_ed.clear();
                                 app.showcmd.record_action(&format!(":{}", cmd), now);
                                 execute_command(app, &cmd, now);
-                            } else {
+                            } else if app.mode == Mode::Normal {
                                 handle_mode_enter(app, now);
-                                if app.mode == Mode::Normal {
-                                    app.sound.play();
-                                    typed = true;
-                                }
+                                app.sound.play();
+                                typed = true;
                                 app.last_char_time = now;
                             }
                         }
@@ -452,7 +499,7 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                             if app.in_command {
                                 app.cmd_ed.delete_word();
                                 app.showcmd.set_command(&app.cmd_ed.text(), now);
-                            } else {
+                            } else if app.mode != Mode::Doc {
                                 app.ed.delete_word();
                                 app.is_dirty = true;
                                 if app.mode == Mode::Normal {
@@ -470,7 +517,7 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                                     app.cmd_ed.backspace();
                                     app.showcmd.set_command(&app.cmd_ed.text(), now);
                                 }
-                            } else {
+                            } else if app.mode != Mode::Doc {
                                 app.ed.backspace();
                                 app.is_dirty = true;
                                 if app.mode == Mode::Normal {
@@ -482,7 +529,7 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                         Delete => {
                             if app.in_command {
                                 app.cmd_ed.delete();
-                            } else {
+                            } else if app.mode != Mode::Doc {
                                 app.ed.delete();
                                 app.is_dirty = true;
                                 if app.mode == Mode::Normal {

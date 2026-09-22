@@ -102,6 +102,8 @@ jobs:
           !define APPVER     "$ver"
           !define PUBLISHER  "Saboor Hamedi"
           !define WEBSITE    "https://github.com/Saboor-Hamedi/my_first_project"
+          !define MUI_ICON   "icon.ico"
+          !define MUI_UNICON "icon.ico"
 
           Name "`${APPNAME} `${APPVER}"
           OutFile "$out"
@@ -128,14 +130,15 @@ jobs:
             File "dist\mindforge.exe"
 
             CreateDirectory "`$SMPROGRAMS\MindForge"
-            CreateShortCut  "`$SMPROGRAMS\MindForge\MindForge.lnk"           "`$INSTDIR\mindforge.exe"
-            CreateShortCut  "`$SMPROGRAMS\MindForge\Uninstall MindForge.lnk" "`$INSTDIR\Uninstall.exe"
-            CreateShortCut  "`$DESKTOP\MindForge.lnk"                        "`$INSTDIR\mindforge.exe"
+            CreateShortCut  "`$SMPROGRAMS\MindForge\MindForge.lnk"           "`$INSTDIR\mindforge.exe" "" "`$INSTDIR\mindforge.exe" 0
+            CreateShortCut  "`$SMPROGRAMS\MindForge\Uninstall MindForge.lnk" "`$INSTDIR\Uninstall.exe" "" "`$INSTDIR\Uninstall.exe" 0
+            CreateShortCut  "`$DESKTOP\MindForge.lnk"                        "`$INSTDIR\mindforge.exe" "" "`$INSTDIR\mindforge.exe" 0
 
             WriteRegStr   HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MindForge" "DisplayName"     "`${APPNAME}"
             WriteRegStr   HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MindForge" "DisplayVersion"  "`${APPVER}"
             WriteRegStr   HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MindForge" "Publisher"       "`${PUBLISHER}"
             WriteRegStr   HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MindForge" "URLInfoAbout"    "`${WEBSITE}"
+            WriteRegStr   HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MindForge" "DisplayIcon"     "`$INSTDIR\mindforge.exe,0"
             WriteRegStr   HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MindForge" "InstallLocation" "`$INSTDIR"
             WriteRegStr   HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MindForge" "UninstallString" "`$INSTDIR\Uninstall.exe"
             WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\MindForge" "NoModify" 1

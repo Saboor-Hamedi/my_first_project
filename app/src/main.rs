@@ -23,6 +23,7 @@ mod view_stats;
 mod vim;
 mod showcmd;
 mod updater;
+mod docs;
 
 pub use types::{snapshot, visual_line};
 
@@ -30,8 +31,16 @@ use app::App;
 use eframe::egui::{self, FontData, FontDefinitions, FontFamily};
 
 fn main() -> eframe::Result<()> {
+    let icon_bytes = include_bytes!("../assets/icon_64.rgba");
+    let icon_data = egui::IconData {
+        rgba: icon_bytes.to_vec(),
+        width: 64,
+        height: 64,
+    };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
+            .with_icon(icon_data)
+            .with_app_id("app.mindforge.MindForge")
             .with_decorations(false) // Borderless: NO title bar, NO borders
             .with_transparent(true)  // Enables opacity and rounded edges
             .with_inner_size([1120.0, 740.0])

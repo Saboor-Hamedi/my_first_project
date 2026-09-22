@@ -296,21 +296,39 @@ impl UpdateManager {
 
         #[cfg(target_os = "windows")]
         {
-            let current_str = current_exe.to_string_lossy().to_string();
-            let new_str = downloaded_path.to_string_lossy().to_string();
+            let is_installer = downloaded_path
+                .file_name()
+                .map(|f| {
+                    let s = f.to_string_lossy().to_lowercase();
+                    s.contains("setup") || s.contains("installer")
+                })
+                .unwrap_or(false);
 
-            // Use cmd.exe to wait for current process to exit, copy new file over, and launch
-            let script = format!(
-                "ping 127.0.0.1 -n 2 > nul & copy /y \"{}\" \"{}\" & start \"\" \"{}\"",
-                new_str, current_str, current_str
-            );
+            if is_installer {
+                // The downloaded asset is the NSIS setup wizard.
+                // Launch it directly so Windows UAC elevates and installs to Program Files.
+                std::process::Command::new(&downloaded_path)
+                    .spawn()
+                    .map_err(|e| format!("Failed to launch installer: {e}"))?;
+                std::process::exit(0);
+            } else {
+                // Standalone / portable executable update.
+                // On Windows NTFS, a running executable can be renamed, but not overwritten in-place.
+                let old_exe = current_exe.with_extension("exe.old");
+                let _ = std::fs::remove_file(&old_exe);
+                let _ = std::fs::rename(&current_exe, &old_exe);
 
-            std::process::Command::new("cmd")
-                .args(["/C", &script])
-                .spawn()
-                .map_err(|e| format!("Failed to spawn updater command: {e}"))?;
+                if let Err(e) = std::fs::copy(&downloaded_path, &current_exe) {
+                    let _ = std::fs::rename(&old_exe, &current_exe);
+                    return Err(format!("Failed to replace executable: {e}"));
+                }
 
-            std::process::exit(0);
+                std::process::Command::new(&current_exe)
+                    .spawn()
+                    .map_err(|e| format!("Failed to restart updated application: {e}"))?;
+
+                std::process::exit(0);
+            }
         }
 
         #[cfg(not(target_os = "windows"))]

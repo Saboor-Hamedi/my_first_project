@@ -1,6 +1,4 @@
-//! Interactive modals for fuzzy search and document renaming.
-
-use crate::fuzzy::{SearchItem, SearchResultKind};
+use crate::fuzzy::SearchItem;
 use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, Stroke};
 
 pub struct SearchModalAction {
@@ -103,7 +101,7 @@ pub fn render_search_modal(
         egui::TextEdit::singleline(query)
             .font(FontId::monospace(14.0))
             .text_color(Color32::WHITE)
-            .hint_text("Spotlight search notes, cards...")
+            .hint_text("Search notes...")
             .margin(vec2(0.0, 2.0))
             .frame(false),
     );
@@ -189,11 +187,10 @@ pub fn render_search_modal(
                 }
 
                 // Type badge pill
-                let badge_text = match item.kind {
-                    SearchResultKind::Document => "DOC",
-                };
+                let badge_text = "NOTE";
+                let badge_w = 46.0;
                 let badge_bg = Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 35);
-                let badge_rect = Rect::from_min_size(item_rect.min + vec2(10.0, 8.0), vec2(46.0, 20.0));
+                let badge_rect = Rect::from_min_size(item_rect.min + vec2(10.0, 8.0), vec2(badge_w, 20.0));
                 painter.rect_filled(badge_rect, 4.0, badge_bg);
                 painter.text(
                     badge_rect.center(),

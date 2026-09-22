@@ -179,9 +179,17 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
             }
         }
         "w" | "save" => {
+            if app.mode == Mode::Doc {
+                app.set_status("Documentation files are read-only (changes not saved).", now);
+                return;
+            }
             app.quick_save_active_note(now);
         }
         "r" | "rename" => {
+            if app.mode == Mode::Doc {
+                app.set_status("Documentation files are read-only and cannot be renamed.", now);
+                return;
+            }
             if !args.is_empty() {
                 app.active_note_title = args.to_string();
                 if let Some(id) = app.active_note_id {
@@ -200,6 +208,10 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
             }
         }
         "d" | "delete" | "rm" => {
+            if app.mode == Mode::Doc {
+                app.set_status("Documentation files cannot be deleted.", now);
+                return;
+            }
             app.delete_confirm_open = true;
             app.delete_just_opened = true;
         }
@@ -372,6 +384,13 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
                 app.backup_dir = args.to_string();
             }
             app.trigger_backup(now);
+        }
+        "doc" | "docs" | "tutorial" | "tutorials" | "document" | "documents" | "documentation" | "documentations" => {
+            app.open_docs_mode(now);
+        }
+        "edit" | "editor" | "note" | "notes" => {
+            app.mode = Mode::Normal;
+            app.set_status("Switched to Notes Editor", now);
         }
         "quit" | "q" => {
             std::process::exit(0);

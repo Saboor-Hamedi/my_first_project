@@ -1,11 +1,7 @@
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SearchResultKind {
-    Document,
-}
+//! Fuzzy search utilities for user notes.
 
 #[derive(Debug, Clone)]
 pub struct SearchItem {
-    pub kind: SearchResultKind,
     pub id: i64,
     pub title: String,
     #[allow(dead_code)]

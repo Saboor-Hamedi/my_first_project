@@ -1,4 +1,4 @@
-//! Sleek floating sidebar with navigation and documents library.
+//! Sleek floating sidebar with navigation and user notes library.
 
 use core::Note;
 use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, Stroke};
@@ -60,16 +60,16 @@ pub fn render_sidebar(
 
     let mut action = None;
 
-    // Navigation items
+    // Navigation items: Strictly app modes (Notes & Stats)
     let nav_items = [
-        ("📝 Editor", 0),
+        ("📝 Notes", 0),
         ("📊 Stats", 1),
     ];
 
     for (i, (label, mode_idx)) in nav_items.iter().enumerate() {
         let btn_rect = Rect::from_min_size(
-            sb_origin + vec2(0.0, 50.0 + i as f32 * 28.0),
-            vec2(sidebar_w - 32.0, 24.0),
+            sb_origin + vec2(0.0, 48.0 + i as f32 * 26.0),
+            vec2(sidebar_w - 32.0, 22.0),
         );
         let is_sel = active_mode_idx == *mode_idx;
         let is_hovered = ui.rect_contains_pointer(btn_rect);
@@ -90,16 +90,16 @@ pub fn render_sidebar(
         }
 
         painter.text(
-            btn_rect.min + vec2(6.0, 4.0),
+            btn_rect.min + vec2(6.0, 3.0),
             Align2::LEFT_TOP,
             *label,
-            FontId::monospace(12.5),
+            FontId::monospace(12.0),
             if is_sel { accent } else { text_color },
         );
     }
 
-    // Documents Header with current count
-    let docs_y = sb_origin.y + 116.0;
+    // Documents Header (Only user SQLite notes)
+    let docs_y = sb_origin.y + 110.0;
     let header_label = if total_notes_count > notes.len() {
         format!("DOCUMENTS ({}/{})", notes.len(), total_notes_count)
     } else {
@@ -110,11 +110,11 @@ pub fn render_sidebar(
         pos2(sb_origin.x, docs_y),
         Align2::LEFT_TOP,
         header_label,
-        FontId::monospace(12.0),
+        FontId::monospace(11.5),
         muted_color,
     );
 
-    // "+" New Note
+    // "+" New Note button
     let new_btn = Rect::from_min_size(
         pos2(sb_rect.max.x - 38.0, docs_y - 2.0),
         vec2(22.0, 20.0),
@@ -127,7 +127,7 @@ pub fn render_sidebar(
     }
     painter.text(new_btn.center(), Align2::CENTER_CENTER, "+", FontId::monospace(14.0), accent);
 
-    // Scrollable Documents Area (Never loads all; max 100 items)
+    // Scrollable Documents Area (User SQLite notes)
     let docs_list_rect = Rect::from_min_max(
         pos2(sb_origin.x, docs_y + 24.0),
         pos2(sb_rect.max.x - 12.0, sb_rect.max.y - 42.0),
@@ -267,8 +267,8 @@ pub fn render_sidebar(
 
     // Bottom Settings entry in sidebar
     let sb_settings_btn = Rect::from_min_size(
-        pos2(sb_origin.x, sb_rect.max.y - 36.0),
-        vec2(sidebar_w - 32.0, 24.0),
+        pos2(sb_rect.min.x + 12.0, sb_rect.max.y - 36.0),
+        vec2(sidebar_w - 24.0, 24.0),
     );
     if ui.rect_contains_pointer(sb_settings_btn) {
         painter.rect_filled(sb_settings_btn, 4.0, Color32::from_rgb(25, 25, 30));
@@ -280,7 +280,7 @@ pub fn render_sidebar(
         sb_settings_btn.min + vec2(6.0, 4.0),
         Align2::LEFT_TOP,
         "⚙ Settings (Ctrl+,)",
-        FontId::monospace(12.0),
+        FontId::monospace(11.5),
         muted_color,
     );
 
