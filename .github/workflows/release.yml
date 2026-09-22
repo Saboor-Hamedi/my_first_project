@@ -157,28 +157,16 @@ jobs:
           name: windows-setup
           path: dist/mindforge-v${{ steps.ver.outputs.VERSION }}-windows-setup.exe
 
-  # ── macOS DMG (drag-to-Applications) ────────────────────────────────────────
-  build-macos:
-    name: macOS DMG (${{ matrix.arch }})
+  # ── macOS Intel DMG ─────────────────────────────────────────────────────────
+  build-macos-intel:
+    name: macOS Intel DMG
     needs: test
     runs-on: macos-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: Intel
-            target: x86_64-apple-darwin
-            suffix: macos-intel
-          - arch: Apple Silicon
-            target: aarch64-apple-darwin
-            suffix: macos-arm64
     steps:
       - uses: actions/checkout@v4
-
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
-
+          targets: x86_64-apple-darwin
       - name: Cache
         uses: actions/cache@v4
         with:
@@ -186,26 +174,20 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
-
+          key: macos-intel-${{ hashFiles('**/Cargo.lock') }}
       - name: Build
-        run: cargo build --release --target ${{ matrix.target }} -p app
-
+        run: cargo build --release --target x86_64-apple-darwin -p app
       - name: Get version
         id: ver
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
       - name: Build .app + .dmg
         run: |
           ver="${{ steps.ver.outputs.VERSION }}"
           mkdir -p dist staging
-
-          # ── .app bundle ──────────────────────────────────────────────────────
           app="staging/MindForge.app"
           mkdir -p "${app}/Contents/MacOS" "${app}/Contents/Resources"
-          cp "target/${{ matrix.target }}/release/app" "${app}/Contents/MacOS/MindForge"
+          cp "target/x86_64-apple-darwin/release/app" "${app}/Contents/MacOS/MindForge"
           chmod +x "${app}/Contents/MacOS/MindForge"
-
           cat > "${app}/Contents/Info.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -220,24 +202,72 @@ jobs:
             <key>NSHighResolutionCapable</key><true/>
           </dict></plist>
           PLIST
-
-          # ── Symlink to /Applications so DMG has drag target ─────────────────
           ln -s /Applications "staging/Applications"
-
-          # ── Create DMG from staging folder ───────────────────────────────────
-          dmg="dist/mindforge-v${ver}-${{ matrix.suffix }}.dmg"
           hdiutil create \
             -volname "MindForge ${ver}" \
             -srcfolder staging \
-            -ov \
-            -format UDZO \
-            "${dmg}"
-
-      - name: Upload
-        uses: actions/upload-artifact@v4
+            -ov -format UDZO \
+            "dist/mindforge-v${ver}-macos-intel.dmg"
+      - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.suffix }}
-          path: dist/mindforge-v${{ steps.ver.outputs.VERSION }}-${{ matrix.suffix }}.dmg
+          name: macos-intel-dmg
+          path: dist/mindforge-v${{ steps.ver.outputs.VERSION }}-macos-intel.dmg
+
+  # ── macOS Apple Silicon DMG ──────────────────────────────────────────────────
+  build-macos-arm:
+    name: macOS Apple Silicon DMG
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: macos-arm64-${{ hashFiles('**/Cargo.lock') }}
+      - name: Build
+        run: cargo build --release --target aarch64-apple-darwin -p app
+      - name: Get version
+        id: ver
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Build .app + .dmg
+        run: |
+          ver="${{ steps.ver.outputs.VERSION }}"
+          mkdir -p dist staging
+          app="staging/MindForge.app"
+          mkdir -p "${app}/Contents/MacOS" "${app}/Contents/Resources"
+          cp "target/aarch64-apple-darwin/release/app" "${app}/Contents/MacOS/MindForge"
+          chmod +x "${app}/Contents/MacOS/MindForge"
+          cat > "${app}/Contents/Info.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>CFBundleExecutable</key><string>MindForge</string>
+            <key>CFBundleIdentifier</key><string>app.mindforge.MindForge</string>
+            <key>CFBundleName</key><string>MindForge</string>
+            <key>CFBundleDisplayName</key><string>MindForge</string>
+            <key>CFBundleVersion</key><string>${ver}</string>
+            <key>CFBundleShortVersionString</key><string>${ver}</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict></plist>
+          PLIST
+          ln -s /Applications "staging/Applications"
+          hdiutil create \
+            -volname "MindForge ${ver}" \
+            -srcfolder staging \
+            -ov -format UDZO \
+            "dist/mindforge-v${ver}-macos-arm64.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64-dmg
+          path: dist/mindforge-v${{ steps.ver.outputs.VERSION }}-macos-arm64.dmg
 
   # ── Linux .deb (apt install / double-click in file manager) ─────────────────
   build-linux:
@@ -319,7 +349,7 @@ jobs:
   # ── Collect everything and publish GitHub Release ───────────────────────────
   release:
     name: Publish Release
-    needs: [build-windows, build-macos, build-linux]
+    needs: [build-windows, build-macos-intel, build-macos-arm, build-linux]
     runs-on: ubuntu-latest
     steps:
       - name: Download all installers
