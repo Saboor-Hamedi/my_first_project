@@ -71,10 +71,9 @@ pub fn render_document_selection(
         // SCENARIO 1: Selection is entirely within this single line
         if is_sel_first_line && is_sel_last_line {
             if row1 == row2 {
-                // Single row
-                let row_h = r1.height().max(16.0);
-                let top = line_y + r1.min.y;
-                let bottom = top + row_h;
+                // Single row — fill the entire line slot so selection height matches the caret.
+                let top = line_y;
+                let bottom = line_y + line.height;
                 let x_min = (text_left + r1.min.x.min(r2.min.x)).max(text_left);
                 let x_max = (text_left + r1.max.x.max(r2.max.x)).max(x_min + 4.0);
 

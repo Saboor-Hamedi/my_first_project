@@ -131,7 +131,7 @@ pub fn build_line_layout(
             let (font_id, lh) = super::elements::heading_metrics(*lvl, base_font_size);
             (font_id.size, lh, true)
         }
-        InlineLineKind::Quote => (base_font_size, (base_font_size * 1.6).round(), false),
+        InlineLineKind::Quote => (base_font_size, (base_font_size * 1.55).round(), false),
         InlineLineKind::Rule => (base_font_size * 0.8, 18.0, false),
         InlineLineKind::TableRow { is_separator: true, .. } => (base_font_size * 0.8, 16.0, false),
         InlineLineKind::TableRow { .. } => (base_font_size, (base_font_size * 1.55).round(), false),

@@ -48,7 +48,8 @@ pub fn render_inline_editor(
     };
 
     let pad_x = if show_line_numbers { 16.0 } else { 24.0 };
-    let pad_y = 12.0;
+    // Match normal editor pad_y exactly so Ctrl+E switching is seamless (body.rs uses 10.0).
+    let pad_y = 10.0;
     let safe_w = editor_rect.width();
     let effective_gutter_w = if safe_w > gutter_w + 40.0 { gutter_w } else { 0.0 };
     let text_left = (editor_rect.min.x + effective_gutter_w + pad_x).min(editor_rect.max.x);

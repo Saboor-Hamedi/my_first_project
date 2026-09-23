@@ -1,15 +1,15 @@
-//! Blockquote / command input styling and card wrapper rendering.
+//! Blockquote styling and card wrapper rendering.
 //!
-//! Complies with the Lumina Premium Inline standard:
-//! 1. Borderless definition through background luminance shift (+5% to +10%), zero hard borders.
-//! 2. Baseline alignment with surrounding editor content.
-//! 3. Compact geometry matching font_line_height + comfortable vertical padding.
-//! 4. Thematic integration with theme accent prompt and text color.
+//! Renders a minimal, elegant callout wrapper:
+//! 1. A soft background surface slightly elevated from the editor canvas.
+//! 2. A sleek 3px vertical accent pill on the left edge with rounded caps.
+//! 3. Compact geometry — card occupies exactly the line slot, no extra padding.
+//! 4. Seamlessly integrates with active theme and user accent color.
 
 use crate::theme::Theme;
-use eframe::egui::{pos2, Color32, Painter, Rect, Stroke};
+use eframe::egui::{pos2, Color32, Painter, Rect};
 
-/// Renders the seamless, borderless background wrapper for a blockquote line.
+/// Renders the blockquote card wrapper (background + left accent bar) for one inline line.
 pub fn render_block_quote_wrapper(
     painter: &Painter,
     line_y: f32,
@@ -19,50 +19,42 @@ pub fn render_block_quote_wrapper(
     theme: &Theme,
     is_active: bool,
 ) {
-    // Compact geometry: font_line_height + 4px vertical padding (2px top / 2px bottom)
-    // Horizontal padding aligns with editor margins
-    let bg_rect = Rect::from_min_max(
-        pos2(text_left - 6.0, line_y - 2.0),
-        pos2(content_right, line_y + line_h + 2.0),
+    // Card spans from a small offset left of text to right content edge.
+    // The accent bar sits at the very left of this card area.
+    let bar_w = 3.0;
+    let bar_gap = 2.0;   // gap between accent bar and card start
+    let card_left = text_left - (bar_w + bar_gap * 2.0 + 8.0);
+
+    // Card background — subtle luminance step from the editor bg.
+    // Blend toward a neutral tone rather than pure add/sub to avoid color shift.
+    let bg = theme.bg;
+    let step: i16 = if theme.is_light() { -9 } else { 14 };
+    let bg_color = Color32::from_rgb(
+        (bg.r() as i16 + step).clamp(0, 255) as u8,
+        (bg.g() as i16 + step).clamp(0, 255) as u8,
+        (bg.b() as i16 + step).clamp(0, 255) as u8,
     );
 
-    // Background color differentiation (+5% to +10% luminance shift from canvas)
-    let base = theme.bg;
-    let bg_color = if theme.is_light() {
-        Color32::from_rgb(
-            base.r().saturating_sub(12),
-            base.g().saturating_sub(12),
-            base.b().saturating_sub(12),
-        )
-    } else {
-        Color32::from_rgb(
-            base.r().saturating_add(14),
-            base.g().saturating_add(14),
-            base.b().saturating_add(16),
-        )
-    };
-
-    // Borderless definition: no visible stroke/border.
-    // Subtle accent focus indicator (<10% opacity) only when actively editing.
-    let stroke = if is_active {
-        Stroke::new(
-            1.0,
-            Color32::from_rgba_unmultiplied(
-                theme.accent.r(),
-                theme.accent.g(),
-                theme.accent.b(),
-                22, // ~8.6% opacity, strictly < 10%
-            ),
-        )
-    } else {
-        Stroke::NONE
-    };
-
-    painter.rect(
-        bg_rect,
-        4.0,
-        bg_color,
-        stroke,
-        eframe::egui::StrokeKind::Inside,
+    let card_rect = Rect::from_min_max(
+        pos2(card_left, line_y),
+        pos2(content_right, line_y + line_h),
     );
+    painter.rect_filled(card_rect, 5.0, bg_color);
+
+    // Accent bar — flush with card left edge, inset 2px vertically for rounded ends.
+    let bar_inset_y = 3.0;
+    let bar_rect = Rect::from_min_max(
+        pos2(card_left + bar_gap, line_y + bar_inset_y),
+        pos2(card_left + bar_gap + bar_w, line_y + line_h - bar_inset_y),
+    );
+
+    // Full accent when caret is on this line, soft 65% opacity when resting.
+    let accent_alpha: u8 = if is_active { 255 } else { 165 };
+    let bar_color = Color32::from_rgba_unmultiplied(
+        theme.accent.r(),
+        theme.accent.g(),
+        theme.accent.b(),
+        accent_alpha,
+    );
+    painter.rect_filled(bar_rect, 1.5, bar_color);
 }

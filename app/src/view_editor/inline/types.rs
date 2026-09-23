@@ -145,9 +145,14 @@ impl InlineEditorLayout {
         let cursor = line.galley.from_ccursor(CCursor::new(best_galley_idx));
         let cursor_rect = line.galley.pos_from_cursor(&cursor);
         let x = ed_origin.x + cursor_rect.min.x;
-        let y = line_y + cursor_rect.min.y;
 
-        let caret_h = cursor_rect.height().max(16.0);
+        // Vertically center the caret within the full line slot.
+        // cursor_rect.min.y is the galley-internal text ascender offset, which
+        // biases the caret toward the bottom when line.height > galley height.
+        // Instead, center it symmetrically: (line_h - caret_h) / 2.
+        let caret_h = cursor_rect.height().max(16.0).min(line.height);
+        let y = line_y + ((line.height - caret_h) * 0.5).round();
+
         (pos2(x, y), caret_h)
     }
 
