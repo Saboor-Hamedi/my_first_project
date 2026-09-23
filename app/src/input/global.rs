@@ -24,25 +24,30 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
         return Some(false);
     }
 
-    // Global AI Agent dropdown toggle: Ctrl+Shift+I
+    // Global AI Agent right pane toggle: Ctrl+Shift+I
     let toggle_ai = ctx.input(|i| {
         i.modifiers.ctrl && i.modifiers.shift && !i.modifiers.alt && i.key_pressed(egui::Key::I)
     });
     if toggle_ai {
-        app.agent_state.is_open = !app.agent_state.is_open;
-        if app.agent_state.is_open {
-            app.set_status("AI Assistant opened (Ctrl+Shift+I to toggle)", now);
-            ctx.memory_mut(|m| m.request_focus(egui::Id::new("deepseek_prompt_input")));
-        } else {
+        if app.preview_open && app.right_pane_tab == crate::app::RightPaneTab::AiAgent {
+            app.preview_open = false;
+            app.agent_state.is_open = false;
             ctx.memory_mut(|m| m.surrender_focus(egui::Id::new("deepseek_prompt_input")));
             app.set_status("AI Agent closed", now);
+        } else {
+            app.preview_open = true;
+            app.right_pane_tab = crate::app::RightPaneTab::AiAgent;
+            app.ai_focus_requested = true;
+            app.agent_state.is_open = true;
+            ctx.memory_mut(|m| m.request_focus(egui::Id::new("deepseek_prompt_input")));
+            app.set_status("AI Assistant opened (Ctrl+Shift+I to toggle)", now);
         }
         return Some(false);
     }
 
     // AI Assistant input priority: when user is focused on the AI prompt textarea,
     // absorb typing and shortcuts so input goes exclusively into the prompt and doesn't trigger the editor.
-    if app.agent_state.is_open {
+    if app.preview_open && app.right_pane_tab == crate::app::RightPaneTab::AiAgent {
         let ai_input_id = egui::Id::new("deepseek_prompt_input");
         let is_ai_focused = ctx.memory(|m| m.has_focus(ai_input_id));
 
@@ -439,7 +444,12 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
     }
 
     if ctrl_backslash {
-        app.preview_open = !app.preview_open;
+        if app.preview_open && app.right_pane_tab == crate::app::RightPaneTab::Preview {
+            app.preview_open = false;
+        } else {
+            app.preview_open = true;
+            app.right_pane_tab = crate::app::RightPaneTab::Preview;
+        }
         let val = if app.preview_open { "true" } else { "false" };
         let _ = app.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
             key: "preview".into(),

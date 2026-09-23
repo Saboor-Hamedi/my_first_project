@@ -461,6 +461,150 @@ pub fn highlight_code_line(
     job
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RightPaneAction {
+    SelectTab(crate::app::RightPaneTab),
+    Close,
+}
+
+/// Renders the unified tab bar header at the top of the right-hand split pane.
+/// Styled with the exact same height (35px), borders, and active tab indicator as the editor tabs.
+pub fn render_right_pane_header(
+    ui: &egui::Ui,
+    painter: &egui::Painter,
+    header_rect: Rect,
+    active_tab: crate::app::RightPaneTab,
+    theme: &Theme,
+) -> Option<RightPaneAction> {
+    let mut action = None;
+
+    // Bottom divider line separating tabs from pane content (identical to editor tab bar)
+    painter.line_segment(
+        [
+            pos2(header_rect.min.x, header_rect.max.y),
+            pos2(header_rect.max.x, header_rect.max.y),
+        ],
+        Stroke::new(1.0, theme.border()),
+    );
+
+    let chip_margin_y = 4.0;
+    let tab_h = header_rect.height() - chip_margin_y * 2.0;
+    let tab_y = header_rect.min.y + chip_margin_y;
+
+    let tabs = [
+        (crate::app::RightPaneTab::Preview, "Preview"),
+        (crate::app::RightPaneTab::AiAgent, "AI Agent"),
+    ];
+
+    let mut current_x = header_rect.min.x + 8.0;
+
+    for (tab_kind, label) in tabs {
+        let is_active = active_tab == tab_kind;
+        let tab_w = 104.0;
+        let tab_rect = Rect::from_min_size(pos2(current_x, tab_y), vec2(tab_w, tab_h));
+        let is_hovered = ui.rect_contains_pointer(tab_rect);
+
+        if is_hovered {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+
+        if is_active {
+            // Elevated active tab chip matching editor tab style
+            painter.rect(
+                tab_rect,
+                6.0,
+                theme.surface(),
+                Stroke::new(1.0, theme.border()),
+                egui::StrokeKind::Inside,
+            );
+            // Discrete bottom accent indicator pill
+            let accent_w = (tab_rect.width() - 24.0).max(18.0);
+            let accent_bar = Rect::from_center_size(
+                pos2(tab_rect.center().x, tab_rect.max.y - 2.5),
+                vec2(accent_w, 2.0),
+            );
+            painter.rect_filled(accent_bar, 1.0, theme.accent);
+        } else if is_hovered {
+            let bg = if theme.is_light() {
+                Color32::from_rgba_unmultiplied(0, 0, 0, 10)
+            } else {
+                Color32::from_rgba_unmultiplied(255, 255, 255, 12)
+            };
+            painter.rect_filled(tab_rect, 6.0, bg);
+        }
+
+        let text_color = if is_active {
+            theme.text
+        } else if is_hovered {
+            theme.text.lerp_to_gamma(theme.muted, 0.3)
+        } else {
+            theme.muted
+        };
+
+        let icon_color = if is_active { theme.accent } else { text_color };
+        let icon_center = pos2(tab_rect.min.x + 15.0, tab_rect.center().y);
+
+        // Crisp vector icons: never depend on OS emoji fonts or unicode tofu
+        match tab_kind {
+            crate::app::RightPaneTab::Preview => {
+                // Vector eye icon (almond outline + pupil)
+                let stroke = Stroke::new(1.3, icon_color);
+                let p_l = pos2(icon_center.x - 6.0, icon_center.y);
+                let p_r = pos2(icon_center.x + 6.0, icon_center.y);
+                let p_t = pos2(icon_center.x, icon_center.y - 3.5);
+                let p_b = pos2(icon_center.x, icon_center.y + 3.5);
+                painter.line_segment([p_l, p_t], stroke);
+                painter.line_segment([p_t, p_r], stroke);
+                painter.line_segment([p_r, p_b], stroke);
+                painter.line_segment([p_b, p_l], stroke);
+                painter.circle_filled(icon_center, 1.6, icon_color);
+            }
+            crate::app::RightPaneTab::AiAgent => {
+                // Vector AI 4-point sparkle star
+                let c = icon_center;
+                let pts = [
+                    pos2(c.x, c.y - 5.5),
+                    pos2(c.x + 1.4, c.y - 1.4),
+                    pos2(c.x + 5.5, c.y),
+                    pos2(c.x + 1.4, c.y + 1.4),
+                    pos2(c.x, c.y + 5.5),
+                    pos2(c.x - 1.4, c.y + 1.4),
+                    pos2(c.x - 5.5, c.y),
+                    pos2(c.x - 1.4, c.y - 1.4),
+                ];
+                painter.add(egui::Shape::convex_polygon(pts.to_vec(), icon_color, Stroke::NONE));
+                painter.circle_filled(pos2(c.x + 4.0, c.y - 4.0), 1.0, icon_color);
+            }
+        }
+
+        painter.text(
+            pos2(tab_rect.min.x + 28.0, tab_rect.center().y),
+            Align2::LEFT_CENTER,
+            label,
+            FontId::proportional(12.0),
+            text_color,
+        );
+
+        if is_hovered && ui.input(|i| i.pointer.primary_clicked()) {
+            action = Some(RightPaneAction::SelectTab(tab_kind));
+        }
+
+        current_x += tab_w + 6.0;
+    }
+
+    // Close button (×) on far right of header
+    let close_size = 20.0;
+    let close_rect = Rect::from_center_size(
+        pos2(header_rect.max.x - 18.0, header_rect.center().y),
+        vec2(close_size, close_size),
+    );
+    if crate::ui_components::render_close_button_rect(ui, painter, close_rect, theme, "right_pane_close") {
+        action = Some(RightPaneAction::Close);
+    }
+
+    action
+}
+
 /// Renders parsed markdown blocks inside `rect` with mouse-wheel scrolling, top header with close button, and polished styling.
 /// Returns `true` if the user clicked the close button.
 pub fn render_markdown_preview(
@@ -936,8 +1080,43 @@ fn render_markdown_view_inner(
                 let col_w = (max_text_w / col_count as f32).max(60.0);
                 let cell_pad_x = 10.0;
                 let cell_pad_y = 6.0;
-                let row_h = font_size * 1.5 + cell_pad_y * 2.0;
-                let table_h = row_h * (1 + rows.len()) as f32;
+
+                // 1. Precompute header galleys and dynamic height
+                let header_galleys: Vec<_> = headers
+                    .iter()
+                    .map(|h_text| {
+                        let job = build_inline_job(h_text, font_size * 0.95, theme.highlight, theme, col_w - cell_pad_x * 2.0);
+                        painter.layout_job(job)
+                    })
+                    .collect();
+                let header_h = header_galleys
+                    .iter()
+                    .map(|g| g.size().y)
+                    .fold(font_size * 1.4, f32::max)
+                    + cell_pad_y * 2.0;
+
+                // 2. Precompute row galleys and dynamic heights
+                let mut row_galleys_list: Vec<Vec<_>> = Vec::with_capacity(rows.len());
+                let mut row_heights: Vec<f32> = Vec::with_capacity(rows.len());
+
+                for row in rows {
+                    let mut row_galleys = Vec::with_capacity(col_count);
+                    let mut max_cell_h = font_size * 1.4;
+                    for c_idx in 0..col_count {
+                        let cell_text = row.get(c_idx).map(|s| s.as_str()).unwrap_or("");
+                        let job = build_inline_job(cell_text, font_size * 0.90, theme.text, theme, col_w - cell_pad_x * 2.0);
+                        let galley = painter.layout_job(job);
+                        if galley.size().y > max_cell_h {
+                            max_cell_h = galley.size().y;
+                        }
+                        row_galleys.push(galley);
+                    }
+                    row_heights.push(max_cell_h + cell_pad_y * 2.0);
+                    row_galleys_list.push(row_galleys);
+                }
+
+                let total_rows_h: f32 = row_heights.iter().sum();
+                let table_h = header_h + total_rows_h;
 
                 if current_y + table_h >= rect.min.y && current_y <= rect.max.y {
                     let table_rect = Rect::from_min_size(pos2(start_x, current_y), vec2(max_text_w, table_h));
@@ -951,7 +1130,7 @@ fn render_markdown_view_inner(
                     );
 
                     // Header row background
-                    let header_rect = Rect::from_min_size(pos2(start_x, current_y), vec2(max_text_w, row_h));
+                    let header_rect = Rect::from_min_size(pos2(start_x, current_y), vec2(max_text_w, header_h));
                     content_painter.rect_filled(
                         header_rect,
                         egui::CornerRadius { nw: 4, ne: 4, sw: 0, se: 0 },
@@ -963,17 +1142,15 @@ fn render_markdown_view_inner(
                     );
 
                     // Header cells
-                    for (c_idx, h_text) in headers.iter().enumerate() {
+                    for (c_idx, galley) in header_galleys.into_iter().enumerate() {
                         let c_x = start_x + c_idx as f32 * col_w + cell_pad_x;
-                        let job = build_inline_job(h_text, font_size * 0.95, theme.highlight, theme, col_w - cell_pad_x * 2.0);
-                        let galley = painter.layout_job(job);
                         content_painter.galley(pos2(c_x, current_y + cell_pad_y), galley, theme.highlight);
                     }
 
                     // Data rows
-                    let mut r_y = current_y + row_h;
-                    for (r_idx, row) in rows.iter().enumerate() {
-                        let r_rect = Rect::from_min_size(pos2(start_x, r_y), vec2(max_text_w, row_h));
+                    let mut r_y = current_y + header_h;
+                    for (r_idx, (row_galleys, &r_h)) in row_galleys_list.into_iter().zip(row_heights.iter()).enumerate() {
+                        let r_rect = Rect::from_min_size(pos2(start_x, r_y), vec2(max_text_w, r_h));
                         if r_idx % 2 == 1 {
                             content_painter.rect_filled(
                                 r_rect,
@@ -988,15 +1165,11 @@ fn render_markdown_view_inner(
                                 Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 25)),
                             );
                         }
-                        for (c_idx, cell_text) in row.iter().enumerate() {
-                            if c_idx < col_count {
-                                let c_x = start_x + c_idx as f32 * col_w + cell_pad_x;
-                                let job = build_inline_job(cell_text, font_size * 0.90, theme.text, theme, col_w - cell_pad_x * 2.0);
-                                let galley = painter.layout_job(job);
-                                content_painter.galley(pos2(c_x, r_y + cell_pad_y), galley, theme.text);
-                            }
+                        for (c_idx, galley) in row_galleys.into_iter().enumerate() {
+                            let c_x = start_x + c_idx as f32 * col_w + cell_pad_x;
+                            content_painter.galley(pos2(c_x, r_y + cell_pad_y), galley, theme.text);
                         }
-                        r_y += row_h;
+                        r_y += r_h;
                     }
                 }
                 current_y += table_h + 12.0;

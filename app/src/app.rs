@@ -48,6 +48,12 @@ pub struct OpenNote {
     pub is_dirty: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RightPaneTab {
+    Preview,
+    AiAgent,
+}
+
 pub struct App {
     pub ed: Editor,
     pub doc_ed: Editor,
@@ -186,6 +192,10 @@ pub struct App {
 
     // DeepSeek Pro AI Agent state
     pub agent_state: crate::agent::AgentState,
+
+    // Right side pane (Preview and AI Agent tabs)
+    pub right_pane_tab: RightPaneTab,
+    pub ai_focus_requested: bool,
 }
 
 impl App {
@@ -204,6 +214,8 @@ impl App {
             sound: SoundEngine::new(SoundProfile::Thocky), // Mechanical keyboard enabled by default
             font_size: 16.0,
             zoom: crate::zoom::ZoomState::new(),
+            right_pane_tab: RightPaneTab::Preview,
+            ai_focus_requested: false,
             opacity: 1.0,
             last_char_time: -10.0,
             cell: None,
@@ -1562,21 +1574,87 @@ impl App {
                 // Center-editor Zoom Percentage HUD (borderless fading pill in middle of editor)
                 self.zoom.render_hud(ui, &painter, actual_editor_rect, &self.theme, now);
 
-                // Render Live Markdown Preview side-by-side if active
+                // Render Right Pane (Markdown Preview or AI Agent tab) side-by-side if active
                 if let Some(p_rect) = preview_rect_opt {
-                    let note_text = self.ed.text();
-                    render_markdown_preview(
+                    let r_header_h = crate::view_editor::TAB_ROW_H;
+                    let r_header_rect = Rect::from_min_max(
+                        p_rect.min,
+                        pos2(p_rect.max.x, p_rect.min.y + r_header_h),
+                    );
+                    let r_content_rect = Rect::from_min_max(
+                        pos2(p_rect.min.x, p_rect.min.y + r_header_h),
+                        p_rect.max,
+                    );
+
+                    let header_action = crate::view_editor::preview::render_right_pane_header(
                         ui,
                         &painter,
-                        p_rect,
-                        &note_text,
-                        &mut self.preview_scroll_y,
+                        r_header_rect,
+                        self.right_pane_tab,
                         &self.theme,
-                        self.font_size,
-                        any_modal_open
-                            || self.is_dragging_splitter
-                            || self.is_dragging_sidebar_splitter,
                     );
+                    if let Some(action) = header_action {
+                        match action {
+                            crate::view_editor::preview::RightPaneAction::SelectTab(tab) => {
+                                self.right_pane_tab = tab;
+                                if tab == RightPaneTab::AiAgent {
+                                    self.ai_focus_requested = true;
+                                    self.agent_state.is_open = true;
+                                }
+                            }
+                            crate::view_editor::preview::RightPaneAction::Close => {
+                                self.preview_open = false;
+                                self.agent_state.is_open = false;
+                                let _ = self.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+                                    key: "preview".into(),
+                                    val: "false".into(),
+                                });
+                            }
+                        }
+                    }
+
+                    match self.right_pane_tab {
+                        RightPaneTab::Preview => {
+                            let note_text = self.ed.text();
+                            render_markdown_preview(
+                                ui,
+                                &painter,
+                                r_content_rect,
+                                &note_text,
+                                &mut self.preview_scroll_y,
+                                &self.theme,
+                                self.font_size,
+                                any_modal_open
+                                    || self.is_dragging_splitter
+                                    || self.is_dragging_sidebar_splitter,
+                            );
+                        }
+                        RightPaneTab::AiAgent => {
+                            self.agent_state.is_open = true;
+                            let cur_text = self.ed.text();
+                            let active_note_info = if let Some(n) = self.notes_list.iter().find(|n| Some(n.id) == self.active_note_id) {
+                                Some((n.topic.as_str(), cur_text.as_str()))
+                            } else {
+                                None
+                            };
+                            let req_focus = self.ai_focus_requested;
+                            self.ai_focus_requested = false;
+                            crate::agent::deepseek_ui::render_ai_pane(
+                                ui,
+                                &painter,
+                                r_content_rect,
+                                &mut self.agent_state,
+                                &self.notes_list,
+                                active_note_info,
+                                &self.theme,
+                                self.font_size,
+                                req_focus,
+                                any_modal_open
+                                    || self.is_dragging_splitter
+                                    || self.is_dragging_sidebar_splitter,
+                            );
+                        }
+                    }
                 }
 
                 // Floating Keystroke Card (Vim showcmd): large borderless capsule pill — bottom-right of editor
@@ -1585,7 +1663,7 @@ impl App {
                     self.showcmd.render_card(&painter, card_anchor, &self.theme, now);
                 }
 
-                if !is_pointer_over_ai && ui.rect_contains_pointer(actual_editor_rect) && ui.input(|i| i.pointer.primary_clicked()) {
+                if ui.rect_contains_pointer(actual_editor_rect) && ui.input(|i| i.pointer.primary_clicked()) {
                     self.terminal_focused = false;
                     ui.memory_mut(|m| m.surrender_focus(egui::Id::new("deepseek_prompt_input")));
                 }
@@ -1807,6 +1885,7 @@ impl App {
             None
         };
 
+        let is_ai_active = self.preview_open && self.right_pane_tab == RightPaneTab::AiAgent;
         let toggle_ai = render_bottom_dock(
             ui,
             &painter,
@@ -1825,14 +1904,21 @@ impl App {
             Some(mode_badge_str.as_str()),
             search_prompt,
             &self.theme,
-            self.agent_state.is_open,
+            is_ai_active,
         );
         if toggle_ai {
-            self.agent_state.is_open = !self.agent_state.is_open;
-            if self.agent_state.is_open {
-                ui.memory_mut(|m| m.request_focus(egui::Id::new("deepseek_prompt_input")));
-            } else {
+            if self.preview_open && self.right_pane_tab == RightPaneTab::AiAgent {
+                self.preview_open = false;
+                self.agent_state.is_open = false;
                 ui.memory_mut(|m| m.surrender_focus(egui::Id::new("deepseek_prompt_input")));
+                self.set_status("AI Agent closed", now);
+            } else {
+                self.preview_open = true;
+                self.right_pane_tab = RightPaneTab::AiAgent;
+                self.ai_focus_requested = true;
+                self.agent_state.is_open = true;
+                ui.memory_mut(|m| m.request_focus(egui::Id::new("deepseek_prompt_input")));
+                self.set_status("AI Assistant opened (Ctrl+Shift+I to toggle)", now);
             }
         }
 
@@ -2159,22 +2245,6 @@ impl App {
         // Poll DeepSeek background worker for any completed responses
         self.agent_state.poll_response();
 
-        // Render floating resizable DeepSeek AI Agent dropdown (Ctrl+Shift+I or bottom statusbar button)
-        let cur_text = self.ed.text();
-        let active_note_info = if let Some(n) = self.notes_list.iter().find(|n| Some(n.id) == self.active_note_id) {
-            Some((n.topic.as_str(), cur_text.as_str()))
-        } else {
-            None
-        };
-        crate::agent::deepseek_ui::render_ai_dropdown(
-            ui,
-            &painter,
-            bounds,
-            &mut self.agent_state,
-            &self.notes_list,
-            active_note_info,
-            &self.theme,
-        );
     }
 }
 

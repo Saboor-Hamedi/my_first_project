@@ -20,6 +20,22 @@ pub struct ChatMessage {
     pub role: MessageRole,
     pub content: String,
     pub timestamp: String,
+    #[serde(default)]
+    pub feedback: Option<bool>,
+}
+
+pub fn current_time_12h() -> String {
+    chrono::Local::now().format("%-I:%M %p").to_string()
+}
+
+pub fn format_time_12h(ts: &str) -> String {
+    if ts.contains("AM") || ts.contains("PM") || ts.contains("am") || ts.contains("pm") {
+        return ts.to_string();
+    }
+    if let Ok(t) = chrono::NaiveTime::parse_from_str(ts.trim(), "%H:%M") {
+        return t.format("%-I:%M %p").to_string();
+    }
+    ts.to_string()
 }
 
 pub struct AgentState {
@@ -59,22 +75,22 @@ impl AgentState {
             self.is_thinking = false;
             match res {
                 AgentResponse::Success(reply) => {
-                    let now_str = chrono::Local::now().format("%H:%M").to_string();
                     self.chat_history.push(ChatMessage {
                         role: MessageRole::Assistant,
                         content: reply,
-                        timestamp: now_str,
+                        timestamp: current_time_12h(),
+                        feedback: None,
                     });
                     self.scroll_to_bottom = true;
                     self.error_msg = None;
                 }
                 AgentResponse::Error(err) => {
                     self.error_msg = Some(err.clone());
-                    let now_str = chrono::Local::now().format("%H:%M").to_string();
                     self.chat_history.push(ChatMessage {
                         role: MessageRole::Assistant,
                         content: format!("⚠️ **Error**: {}", err),
-                        timestamp: now_str,
+                        timestamp: current_time_12h(),
+                        feedback: None,
                     });
                     self.scroll_to_bottom = true;
                 }
@@ -89,11 +105,11 @@ impl AgentState {
             return;
         }
 
-        let now_str = chrono::Local::now().format("%H:%M").to_string();
         self.chat_history.push(ChatMessage {
             role: MessageRole::User,
             content: text.clone(),
-            timestamp: now_str,
+            timestamp: current_time_12h(),
+            feedback: None,
         });
         self.input_text.clear();
         self.is_thinking = true;
@@ -111,11 +127,11 @@ impl AgentState {
 
         let raw_key = deobfuscate_key(&self.deepseek_api_key_enc);
         if raw_key.trim().is_empty() {
-            let now_str = chrono::Local::now().format("%H:%M").to_string();
             self.chat_history.push(ChatMessage {
                 role: MessageRole::Assistant,
                 content: "⚠️ DeepSeek API key is not configured.\n\nPlease open Settings (Ctrl+,) -> AI Agent tab and paste your API key to enable AI chatting.".to_string(),
-                timestamp: now_str,
+                timestamp: current_time_12h(),
+                feedback: None,
             });
             self.is_thinking = false;
             self.scroll_to_bottom = true;
@@ -245,5 +261,32 @@ mod tests {
         assert!(prompt.contains("1 document(s)"));
         assert!(prompt.contains("Rust Ownership"));
         assert!(prompt.contains("2026-09-23 10:00"));
+    }
+
+    #[test]
+    fn test_format_time_12h() {
+        assert_eq!(format_time_12h("14:30"), "2:30 PM");
+        assert_eq!(format_time_12h("09:15"), "9:15 AM");
+        assert_eq!(format_time_12h("00:05"), "12:05 AM");
+        assert_eq!(format_time_12h("12:00"), "12:00 PM");
+        assert_eq!(format_time_12h("2:30 PM"), "2:30 PM");
+    }
+
+    #[test]
+    fn test_chat_message_feedback_serde() {
+        let msg = ChatMessage {
+            role: MessageRole::Assistant,
+            content: "Hello!".to_string(),
+            timestamp: "2:30 PM".to_string(),
+            feedback: Some(true),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let parsed: ChatMessage = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.feedback, Some(true));
+
+        // Backwards compatibility with missing feedback field
+        let old_json = r#"{"role":"Assistant","content":"Hi","timestamp":"2:30 PM"}"#;
+        let old_parsed: ChatMessage = serde_json::from_str(old_json).unwrap();
+        assert_eq!(old_parsed.feedback, None);
     }
 }
