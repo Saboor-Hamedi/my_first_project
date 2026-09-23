@@ -32,19 +32,26 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
         app.agent_state.is_open = !app.agent_state.is_open;
         if app.agent_state.is_open {
             app.set_status("AI Assistant opened (Ctrl+Shift+I to toggle)", now);
+            ctx.memory_mut(|m| m.request_focus(egui::Id::new("deepseek_prompt_input")));
         } else {
+            ctx.memory_mut(|m| m.surrender_focus(egui::Id::new("deepseek_prompt_input")));
             app.set_status("AI Agent closed", now);
         }
         return Some(false);
     }
 
-    // AI Agent Dropdown input priority: absorbs all shortcuts, text, and keys so typing goes only into the AI prompt
+    // AI Assistant input priority: when user is focused on the AI prompt textarea,
+    // absorb typing and shortcuts so input goes exclusively into the prompt and doesn't trigger the editor.
     if app.agent_state.is_open {
-        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            app.agent_state.is_open = false;
-            app.set_status("AI Agent closed", now);
+        let ai_input_id = egui::Id::new("deepseek_prompt_input");
+        let is_ai_focused = ctx.memory(|m| m.has_focus(ai_input_id));
+
+        if is_ai_focused {
+            if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                ctx.memory_mut(|m| m.surrender_focus(ai_input_id));
+            }
+            return Some(false);
         }
-        return Some(false);
     }
 
     // When Vim search is active, bypass ALL global shortcuts so every keystroke

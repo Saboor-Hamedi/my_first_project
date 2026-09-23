@@ -471,8 +471,9 @@ pub fn render_markdown_preview(
     scroll_y: &mut f32,
     theme: &Theme,
     font_size: f32,
+    block_scroll: bool,
 ) -> bool {
-    render_markdown_view_inner(ui, painter, rect, content, scroll_y, theme, font_size, false)
+    render_markdown_view_inner(ui, painter, rect, content, scroll_y, theme, font_size, false, block_scroll)
 }
 
 /// Renders parsed markdown blocks inside `rect` as a full-height document without any nested header bar.
@@ -486,7 +487,7 @@ pub fn render_markdown_document(
     theme: &Theme,
     font_size: f32,
 ) {
-    let _ = render_markdown_view_inner(ui, painter, rect, content, scroll_y, theme, font_size, false);
+    let _ = render_markdown_view_inner(ui, painter, rect, content, scroll_y, theme, font_size, false, false);
 }
 
 fn render_markdown_view_inner(
@@ -498,6 +499,7 @@ fn render_markdown_view_inner(
     theme: &Theme,
     font_size: f32,
     show_header: bool,
+    block_scroll: bool,
 ) -> bool {
     let mut close_clicked = false;
 
@@ -554,8 +556,8 @@ fn render_markdown_view_inner(
     let content_painter = painter.with_clip_rect(content_rect);
     let max_text_w = (content_rect.width() - pad_x * 2.0).max(60.0);
 
-    // Mouse scroll handling inside preview pane
-    if ui.rect_contains_pointer(content_rect) {
+    // Mouse scroll handling inside preview pane (blocked when modals or floating AI assistant window are on top)
+    if !block_scroll && ui.rect_contains_pointer(content_rect) {
         let delta = ui.input(|i| {
             if i.smooth_scroll_delta.y.abs() > 0.001 {
                 i.smooth_scroll_delta.y

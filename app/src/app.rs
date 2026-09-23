@@ -1018,6 +1018,11 @@ impl App {
             self.accent_dropdown_open = !self.accent_dropdown_open;
         }
 
+        let pointer_pos = ui.input(|i| i.pointer.hover_pos().or_else(|| i.pointer.interact_pos()));
+        let is_pointer_over_ai = self.agent_state.is_open && self.agent_state.window_rect.map_or(false, |r| {
+            pointer_pos.map_or(false, |p| r.contains(p))
+        });
+
         // Sidebar Splitter Divider & Knob (when sidebar is open in Notes or Docs)
         let any_modal_open = self.settings_open
             || self.search_open
@@ -1025,7 +1030,7 @@ impl App {
             || self.rename_open
             || self.delete_confirm_open
             || self.accent_dropdown_open
-            || self.agent_state.is_open;
+            || is_pointer_over_ai;
 
         if let (Some(hit_rect), Some(center_x)) = (layout.splitter_hit_rect, layout.splitter_center_x) {
             let is_splitter_hovered = !any_modal_open && ui.rect_contains_pointer(hit_rect);
@@ -1545,12 +1550,7 @@ impl App {
                     dt,
                     now,
                     typed,
-                    self.settings_open
-                        || self.search_open
-                        || self.help_open
-                        || self.rename_open
-                        || self.delete_confirm_open
-                        || self.accent_dropdown_open
+                    any_modal_open
                         || self.is_dragging_splitter
                         || self.is_dragging_sidebar_splitter,
                     search_matches,
@@ -1573,6 +1573,9 @@ impl App {
                         &mut self.preview_scroll_y,
                         &self.theme,
                         self.font_size,
+                        any_modal_open
+                            || self.is_dragging_splitter
+                            || self.is_dragging_sidebar_splitter,
                     );
                 }
 
@@ -1582,8 +1585,9 @@ impl App {
                     self.showcmd.render_card(&painter, card_anchor, &self.theme, now);
                 }
 
-                if ui.rect_contains_pointer(actual_editor_rect) && ui.input(|i| i.pointer.primary_clicked()) {
+                if !is_pointer_over_ai && ui.rect_contains_pointer(actual_editor_rect) && ui.input(|i| i.pointer.primary_clicked()) {
                     self.terminal_focused = false;
+                    ui.memory_mut(|m| m.surrender_focus(egui::Id::new("deepseek_prompt_input")));
                 }
 
                 // Render Bottom-Docked Embedded Terminal (underneath editor & preview)
@@ -1825,6 +1829,11 @@ impl App {
         );
         if toggle_ai {
             self.agent_state.is_open = !self.agent_state.is_open;
+            if self.agent_state.is_open {
+                ui.memory_mut(|m| m.request_focus(egui::Id::new("deepseek_prompt_input")));
+            } else {
+                ui.memory_mut(|m| m.surrender_focus(egui::Id::new("deepseek_prompt_input")));
+            }
         }
 
         // Sleek Sidebar (Ctrl+B)

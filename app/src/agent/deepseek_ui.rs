@@ -383,6 +383,15 @@ pub fn render_ai_dropdown(
         egui::StrokeKind::Inside,
     );
 
+    // Surrender focus when user clicks outside the AI window
+    if ui.input(|i| i.pointer.primary_clicked()) {
+        if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+            if !rect.contains(pos) {
+                ui.memory_mut(|m| m.surrender_focus(edit_id));
+            }
+        }
+    }
+
     let edit_resp = ui.put(
         input_rect.shrink2(vec2(8.0, 7.0)),
         egui::TextEdit::multiline(&mut state.input_text)
@@ -390,7 +399,7 @@ pub fn render_ai_dropdown(
             .font(FontId::proportional(12.5))
             .text_color(theme.text)
             .hint_text(
-                egui::WidgetText::from("Ask DeepSeek about your notes... (Enter to send)")
+                egui::WidgetText::from("Ask anything about your notes... (Enter to send)")
                     .color(theme.muted),
             )
             .desired_rows(1)
