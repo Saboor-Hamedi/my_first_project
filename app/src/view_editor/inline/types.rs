@@ -2,15 +2,38 @@ use eframe::egui::text::CCursor;
 use eframe::egui::{pos2, vec2, Galley, Pos2, Rect};
 use std::sync::Arc;
 
+/// Column alignment for Markdown tables.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TableAlign {
+    None,
+    Left,
+    Center,
+    Right,
+}
+
+/// Metadata for a markdown table row.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct TableRowInfo {
+    pub is_header: bool,
+    pub is_separator: bool,
+    pub aligns: Vec<TableAlign>,
+}
+
 /// Classification of a markdown line.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InlineLineKind {
     /// Normal paragraph text
     Normal,
-    /// Heading with level 1..=4
+    /// Blank line (whitespace only or empty)
+    Blank,
+    /// ATX Heading with level 1..=6
     Heading(u8),
-    /// Blockquote with text
-    Quote,
+    /// Setext Heading with level 1..=2 (promoted from line above === or ---)
+    SetextHeading(u8),
+    /// Setext underline row (=== or ---)
+    SetextUnderline(u8),
+    /// Blockquote with nesting depth (1 for '>', 2 for '>>', etc.)
+    Quote(usize),
     /// Interactive task item (- [ ] or - [x])
     TaskItem {
         checked: bool,
@@ -21,17 +44,41 @@ pub enum InlineLineKind {
     BulletItem,
     /// Numbered list item (1., 2., etc.)
     NumberedItem(String),
-    /// Horizontal divider (---, ***)
+    /// Horizontal divider (---, ***, ___)
     Rule,
     /// Code fence start/end (```lang)
     CodeFence(String),
     /// Line inside a code block
     CodeLine,
     /// Markdown table row (| col1 | col2 |)
-    TableRow {
-        is_header: bool,
-        is_separator: bool,
-    },
+    TableRow(TableRowInfo),
+}
+
+/// Kinds of inline markdown spans parsed within a single line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InlineSpanKind {
+    Text,
+    Bold,
+    Italic,
+    BoldItalic,
+    Strike,
+    Code,
+    Link { url: String, title: Option<String> },
+    Image { url: String, alt: String },
+    Autolink { url: String },
+    FootnoteRef { id: String },
+    Html { tag: String },
+    HardBreak,
+    Escape { ch: char },
+}
+
+/// An inline markdown span covering `chars[start..end]` of a line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InlineSpan {
+    pub kind: InlineSpanKind,
+    pub start: usize,
+    pub end: usize,
+    pub marker_len: usize,
 }
 
 /// A formatted visual line in the inline editor.
@@ -53,7 +100,7 @@ pub struct InlineLine {
     pub galley: Arc<Galley>,
     /// Maps each displayed character index in `galley` back to its index in `Editor::buf`
     pub char_map: Vec<usize>,
-    /// Bounding box for interactive checkbox widget (if this is a TaskItem)
+    /// Bounding box for interactive checkbox widget (if this is a TaskItem), relative to ed_origin
     pub checkbox_rect: Option<Rect>,
 }
 
@@ -146,12 +193,10 @@ impl InlineEditorLayout {
         let cursor_rect = line.galley.pos_from_cursor(&cursor);
         let x = ed_origin.x + cursor_rect.min.x;
 
-        // Vertically center the caret within the full line slot.
-        // cursor_rect.min.y is the galley-internal text ascender offset, which
-        // biases the caret toward the bottom when line.height > galley height.
-        // Instead, center it symmetrically: (line_h - caret_h) / 2.
+        // Vertically center the text galley and caret together within the line slot
+        let galley_y_pad = ((line.height - line.galley.size().y) * 0.5).round().max(0.0);
         let caret_h = cursor_rect.height().max(16.0).min(line.height);
-        let y = line_y + ((line.height - caret_h) * 0.5).round();
+        let y = line_y + galley_y_pad + cursor_rect.min.y;
 
         (pos2(x, y), caret_h)
     }
@@ -166,8 +211,9 @@ impl InlineEditorLayout {
         let line_idx = self.line_at_y(rel_y);
         let line = &self.lines[line_idx];
         let line_y = ed_origin.y + line.y_offset;
+        let galley_y_pad = ((line.height - line.galley.size().y) * 0.5).round().max(0.0);
         let rel_x = (mouse_pos.x - ed_origin.x).max(0.0);
-        let rel_row_y = (mouse_pos.y - line_y).clamp(0.0, line.height.max(1.0));
+        let rel_row_y = (mouse_pos.y - line_y - galley_y_pad).clamp(0.0, line.galley.size().y.max(1.0));
         let ccursor = line.galley.cursor_from_pos(vec2(rel_x, rel_row_y));
         let g_idx = ccursor.ccursor.index;
 

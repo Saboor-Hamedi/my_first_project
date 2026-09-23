@@ -1,6 +1,10 @@
+pub mod active;
+pub mod inactive;
+
 use super::elements::{
-    render_block_quote_wrapper, render_code_wrapper_line, render_document_selection,
-    render_horizontal_rule, render_table_row_decorations, render_task_checkbox,
+    code_block_copy_button_rect, render_block_quote_wrapper, render_code_block_card,
+    render_document_selection, render_horizontal_rule, render_table_block_decorations,
+    render_table_row_decorations, render_task_checkbox,
 };
 use super::interaction::handle_inline_mouse_interaction;
 use super::layout::compute_inline_layout;
@@ -80,8 +84,66 @@ pub fn render_inline_editor(
         }
     }
 
+    let right_pad = 28.0;
+    let content_right = (editor_rect.max.x - right_pad).max(text_left + 100.0);
+    let table_margin_right = 32.0;
+    let table_avail_w = (editor_rect.max.x - text_left - table_margin_right).max(120.0);
+    let table_w = table_avail_w.min(650.0);
+
+    // 1. Intercept Copy Button clicks so clicking Copy never shifts caret or expands raw code fences
+    let mut clicked_copy_button = false;
+    let mut blk_check = 0;
+    while blk_check < layout.lines.len() {
+        if matches!(layout.lines[blk_check].kind, InlineLineKind::CodeFence(_) | InlineLineKind::CodeLine) {
+            let start_k = blk_check;
+            let mut end_k = blk_check;
+            while end_k + 1 < layout.lines.len()
+                && matches!(layout.lines[end_k + 1].kind, InlineLineKind::CodeFence(_) | InlineLineKind::CodeLine)
+            {
+                end_k += 1;
+                if matches!(layout.lines[end_k].kind, InlineLineKind::CodeFence(_)) {
+                    break;
+                }
+            }
+            let top_y = ed_origin.y + layout.lines[start_k].y_offset;
+            let btn_rect = code_block_copy_button_rect(content_right, top_y);
+            let header_bar_rect = Rect::from_min_max(
+                pos2(text_left, top_y),
+                pos2(content_right, top_y + 28.0),
+            );
+
+            let is_btn_hovered = ui.rect_contains_pointer(btn_rect.expand(3.0));
+            if is_btn_hovered {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                clicked_copy_button = true;
+                if ui.input(|i| i.pointer.primary_clicked()) {
+                    let mut code_text = String::new();
+                    for k in (start_k + 1)..end_k {
+                        let l_chars = &layout.lines[k];
+                        let raw_line: String = ed.buf[l_chars.char_start..l_chars.char_end].iter().collect();
+                        code_text.push_str(&raw_line);
+                        code_text.push('\n');
+                    }
+                    ui.ctx().copy_text(code_text);
+                    let copy_id = ui.id().with(("inline_code_block_copy", start_k));
+                    let current_time = ui.input(|i| i.time);
+                    ui.data_mut(|d| d.insert_temp(copy_id, current_time));
+                    ui.ctx().request_repaint();
+                    break;
+                }
+            } else if ui.rect_contains_pointer(header_bar_rect) && ui.input(|i| i.pointer.primary_clicked() || i.pointer.primary_down()) {
+                // Clicking on header bar outside button should not expand raw fence
+                clicked_copy_button = true;
+            }
+
+            blk_check = end_k + 1;
+        } else {
+            blk_check += 1;
+        }
+    }
+
     // Interactive mouse clicks, drag selection, and task checkboxes
-    if handle_inline_mouse_interaction(
+    if !clicked_copy_button && handle_inline_mouse_interaction(
         ui,
         editor_rect,
         ed_origin,
@@ -143,8 +205,143 @@ pub fn render_inline_editor(
 
     let mouse_pos = ui.input(|i| i.pointer.interact_pos());
 
+    // 3. Render Unified Code Block Container Cards (matching preview elevated surface, no broken line strips)
+    let mut blk_idx = 0;
+    while blk_idx < layout.lines.len() {
+        if matches!(layout.lines[blk_idx].kind, InlineLineKind::CodeFence(_) | InlineLineKind::CodeLine) {
+            let start_idx = blk_idx;
+            let mut end_idx = blk_idx;
+            let mut fence_lang: Option<String> = None;
+
+            if let InlineLineKind::CodeFence(ref l) = layout.lines[blk_idx].kind {
+                if !l.is_empty() {
+                    fence_lang = Some(l.clone());
+                }
+            }
+
+            while end_idx + 1 < layout.lines.len()
+                && matches!(layout.lines[end_idx + 1].kind, InlineLineKind::CodeFence(_) | InlineLineKind::CodeLine)
+            {
+                end_idx += 1;
+                if matches!(layout.lines[end_idx].kind, InlineLineKind::CodeFence(_)) {
+                    break;
+                }
+            }
+
+            let top_y = ed_origin.y + layout.lines[start_idx].y_offset;
+            let bottom_y = ed_origin.y + layout.lines[end_idx].y_offset + layout.lines[end_idx].height;
+
+            if bottom_y >= editor_rect.min.y && top_y <= editor_rect.max.y {
+                render_code_block_card(
+                    &editor_painter,
+                    top_y,
+                    bottom_y,
+                    text_left,
+                    content_right,
+                    theme,
+                    fence_lang.as_deref(),
+                );
+
+                // Code block copy button: zero background, zero border matching preview.rs
+                let copy_id = ui.id().with(("inline_code_block_copy", start_idx));
+                let current_time = ui.input(|i| i.time);
+                let last_copied: Option<f64> = ui.data(|d| d.get_temp(copy_id));
+                let is_copied = last_copied.map_or(false, |t| current_time - t < 1.0);
+
+                let btn_rect = code_block_copy_button_rect(content_right, top_y);
+
+                let is_btn_hovered = ui.rect_contains_pointer(btn_rect.expand(3.0));
+                if is_btn_hovered {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                }
+                if is_btn_hovered && ui.input(|i| i.pointer.primary_clicked()) {
+                    let mut code_text = String::new();
+                    for k in (start_idx + 1)..end_idx {
+                        let l_chars = &layout.lines[k];
+                        let raw_line: String = ed.buf[l_chars.char_start..l_chars.char_end].iter().collect();
+                        code_text.push_str(&raw_line);
+                        code_text.push('\n');
+                    }
+                    ui.ctx().copy_text(code_text);
+                    ui.data_mut(|d| d.insert_temp(copy_id, current_time));
+                    ui.ctx().request_repaint();
+                }
+                if is_copied {
+                    let elapsed = current_time - last_copied.unwrap();
+                    let remaining = 1.0 - elapsed;
+                    if remaining > 0.0 {
+                        ui.ctx().request_repaint_after(std::time::Duration::from_millis((remaining * 1000.0) as u64 + 20));
+                    }
+                }
+
+                let (btn_text, btn_color) = if is_copied {
+                    ("✓ Copied", theme.accent)
+                } else if is_btn_hovered {
+                    ("Copy", theme.text)
+                } else {
+                    ("Copy", theme.muted)
+                };
+
+                editor_painter.text(
+                    btn_rect.center(),
+                    Align2::CENTER_CENTER,
+                    btn_text,
+                    FontId::monospace(9.5),
+                    btn_color,
+                );
+            }
+
+            blk_idx = end_idx + 1;
+        } else {
+            blk_idx += 1;
+        }
+    }
+
+    // 4. Render Unified Table Container Cards (sleek, matching preview.rs)
+    let mut tbl_idx = 0;
+    while tbl_idx < layout.lines.len() {
+        if matches!(layout.lines[tbl_idx].kind, InlineLineKind::TableRow(_)) {
+            let start_idx = tbl_idx;
+            let mut end_idx = tbl_idx;
+            while end_idx + 1 < layout.lines.len()
+                && matches!(layout.lines[end_idx + 1].kind, InlineLineKind::TableRow(_))
+            {
+                end_idx += 1;
+            }
+
+            let top_y = ed_origin.y + layout.lines[start_idx].y_offset;
+            let bottom_y = ed_origin.y + layout.lines[end_idx].y_offset + layout.lines[end_idx].height;
+
+            if bottom_y >= editor_rect.min.y && top_y <= editor_rect.max.y {
+                let table_rect = Rect::from_min_max(
+                    pos2(text_left, top_y),
+                    pos2(text_left + table_w, bottom_y),
+                );
+
+                let mut header_rect = None;
+                if let InlineLineKind::TableRow(ref info) = layout.lines[start_idx].kind {
+                    if info.is_header {
+                        let h_h = layout.lines[start_idx].height;
+                        header_rect = Some(Rect::from_min_size(pos2(text_left, top_y), vec2(table_w, h_h)));
+                    }
+                }
+
+                render_table_block_decorations(
+                    &editor_painter,
+                    table_rect,
+                    header_rect,
+                    theme,
+                );
+            }
+
+            tbl_idx = end_idx + 1;
+        } else {
+            tbl_idx += 1;
+        }
+    }
+
     // Frustum culling: render only lines intersecting visible viewport
-    for line in &layout.lines {
+    for (line_idx, line) in layout.lines.iter().enumerate() {
         let line_y = ed_origin.y + line.y_offset;
 
         if line_y + line.height < editor_rect.min.y || line_y > editor_rect.max.y {
@@ -152,10 +349,11 @@ pub fn render_inline_editor(
         }
 
         let is_line_active = ed.cur >= line.char_start && ed.cur <= line.char_end;
-        let content_right = editor_rect.max.x - 16.0;
 
-        // 1. Render Blockquote modern wrapper card (without harsh left stripe)
-        if let InlineLineKind::Quote = line.kind {
+        // 1. Render Blockquote modern wrapper card (without harsh left stripe, continuous across multi-lines)
+        if let InlineLineKind::Quote(depth) = line.kind {
+            let is_first = line_idx == 0 || !matches!(layout.lines[line_idx - 1].kind, InlineLineKind::Quote(d) if d == depth);
+            let is_last = line_idx + 1 >= layout.lines.len() || !matches!(layout.lines[line_idx + 1].kind, InlineLineKind::Quote(d) if d == depth);
             render_block_quote_wrapper(
                 &editor_painter,
                 line_y,
@@ -164,53 +362,36 @@ pub fn render_inline_editor(
                 content_right,
                 theme,
                 is_line_active,
+                depth,
+                is_first,
+                is_last,
             );
         }
 
-        // 2. Render Code Line & Fence surface wrapper
-        match &line.kind {
-            InlineLineKind::CodeLine => {
-                render_code_wrapper_line(
+        // 3. Render Markdown Table Row decorations (alternating tint and subtle dividers for data rows)
+        if let InlineLineKind::TableRow(ref info) = line.kind {
+            if !info.is_header && !info.is_separator && !is_line_active {
+                let mut row_idx = 0;
+                let mut k = line_idx;
+                while k > 0 && matches!(layout.lines[k - 1].kind, InlineLineKind::TableRow(_)) {
+                    k -= 1;
+                    if let InlineLineKind::TableRow(ref prev_info) = layout.lines[k].kind {
+                        if !prev_info.is_header && !prev_info.is_separator {
+                            row_idx += 1;
+                        }
+                    }
+                }
+                let is_last = line_idx + 1 >= layout.lines.len()
+                    || !matches!(layout.lines[line_idx + 1].kind, InlineLineKind::TableRow(_));
+                let row_rect = Rect::from_min_size(pos2(text_left, line_y), vec2(table_w, line.height));
+                render_table_row_decorations(
                     &editor_painter,
-                    line_y,
-                    line.height,
-                    text_left,
-                    content_right,
+                    row_rect,
                     theme,
-                    false,
-                    None,
-                    is_line_active,
+                    row_idx,
+                    is_last,
                 );
             }
-            InlineLineKind::CodeFence(lang) => {
-                render_code_wrapper_line(
-                    &editor_painter,
-                    line_y,
-                    line.height,
-                    text_left,
-                    content_right,
-                    theme,
-                    true,
-                    Some(lang.as_str()),
-                    is_line_active,
-                );
-            }
-            _ => {}
-        }
-
-        // 3. Render Markdown Table Row decorations
-        if let InlineLineKind::TableRow { is_header, is_separator } = line.kind {
-            render_table_row_decorations(
-                &editor_painter,
-                line_y,
-                line.height,
-                text_left,
-                content_right,
-                theme,
-                is_header,
-                is_separator,
-                is_line_active,
-            );
         }
 
         // 4. Render Horizontal Rule
@@ -229,9 +410,10 @@ pub fn render_inline_editor(
         // 5. Render Interactive Checkbox for TaskItem
         if let InlineLineKind::TaskItem { checked, .. } = line.kind {
             if let Some(box_rect) = line.checkbox_rect {
+                let screen_box = box_rect.translate(vec2(ed_origin.x, ed_origin.y));
                 render_task_checkbox(
                     &editor_painter,
-                    box_rect,
+                    screen_box,
                     checked,
                     mouse_pos,
                     theme,
@@ -274,17 +456,19 @@ pub fn render_inline_editor(
                         Color32::from_rgba_unmultiplied(255, 215, 60, 55)
                     };
 
+                    let galley_y_pad = ((line.height - line.galley.size().y) * 0.5).round().max(0.0);
                     let m_rect = Rect::from_min_max(
-                        pos2(text_left + r1.min.x, line_y + r1.min.y),
-                        pos2(text_left + r2.max.x.max(r1.min.x + 6.0), line_y + r1.min.y + r1.height().max(16.0)),
+                        pos2(text_left + r1.min.x, line_y + galley_y_pad + r1.min.y),
+                        pos2(text_left + r2.max.x.max(r1.min.x + 6.0), line_y + galley_y_pad + r1.min.y + r1.height().max(16.0)),
                     );
                     editor_painter.rect_filled(m_rect, 2.0, match_color);
                 }
             }
         }
 
-        // 7. Render Text Galley
-        editor_painter.galley(pos2(text_left, line_y), line.galley.clone(), theme.text);
+        // 7. Render Text Galley (vertically centered in line slot)
+        let galley_y_pad = ((line.height - line.galley.size().y) * 0.5).round().max(0.0);
+        editor_painter.galley(pos2(text_left, line_y + galley_y_pad), line.galley.clone(), theme.text);
     }
 
     // 8. Render Caret Overlay (Strict Layer Priority: Always renders ON TOP of selection and text)
@@ -322,8 +506,8 @@ pub fn render_inline_editor(
                 };
 
                 gutter_painter.text(
-                    pos2(gutter_rect.max.x - 6.0, line_y + (line.height * 0.2)),
-                    Align2::RIGHT_TOP,
+                    pos2(gutter_rect.max.x - 6.0, line_y + (line.height * 0.5)),
+                    Align2::RIGHT_CENTER,
                     num_str,
                     num_font.clone(),
                     color,

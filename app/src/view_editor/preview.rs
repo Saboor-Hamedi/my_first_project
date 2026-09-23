@@ -113,7 +113,7 @@ pub fn parse_markdown(text: &str) -> Vec<MdBlock> {
                     break;
                 }
             }
-            if table_lines.len() >= 2 {
+            if !table_lines.is_empty() {
                 let parse_row = |r: &str| -> Vec<String> {
                     r.trim_matches('|')
                         .split('|')
@@ -121,9 +121,10 @@ pub fn parse_markdown(text: &str) -> Vec<MdBlock> {
                         .collect()
                 };
                 let headers = parse_row(&table_lines[0]);
-                let is_sep = table_lines[1]
-                    .chars()
-                    .all(|c| c == '|' || c == '-' || c == ':' || c == ' ');
+                let is_sep = table_lines.len() >= 2
+                    && table_lines[1]
+                        .chars()
+                        .all(|c| c == '|' || c == '-' || c == ':' || c == ' ');
                 let data_start = if is_sep { 2 } else { 1 };
                 let mut rows = Vec::new();
                 for row_line in &table_lines[data_start..] {
@@ -741,31 +742,20 @@ fn render_markdown_view_inner(
     for block in &blocks {
         match block {
             MdBlock::Heading1(text) => {
-                current_y += 14.0;
-                let font = FontId::proportional(font_size * 1.52);
-                let color = theme.highlight;
+                current_y += 10.0;
+                let (font, _) = crate::view_editor::inline::elements::heading_metrics(1, font_size);
+                let color = crate::view_editor::inline::elements::heading_color(1, theme);
                 let galley = painter.layout(text.clone(), font, color, max_text_w);
                 let text_h = galley.size().y;
                 if current_y + text_h >= rect.min.y && current_y <= rect.max.y {
                     content_painter.galley(pos2(start_x, current_y), galley, color);
                 }
-                current_y += text_h + 16.0;
+                current_y += text_h + 10.0;
             }
             MdBlock::Heading2(text) => {
-                current_y += 12.0;
-                let font = FontId::proportional(font_size * 1.28);
-                let color = theme.accent;
-                let galley = painter.layout(text.clone(), font, color, max_text_w);
-                let text_h = galley.size().y;
-                if current_y + text_h >= rect.min.y && current_y <= rect.max.y {
-                    content_painter.galley(pos2(start_x, current_y), galley, color);
-                }
-                current_y += text_h + 12.0;
-            }
-            MdBlock::Heading3(text) => {
-                current_y += 10.0;
-                let font = FontId::proportional(font_size * 1.12);
-                let color = theme.text;
+                current_y += 8.0;
+                let (font, _) = crate::view_editor::inline::elements::heading_metrics(2, font_size);
+                let color = crate::view_editor::inline::elements::heading_color(2, theme);
                 let galley = painter.layout(text.clone(), font, color, max_text_w);
                 let text_h = galley.size().y;
                 if current_y + text_h >= rect.min.y && current_y <= rect.max.y {
@@ -773,16 +763,27 @@ fn render_markdown_view_inner(
                 }
                 current_y += text_h + 8.0;
             }
-            MdBlock::Heading4(text) => {
-                current_y += 8.0;
-                let font = FontId::proportional(font_size * 1.02);
-                let color = theme.muted;
+            MdBlock::Heading3(text) => {
+                current_y += 6.0;
+                let (font, _) = crate::view_editor::inline::elements::heading_metrics(3, font_size);
+                let color = crate::view_editor::inline::elements::heading_color(3, theme);
                 let galley = painter.layout(text.clone(), font, color, max_text_w);
                 let text_h = galley.size().y;
                 if current_y + text_h >= rect.min.y && current_y <= rect.max.y {
                     content_painter.galley(pos2(start_x, current_y), galley, color);
                 }
                 current_y += text_h + 6.0;
+            }
+            MdBlock::Heading4(text) => {
+                current_y += 4.0;
+                let (font, _) = crate::view_editor::inline::elements::heading_metrics(4, font_size);
+                let color = crate::view_editor::inline::elements::heading_color(4, theme);
+                let galley = painter.layout(text.clone(), font, color, max_text_w);
+                let text_h = galley.size().y;
+                if current_y + text_h >= rect.min.y && current_y <= rect.max.y {
+                    content_painter.galley(pos2(start_x, current_y), galley, color);
+                }
+                current_y += text_h + 4.0;
             }
             MdBlock::Paragraph(text) => {
                 let job = build_inline_job(text, font_size, theme.text, theme, max_text_w);
@@ -795,30 +796,55 @@ fn render_markdown_view_inner(
             }
             MdBlock::Quote(text) => {
                 let inner_w = max_text_w - 24.0;
-                let job = build_inline_job(text, font_size * 0.96, theme.muted, theme, inner_w);
+                let quote_text_color = if theme.is_light() {
+                    Color32::from_rgb(
+                        ((theme.text.r() as u16 * 7 + theme.muted.r() as u16 * 3) / 10) as u8,
+                        ((theme.text.g() as u16 * 7 + theme.muted.g() as u16 * 3) / 10) as u8,
+                        ((theme.text.b() as u16 * 7 + theme.muted.b() as u16 * 3) / 10) as u8,
+                    )
+                } else {
+                    Color32::from_rgb(
+                        ((theme.text.r() as u16 * 8 + theme.muted.r() as u16 * 2) / 10) as u8,
+                        ((theme.text.g() as u16 * 8 + theme.muted.g() as u16 * 2) / 10) as u8,
+                        ((theme.text.b() as u16 * 8 + theme.muted.b() as u16 * 2) / 10) as u8,
+                    )
+                };
+                let job = build_inline_job(text, font_size, quote_text_color, theme, inner_w);
                 let galley = painter.layout_job(job);
                 let text_h = galley.size().y;
-                let box_h = text_h + 12.0;
+                let box_h = text_h + 8.0;
+
                 if current_y + box_h >= rect.min.y && current_y <= rect.max.y {
-                    // Left quote vertical accent border
-                    let bar_rect = Rect::from_min_size(pos2(start_x, current_y), vec2(3.5, box_h));
-                    content_painter.rect_filled(bar_rect, 1.5, theme.accent);
-                    // Subtle quote background box
-                    let bg_rect = Rect::from_min_size(pos2(start_x + 4.0, current_y), vec2(max_text_w - 4.0, box_h));
-                    content_painter.rect_filled(
-                        bg_rect,
-                        4.0,
-                        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 14),
+                    // Soft elevated callout card background (no clunky stroke border) matching block_quote.rs
+                    let bg = theme.bg;
+                    let step: i16 = if theme.is_light() { -8 } else { 12 };
+                    let bg_color = Color32::from_rgb(
+                        (bg.r() as i16 + step).clamp(0, 255) as u8,
+                        (bg.g() as i16 + step).clamp(0, 255) as u8,
+                        (bg.b() as i16 + step).clamp(0, 255) as u8,
                     );
-                    content_painter.rect_stroke(
-                        bg_rect,
-                        4.0,
-                        Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 22)),
-                        egui::StrokeKind::Inside,
+                    let bg_rect = Rect::from_min_size(pos2(start_x, current_y), vec2(max_text_w, box_h));
+                    content_painter.rect_filled(bg_rect, 5.0, bg_color);
+
+                    // Sleek left accent pill bar with rounded caps matching block_quote.rs
+                    let bar_w = 3.0;
+                    let bar_pad_y = 3.0;
+                    let bar_rect = Rect::from_min_max(
+                        pos2(start_x + 2.0, current_y + bar_pad_y),
+                        pos2(start_x + 2.0 + bar_w, current_y + box_h - bar_pad_y),
                     );
-                    content_painter.galley(pos2(start_x + 14.0, current_y + 6.0), galley, theme.text);
+                    let bar_color = Color32::from_rgba_unmultiplied(
+                        theme.accent.r(),
+                        theme.accent.g(),
+                        theme.accent.b(),
+                        165,
+                    );
+                    content_painter.rect_filled(bar_rect, 1.5, bar_color);
+
+                    // Text with matching soft indent
+                    content_painter.galley(pos2(start_x + 12.0, current_y + 4.0), galley, quote_text_color);
                 }
-                current_y += box_h + 10.0;
+                current_y += box_h + 8.0;
             }
             MdBlock::ListItem { bullet, text, checked, indent_level } => {
                 let indent_offset = (*indent_level as f32) * 20.0;
@@ -832,42 +858,31 @@ fn render_markdown_view_inner(
 
                 if current_y + row_h >= rect.min.y && current_y <= rect.max.y {
                     if let Some(is_checked) = checked {
-                        // Custom vector checkbox widget
+                        // Custom vector checkbox widget matching inline editor
                         let cb_size = 15.0;
                         let cb_y = current_y + 1.5;
                         let cb_rect = Rect::from_min_size(pos2(item_start_x, cb_y), vec2(cb_size, cb_size));
 
-                        if *is_checked {
-                            // Checked: Filled accent box with crisp checkmark
-                            content_painter.rect_filled(cb_rect, 3.5, theme.accent);
-                            // Vector checkmark
-                            let p1 = pos2(cb_rect.min.x + 3.5, cb_rect.min.y + 7.5);
-                            let p2 = pos2(cb_rect.min.x + 6.0, cb_rect.min.y + 11.0);
-                            let p3 = pos2(cb_rect.min.x + 11.5, cb_rect.min.y + 4.5);
-                            content_painter.line_segment([p1, p2], Stroke::new(1.8, theme.bg));
-                            content_painter.line_segment([p2, p3], Stroke::new(1.8, theme.bg));
+                        // Render unified vector checkbox
+                        crate::view_editor::inline::elements::render_task_checkbox(
+                            &content_painter,
+                            cb_rect,
+                            *is_checked,
+                            None,
+                            theme,
+                        );
 
+                        if *is_checked {
                             // Text: dimmed with strike-through
                             let text_start = pos2(item_start_x + 24.0, current_y);
-                            content_painter.galley(text_start, galley, Color32::from_rgba_unmultiplied(255, 255, 255, 140));
+                            let text_dimmed = Color32::from_rgba_unmultiplied(theme.text.r(), theme.text.g(), theme.text.b(), 140);
+                            content_painter.galley(text_start, galley, text_dimmed);
                             let strike_y = current_y + text_h * 0.52;
                             content_painter.line_segment(
                                 [pos2(text_start.x, strike_y), pos2(text_start.x + available_w - 28.0, strike_y)],
                                 Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 120)),
                             );
                         } else {
-                            // Unchecked: Rounded outline box with subtle background
-                            content_painter.rect_filled(
-                                cb_rect,
-                                3.5,
-                                Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 18),
-                            );
-                            content_painter.rect_stroke(
-                                cb_rect,
-                                3.5,
-                                Stroke::new(1.5, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 140)),
-                                egui::StrokeKind::Inside,
-                            );
                             content_painter.galley(pos2(item_start_x + 24.0, current_y), galley, theme.text);
                         }
                     } else {
@@ -909,13 +924,18 @@ fn render_markdown_view_inner(
                 if current_y + block_h >= rect.min.y && current_y <= rect.max.y {
                     let code_rect = Rect::from_min_size(pos2(start_x, current_y), vec2(max_text_w, block_h));
 
-                    // Single cohesive code wrapper card matching theme surface and border
-                    content_painter.rect(
-                        code_rect,
-                        5.0,
-                        theme.surface(),
-                        Stroke::new(1.0, theme.border()),
-                        egui::StrokeKind::Inside,
+                    let card_left = start_x;
+                    let card_right = start_x + max_text_w;
+
+                    // Unified cohesive code wrapper card matching editor card with sleek header bar
+                    crate::view_editor::inline::elements::render_code_block_card(
+                        &content_painter,
+                        current_y,
+                        current_y + block_h,
+                        card_left,
+                        card_right,
+                        theme,
+                        if lang.is_empty() { None } else { Some(lang.as_str()) },
                     );
 
                     // Horizontal scrolling state & input handling
@@ -949,12 +969,7 @@ fn render_markdown_view_inner(
                     let last_copied: Option<f64> = ui.data(|d| d.get_temp(copy_id));
                     let is_copied = last_copied.map_or(false, |t| current_time - t < 1.0);
 
-                    let btn_w = 58.0;
-                    let btn_h = 18.0;
-                    let btn_rect = Rect::from_min_size(
-                        pos2(code_rect.max.x - btn_w - 10.0, code_rect.min.y + 6.0),
-                        vec2(btn_w, btn_h),
-                    );
+                    let btn_rect = crate::view_editor::inline::elements::code_block_copy_button_rect(card_right, current_y);
 
                     let is_btn_hovered = ui.rect_contains_pointer(btn_rect);
                     if is_btn_hovered {
@@ -973,40 +988,14 @@ fn render_markdown_view_inner(
                         }
                     }
 
-                    if has_header {
-                        // Subtle language label on the left (integrated into card, NO separate top layer)
-                        content_painter.text(
-                            pos2(code_rect.min.x + pad_x, code_rect.min.y + 15.0),
-                            Align2::LEFT_CENTER,
-                            lang.to_uppercase(),
-                            FontId::monospace(10.0),
-                            theme.accent,
-                        );
-                    }
-
-                    // Render Copy button in top-right
-                    let (btn_bg, btn_text, btn_color) = if is_copied {
-                        (
-                            Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 45),
-                            "✓ Copied",
-                            theme.accent,
-                        )
+                    // Render Copy button in top-right with zero background and zero border
+                    let (btn_text, btn_color) = if is_copied {
+                        ("✓ Copied", theme.accent)
                     } else if is_btn_hovered {
-                        (
-                            Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 45),
-                            "Copy",
-                            theme.text,
-                        )
+                        ("Copy", theme.text)
                     } else {
-                        (
-                            Color32::TRANSPARENT,
-                            "Copy",
-                            theme.muted,
-                        )
+                        ("Copy", theme.muted)
                     };
-                    if btn_bg != Color32::TRANSPARENT {
-                        content_painter.rect_filled(btn_rect, 3.0, btn_bg);
-                    }
                     content_painter.text(
                         btn_rect.center(),
                         Align2::CENTER_CENTER,
@@ -1077,9 +1066,11 @@ fn render_markdown_view_inner(
             MdBlock::Table { headers, rows } => {
                 current_y += 8.0;
                 let col_count = headers.len().max(1);
-                let col_w = (max_text_w / col_count as f32).max(60.0);
-                let cell_pad_x = 10.0;
+                let table_margin_right = 16.0;
+                let table_w = (max_text_w - table_margin_right).min(650.0);
+                let cell_pad_x = 12.0;
                 let cell_pad_y = 6.0;
+                let col_w = ((table_w - cell_pad_x * 2.0) / col_count as f32).max(60.0);
 
                 // 1. Precompute header galleys and dynamic height
                 let header_galleys: Vec<_> = headers
@@ -1119,26 +1110,15 @@ fn render_markdown_view_inner(
                 let table_h = header_h + total_rows_h;
 
                 if current_y + table_h >= rect.min.y && current_y <= rect.max.y {
-                    let table_rect = Rect::from_min_size(pos2(start_x, current_y), vec2(max_text_w, table_h));
+                    let table_rect = Rect::from_min_size(pos2(start_x, current_y), vec2(table_w, table_h));
+                    let header_rect = Rect::from_min_size(pos2(start_x, current_y), vec2(table_w, header_h));
 
-                    // Table outer rounded container
-                    content_painter.rect_stroke(
+                    // Table container and header decorations matching editor styling
+                    crate::view_editor::inline::elements::render_table_block_decorations(
+                        &content_painter,
                         table_rect,
-                        4.0,
-                        Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 40)),
-                        egui::StrokeKind::Inside,
-                    );
-
-                    // Header row background
-                    let header_rect = Rect::from_min_size(pos2(start_x, current_y), vec2(max_text_w, header_h));
-                    content_painter.rect_filled(
-                        header_rect,
-                        egui::CornerRadius { nw: 4, ne: 4, sw: 0, se: 0 },
-                        Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 24),
-                    );
-                    content_painter.line_segment(
-                        [header_rect.left_bottom(), header_rect.right_bottom()],
-                        Stroke::new(1.5, theme.accent),
+                        Some(header_rect),
+                        theme,
                     );
 
                     // Header cells
@@ -1149,8 +1129,14 @@ fn render_markdown_view_inner(
 
                     // Data rows
                     let mut r_y = current_y + header_h;
+                    let divider_color = Color32::from_rgba_unmultiplied(
+                        theme.border().r(),
+                        theme.border().g(),
+                        theme.border().b(),
+                        80,
+                    );
                     for (r_idx, (row_galleys, &r_h)) in row_galleys_list.into_iter().zip(row_heights.iter()).enumerate() {
-                        let r_rect = Rect::from_min_size(pos2(start_x, r_y), vec2(max_text_w, r_h));
+                        let r_rect = Rect::from_min_size(pos2(start_x, r_y), vec2(table_w, r_h));
                         if r_idx % 2 == 1 {
                             content_painter.rect_filled(
                                 r_rect,
@@ -1158,11 +1144,11 @@ fn render_markdown_view_inner(
                                 Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 10),
                             );
                         }
-                        // Bottom row border
+                        // Bottom row border matching table.rs
                         if r_idx + 1 < rows.len() {
                             content_painter.line_segment(
                                 [r_rect.left_bottom(), r_rect.right_bottom()],
-                                Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 25)),
+                                Stroke::new(0.8, divider_color),
                             );
                         }
                         for (c_idx, galley) in row_galleys.into_iter().enumerate() {
@@ -1179,7 +1165,7 @@ fn render_markdown_view_inner(
                 if current_y >= rect.min.y && current_y <= rect.max.y {
                     content_painter.line_segment(
                         [pos2(start_x, current_y), pos2(start_x + max_text_w, current_y)],
-                        Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 40)),
+                        Stroke::new(1.0, theme.border()),
                     );
                 }
                 current_y += 10.0;

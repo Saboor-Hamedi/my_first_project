@@ -4,7 +4,11 @@ pub mod init;
 pub mod modals;
 pub mod notes;
 pub mod panes;
+pub mod right_pane;
+pub mod scan_view;
 pub mod shell;
+pub mod stats_view;
+pub mod terminal_drawer;
 
 #[allow(unused_imports)]
 pub use init::default_backup_dir;

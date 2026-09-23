@@ -1,10 +1,8 @@
 //! Editor panes layout, splitters, tab strips, and view modes.
 
-use super::{App, EditorInputMode, RightPaneTab};
+use super::{App, EditorInputMode};
 use crate::mode::Mode;
-use crate::view_editor::{render_editor_body, render_inline_editor, render_markdown_preview};
-use crate::view_stats::render_stats;
-use chrono::Local;
+use crate::view_editor::{render_editor_body, render_inline_editor};
 use eframe::egui::{self, pos2, vec2, Color32, FontId, Rect, Stroke, Ui};
 
 impl App {
@@ -444,87 +442,7 @@ impl App {
                 self.zoom.render_hud(ui, painter, actual_editor_rect, &self.theme, now);
 
                 // Render Right Pane (Markdown Preview or AI Agent tab) side-by-side if active
-                if let Some(p_rect) = preview_rect_opt {
-                    let r_header_h = crate::view_editor::TAB_ROW_H;
-                    let r_header_rect = Rect::from_min_max(
-                        p_rect.min,
-                        pos2(p_rect.max.x, p_rect.min.y + r_header_h),
-                    );
-                    let r_content_rect = Rect::from_min_max(
-                        pos2(p_rect.min.x, p_rect.min.y + r_header_h),
-                        p_rect.max,
-                    );
-
-                    let header_action = crate::view_editor::preview::render_right_pane_header(
-                        ui,
-                        painter,
-                        r_header_rect,
-                        self.right_pane_tab,
-                        &self.theme,
-                    );
-                    if let Some(action) = header_action {
-                        match action {
-                            crate::view_editor::preview::RightPaneAction::SelectTab(tab) => {
-                                self.right_pane_tab = tab;
-                                if tab == RightPaneTab::AiAgent {
-                                    self.ai_focus_requested = true;
-                                    self.agent_state.is_open = true;
-                                }
-                            }
-                            crate::view_editor::preview::RightPaneAction::Close => {
-                                self.preview_open = false;
-                                self.agent_state.is_open = false;
-                                let _ = self.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
-                                    key: "preview".into(),
-                                    val: "false".into(),
-                                });
-                            }
-                        }
-                    }
-
-                    match self.right_pane_tab {
-                        RightPaneTab::Preview => {
-                            let note_text = self.ed.text();
-                            render_markdown_preview(
-                                ui,
-                                painter,
-                                r_content_rect,
-                                &note_text,
-                                &mut self.preview_scroll_y,
-                                &self.theme,
-                                self.font_size,
-                                any_modal_open
-                                    || self.is_dragging_splitter
-                                    || self.is_dragging_sidebar_splitter,
-                            );
-                        }
-                        RightPaneTab::AiAgent => {
-                            self.agent_state.is_open = true;
-                            let cur_text = self.ed.text();
-                            let active_note_info = if let Some(n) = self.notes_list.iter().find(|n| Some(n.id) == self.active_note_id) {
-                                Some((n.topic.as_str(), cur_text.as_str()))
-                            } else {
-                                None
-                            };
-                            let req_focus = self.ai_focus_requested;
-                            self.ai_focus_requested = false;
-                            crate::agent::deepseek_ui::render_ai_pane(
-                                ui,
-                                painter,
-                                r_content_rect,
-                                &mut self.agent_state,
-                                &self.notes_list,
-                                active_note_info,
-                                &self.theme,
-                                self.font_size,
-                                req_focus,
-                                any_modal_open
-                                    || self.is_dragging_splitter
-                                    || self.is_dragging_sidebar_splitter,
-                            );
-                        }
-                    }
-                }
+                self.render_right_pane_tabs(ui, painter, preview_rect_opt, any_modal_open);
 
                 // Floating Keystroke Card (Vim showcmd)
                 if self.editor_input_mode == EditorInputMode::Vim {
@@ -537,89 +455,15 @@ impl App {
                     ui.memory_mut(|m| m.surrender_focus(egui::Id::new("deepseek_prompt_input")));
                 }
 
-                // Render Bottom-Docked Embedded Terminal
-                if let (Some(term_rect), Some(divider_rect)) = (bottom_terminal_rect, term_splitter_rect_opt) {
-                    let divider_h = 10.0;
-                    let available_h = (editor_panel_rect.height() - divider_h).max(140.0);
-                    let divider_hit_rect = divider_rect.expand2(vec2(0.0, 8.0));
-                    let is_divider_hovered = ui.rect_contains_pointer(divider_hit_rect);
-                    let primary_down = ui.input(|i| i.pointer.primary_down());
-                    let primary_pressed = ui.input(|i| i.pointer.primary_clicked() || i.pointer.button_pressed(egui::PointerButton::Primary));
-
-                    if is_divider_hovered && primary_pressed {
-                        self.is_dragging_terminal_splitter = true;
-                    }
-
-                    if self.is_dragging_terminal_splitter {
-                        if primary_down {
-                            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeRow);
-                            if let Some(pos) = ui.input(|i| i.pointer.interact_pos().or_else(|| i.pointer.hover_pos())) {
-                                let term_pixel_h = editor_panel_rect.max.y - pos.y;
-                                let raw_ratio = term_pixel_h / available_h;
-                                self.terminal_split_ratio = raw_ratio.clamp(0.12, 0.85);
-                                ui.ctx().request_repaint();
-                            }
-                        } else {
-                            self.is_dragging_terminal_splitter = false;
-                        }
-                    } else if is_divider_hovered {
-                        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeRow);
-                    }
-
-                    let is_active = is_divider_hovered || self.is_dragging_terminal_splitter;
-                    let mid_y = divider_rect.center().y;
-                    let panel_left = divider_rect.min.x;
-                    let panel_right = divider_rect.max.x;
-                    if is_active {
-                        let line_rect = Rect::from_center_size(
-                            pos2((panel_left + panel_right) * 0.5, mid_y),
-                            vec2((panel_right - panel_left).max(0.0), 5.0),
-                        );
-                        painter.rect_filled(line_rect, 2.5, self.theme.accent);
-                    }
-                    let knob_w = 42.0;
-                    let knob_h = if is_active { 7.0 } else { 5.0 };
-                    let knob_rect = Rect::from_center_size(pos2((panel_left + panel_right) * 0.5, mid_y), vec2(knob_w, knob_h));
-                    painter.rect_filled(
-                        knob_rect,
-                        3.0,
-                        if is_active {
-                            self.theme.accent
-                        } else {
-                            Color32::from_rgba_unmultiplied(self.theme.muted.r(), self.theme.muted.g(), self.theme.muted.b(), 100)
-                        },
-                    );
-
-                    let knob_mid = knob_rect.center();
-                    let grip_color = self.theme.bg;
-                    for dx in [-6.0, 0.0, 6.0] {
-                        painter.line_segment(
-                            [pos2(knob_mid.x + dx, knob_mid.y - 1.5), pos2(knob_mid.x + dx, knob_mid.y + 1.5)],
-                            Stroke::new(1.0, grip_color),
-                        );
-                    }
-
-                    if self.term_pane.is_none() {
-                        self.term_pane = crate::terminal_pane::TerminalPane::spawn(ui.ctx(), &self.theme).ok();
-                    }
-                    if let Some(ref mut pane) = self.term_pane {
-                        let action = pane.ui(ui, term_rect, &self.theme, self.font_size, self.terminal_focused);
-                        match action {
-                            crate::terminal_pane::TerminalAction::Close => {
-                                self.terminal_open = false;
-                                self.terminal_focused = false;
-                                self.set_status("Terminal closed", now);
-                                ui.ctx().request_repaint();
-                            }
-                            crate::terminal_pane::TerminalAction::RequestFocus => {
-                                self.terminal_focused = true;
-                            }
-                            crate::terminal_pane::TerminalAction::None => {}
-                        }
-                    }
-                } else {
-                    self.is_dragging_terminal_splitter = false;
-                }
+                // Render Bottom-Docked Embedded Terminal Drawer
+                self.render_terminal_drawer(
+                    ui,
+                    painter,
+                    editor_panel_rect,
+                    bottom_terminal_rect,
+                    term_splitter_rect_opt,
+                    now,
+                );
             }
             Mode::Help => {
                 let action = crate::help_panel::render_help_tab_view(
@@ -636,64 +480,10 @@ impl App {
                 }
             }
             Mode::Stats => {
-                let today_str = Local::now().date_naive().format("%Y-%m-%d").to_string();
-                let yest_str = (Local::now().date_naive() - chrono::Duration::days(1))
-                    .format("%Y-%m-%d")
-                    .to_string();
-                render_stats(
-                    ui,
-                    editor_panel_rect,
-                    &self.today_activity,
-                    &self.activity_history,
-                    self.lifetime_activity,
-                    self.total_notes_count,
-                    &self.theme,
-                    &today_str,
-                    &yest_str,
-                );
+                self.render_stats_pane(ui, editor_panel_rect);
             }
-            Mode::ScanReport => {
-                crate::scan_view::render_scan_view(
-                    ui,
-                    painter,
-                    editor_panel_rect,
-                    self.active_scan_result.as_ref(),
-                    self.active_scan_error.as_ref().map(|(u, e)| (u.as_str(), e.as_str())),
-                    &mut self.scan_report_scroll_y,
-                    &self.theme,
-                    self.font_size,
-                );
-            }
-            Mode::ScanHistory => {
-                let opened_idx = crate::scan_history_view::render_scan_history(
-                    ui,
-                    painter,
-                    editor_panel_rect,
-                    &self.past_scans,
-                    &mut self.scan_history_selected,
-                    &mut self.scan_history_scroll_y,
-                    &self.theme,
-                    self.font_size,
-                );
-                if let Some(idx) = opened_idx {
-                    if let Some(record) = self.past_scans.get(idx) {
-                        let findings: Vec<webscan::Finding> = serde_json::from_str(&record.findings_json).unwrap_or_default();
-                        let result = webscan::ScanResult {
-                            url: record.url.clone(),
-                            status_code: 200,
-                            response_time_ms: 0,
-                            tls: None,
-                            server_header: None,
-                            page_size_bytes: 0,
-                            note: record.note.clone(),
-                            findings,
-                        };
-                        self.active_scan_result = Some(result);
-                        self.active_scan_error = None;
-                        self.scan_report_scroll_y = 0.0;
-                        self.mode = Mode::ScanReport;
-                    }
-                }
+            Mode::ScanReport | Mode::ScanHistory => {
+                self.render_scan_panes(ui, painter, editor_panel_rect);
             }
             Mode::Terminal => {
                 if self.term_pane.is_none() {

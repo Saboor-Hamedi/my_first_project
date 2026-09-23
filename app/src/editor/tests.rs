@@ -417,6 +417,82 @@ fn test_enter_clears_empty_marker() {
 }
 
 #[test]
+fn test_enter_blockquote_continuation_and_clearing() {
+    // Nested quote continuation: ">>> nested quote" -> Enter -> ">>> nested quote\n>>> "
+    let mut ed = Editor::new();
+    ed.insert_str(">>> nested quote");
+    ed.cur = ed.buf.len();
+    ed.handle_enter();
+    assert_eq!(ed.text(), ">>> nested quote\n>>> ");
+    assert_eq!(ed.cur, ">>> nested quote\n>>> ".len());
+
+    // Enter again on empty quote clears it and leaves clean newline
+    ed.handle_enter();
+    assert_eq!(ed.text(), ">>> nested quote\n\n");
+    assert_eq!(ed.cur, ">>> nested quote\n\n".len());
+
+    // Single quote continuation
+    let mut ed_single = Editor::new();
+    ed_single.insert_str("> Single quote");
+    ed_single.cur = ed_single.buf.len();
+    ed_single.handle_enter();
+    assert_eq!(ed_single.text(), "> Single quote\n> ");
+    ed_single.handle_enter();
+    assert_eq!(ed_single.text(), "> Single quote\n\n");
+}
+
+#[test]
+fn test_enter_table_continuation_and_clearing() {
+    // 1. Enter on new table header generates separator and first data row
+    let mut ed = Editor::new();
+    ed.insert_str("| Col 1 | Col 2 |");
+    ed.cur = ed.buf.len();
+    ed.handle_enter();
+    assert_eq!(ed.text(), "| Col 1 | Col 2 |\n| --- | --- |\n|  |  |");
+
+    // 2. Typing into data row and hitting Enter generates next data row
+    let mut ed2 = Editor::new();
+    ed2.insert_str("| Col 1 | Col 2 |\n| --- | --- |\n| val1 | val2 |");
+    ed2.cur = ed2.buf.len();
+    ed2.handle_enter();
+    assert_eq!(ed2.text(), "| Col 1 | Col 2 |\n| --- | --- |\n| val1 | val2 |\n|  |  |");
+
+    // 3. Hitting Enter on an empty row clears it and exits table
+    ed2.handle_enter();
+    assert_eq!(ed2.text(), "| Col 1 | Col 2 |\n| --- | --- |\n| val1 | val2 |\n\n");
+}
+
+#[test]
+fn test_backspace_dedents_quote_and_indent() {
+    // Backspacing on empty nested quote drops one nesting level
+    let mut ed = Editor::new();
+    ed.insert_str(">>> ");
+    ed.cur = ed.buf.len();
+    ed.backspace();
+    assert_eq!(ed.text(), ">> ");
+
+    ed.backspace();
+    assert_eq!(ed.text(), "> ");
+
+    ed.backspace();
+    assert_eq!(ed.text(), "");
+
+    // Backspacing on 4-space soft tab dedents all 4 spaces
+    let mut ed_indent = Editor::new();
+    ed_indent.insert_str("    ");
+    ed_indent.cur = 4;
+    ed_indent.backspace();
+    assert_eq!(ed_indent.text(), "");
+
+    // Backspacing on empty bullet clears prefix
+    let mut ed_bullet = Editor::new();
+    ed_bullet.insert_str("- ");
+    ed_bullet.cur = 2;
+    ed_bullet.backspace();
+    assert_eq!(ed_bullet.text(), "");
+}
+
+#[test]
 fn test_enter_with_selection_replaces_without_continuation() {
     let mut ed = Editor::new();
     ed.insert_str("1. Hello world");

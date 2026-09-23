@@ -2,7 +2,7 @@
 
 use super::types::InlineEditorLayout;
 use crate::editor::Editor;
-use eframe::egui::{Pos2, Rect, Ui};
+use eframe::egui::{vec2, Pos2, Rect, Ui};
 
 /// Handles mouse interactions (primary click, drag selection, and checkbox toggle).
 pub fn handle_inline_mouse_interaction(
@@ -26,8 +26,9 @@ pub fn handle_inline_mouse_interaction(
         if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
             for line in &layout.lines {
                 if let Some(box_rect) = line.checkbox_rect {
-                    // Check if clicked inside or near the checkbox
-                    let expanded_rect = box_rect.expand(4.0);
+                    // Translate box_rect to screen coordinates
+                    let screen_box = box_rect.translate(vec2(ed_origin.x, ed_origin.y));
+                    let expanded_rect = screen_box.expand(5.0);
                     if expanded_rect.contains(pos) {
                         if let super::types::InlineLineKind::TaskItem { check_char_idx, checked } = line.kind {
                             let target_idx = line.char_start + check_char_idx;
@@ -59,14 +60,32 @@ pub fn handle_inline_mouse_interaction(
     if ui.input(|i| i.pointer.primary_clicked()) {
         if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
             let clicked_char = layout.char_at_pos(pos, ed_origin);
+            let target_char = {
+                let line_idx = layout.line_for_char(clicked_char);
+                if let Some(line) = layout.lines.get(line_idx) {
+                    if matches!(line.kind, super::types::InlineLineKind::CodeFence(_)) {
+                        if line_idx + 1 < layout.lines.len()
+                            && matches!(layout.lines[line_idx + 1].kind, super::types::InlineLineKind::CodeLine)
+                        {
+                            layout.lines[line_idx + 1].char_start
+                        } else {
+                            clicked_char
+                        }
+                    } else {
+                        clicked_char
+                    }
+                } else {
+                    clicked_char
+                }
+            };
             let is_shift = ui.input(|i| i.modifiers.shift);
             if is_shift {
                 if ed.selection.is_none() {
                     ed.selection = Some(ed.cur);
                 }
-                ed.cur = clicked_char;
+                ed.cur = target_char;
             } else {
-                ed.cur = clicked_char;
+                ed.cur = target_char;
                 ed.selection = None;
             }
             action_taken = true;

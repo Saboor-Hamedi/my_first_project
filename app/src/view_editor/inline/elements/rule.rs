@@ -1,7 +1,13 @@
-//! Horizontal divider rule element rendering.
+//! Horizontal divider rule element rendering and metrics.
 
 use crate::theme::Theme;
-use eframe::egui::{pos2, Painter, Stroke};
+use eframe::egui::{pos2, FontId, Painter, Stroke};
+
+/// Returns font and line height metrics for horizontal rules.
+#[allow(dead_code)]
+pub fn rule_metrics(base_font_size: f32) -> (FontId, f32) {
+    (FontId::monospace(base_font_size * 0.8), 18.0)
+}
 
 /// Renders a crisp horizontal rule divider when the line is inactive.
 pub fn render_horizontal_rule(

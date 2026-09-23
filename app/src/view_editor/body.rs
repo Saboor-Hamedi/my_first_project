@@ -4,7 +4,7 @@ use super::ligatures::render_line_with_ligatures;
 use crate::caret::Caret;
 use crate::editor::{Editor, VisualLine};
 use crate::theme::Theme;
-use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, Stroke};
+use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Pos2, Rect, Stroke};
 
 /// Renders the editor body with soft-wrapped visual lines, smooth scrolling, caret animation, and interactive scrollbar.
 pub fn render_editor_body(
@@ -79,16 +79,50 @@ pub fn render_editor_body(
         pos2(text_left, editor_rect.min.y),
         pos2(editor_rect.max.x.max(text_left + 1.0), editor_rect.max.y),
     );
-    if !block_scroll && ui.rect_contains_pointer(text_area_rect) && ui.input(|i| i.pointer.primary_clicked()) {
-        if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
-            let clicked_row = ((pos.y - ed_origin.y) / lh).floor() as isize;
-            if clicked_row >= 0 && (clicked_row as usize) < visual_lines.len() {
-                let r = clicked_row as usize;
-                let line = &visual_lines[r];
-                let clicked_col = (((pos.x - ed_origin.x).max(0.0)) / cw).round() as usize;
-                let line_len = line.char_end.saturating_sub(line.char_start);
-                ed.cur = line.char_start + clicked_col.min(line_len);
-                ed.selection = None;
+    let pos_to_char = |pos: Pos2| -> usize {
+        let clicked_row = ((pos.y - ed_origin.y) / lh).floor() as isize;
+        if clicked_row >= 0 && (clicked_row as usize) < visual_lines.len() {
+            let r = clicked_row as usize;
+            let line = &visual_lines[r];
+            let clicked_col = (((pos.x - ed_origin.x).max(0.0)) / cw).round() as usize;
+            let line_len = line.char_end.saturating_sub(line.char_start);
+            line.char_start + clicked_col.min(line_len)
+        } else if clicked_row >= visual_lines.len() as isize {
+            ed.buf.len()
+        } else {
+            0
+        }
+    };
+
+    if !block_scroll && ui.rect_contains_pointer(text_area_rect) {
+        if ui.input(|i| i.pointer.button_double_clicked(egui::PointerButton::Primary)) {
+            if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+                let clicked_char = pos_to_char(pos);
+                ed.select_word_at(clicked_char);
+                typed = true;
+            }
+        } else if ui.input(|i| i.pointer.primary_clicked()) {
+            if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+                let clicked_char = pos_to_char(pos);
+                let is_shift = ui.input(|i| i.modifiers.shift);
+                if is_shift {
+                    if ed.selection.is_none() {
+                        ed.selection = Some(ed.cur);
+                    }
+                    ed.cur = clicked_char;
+                } else {
+                    ed.cur = clicked_char;
+                    ed.selection = None;
+                }
+                typed = true;
+            }
+        } else if ui.input(|i| i.pointer.is_decidedly_dragging() && i.pointer.primary_down()) {
+            if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+                let drag_char = pos_to_char(pos);
+                if ed.selection.is_none() {
+                    ed.selection = Some(ed.cur);
+                }
+                ed.cur = drag_char;
                 typed = true;
             }
         }

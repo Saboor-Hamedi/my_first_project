@@ -2,14 +2,37 @@
 //!
 //! Renders a minimal, elegant callout wrapper:
 //! 1. A soft background surface slightly elevated from the editor canvas.
-//! 2. A sleek 3px vertical accent pill on the left edge with rounded caps.
-//! 3. Compact geometry — card occupies exactly the line slot, no extra padding.
-//! 4. Seamlessly integrates with active theme and user accent color.
+//! 2. Sleek vertical accent pill(s) on the left edge with rounded caps supporting nested depths.
+//! 3. Strictly pinned left margin — nested levels indent INWARD (to the right), never bleeding left.
+//! 4. Seamless continuous multi-line callout card without broken line scallops.
+//! 5. Seamlessly integrates with active theme and user accent color.
 
 use crate::theme::Theme;
-use eframe::egui::{pos2, Color32, Painter, Rect};
+use eframe::egui::{pos2, Color32, CornerRadius, Painter, Rect};
 
-/// Renders the blockquote card wrapper (background + left accent bar) for one inline line.
+/// Returns the quote text color.
+pub fn quote_color(theme: &Theme) -> Color32 {
+    if theme.is_light() {
+        Color32::from_rgb(
+            ((theme.text.r() as u16 * 7 + theme.muted.r() as u16 * 3) / 10) as u8,
+            ((theme.text.g() as u16 * 7 + theme.muted.g() as u16 * 3) / 10) as u8,
+            ((theme.text.b() as u16 * 7 + theme.muted.b() as u16 * 3) / 10) as u8,
+        )
+    } else {
+        Color32::from_rgb(
+            ((theme.text.r() as u16 * 8 + theme.muted.r() as u16 * 2) / 10) as u8,
+            ((theme.text.g() as u16 * 8 + theme.muted.g() as u16 * 2) / 10) as u8,
+            ((theme.text.b() as u16 * 8 + theme.muted.b() as u16 * 2) / 10) as u8,
+        )
+    }
+}
+
+/// Returns soft indent spaces proportional to nesting depth inside the quote card (capped at 4).
+pub fn quote_indent(depth: usize) -> String {
+    " ".repeat(depth.min(4))
+}
+
+/// Renders the blockquote card wrapper (background + left accent bar(s)) for one inline line.
 pub fn render_block_quote_wrapper(
     painter: &Painter,
     line_y: f32,
@@ -18,17 +41,23 @@ pub fn render_block_quote_wrapper(
     content_right: f32,
     theme: &Theme,
     is_active: bool,
+    depth: usize,
+    is_first: bool,
+    is_last: bool,
 ) {
-    // Card spans from a small offset left of text to right content edge.
-    // The accent bar sits at the very left of this card area.
+    let effective_depth = depth.clamp(1, 5);
     let bar_w = 3.0;
-    let bar_gap = 2.0;   // gap between accent bar and card start
-    let card_left = text_left - (bar_w + bar_gap * 2.0 + 8.0);
+    let bar_pitch = 5.0; // pitch between multiple nested bars stepping inward to the right
+    let bar_gap = 2.0;
 
-    // Card background — subtle luminance step from the editor bg.
-    // Blend toward a neutral tone rather than pure add/sub to avoid color shift.
+    // The left edge of the card is strictly pinned relative to text_left.
+    // It NEVER shifts to the left when nesting increases, preventing any bleed into the gutter.
+    let card_left = text_left - 10.0;
+
+    // Card background — subtle luminance step from the editor bg
     let bg = theme.bg;
-    let step: i16 = if theme.is_light() { -9 } else { 14 };
+    let step_base: i16 = if theme.is_light() { -8 } else { 12 };
+    let step: i16 = step_base + if theme.is_light() { -(effective_depth as i16 * 2) } else { effective_depth as i16 * 2 };
     let bg_color = Color32::from_rgb(
         (bg.r() as i16 + step).clamp(0, 255) as u8,
         (bg.g() as i16 + step).clamp(0, 255) as u8,
@@ -39,22 +68,46 @@ pub fn render_block_quote_wrapper(
         pos2(card_left, line_y),
         pos2(content_right, line_y + line_h),
     );
-    painter.rect_filled(card_rect, 5.0, bg_color);
+    let card_rounding = CornerRadius {
+        nw: if is_first { 5 } else { 0 },
+        ne: if is_first { 5 } else { 0 },
+        sw: if is_last { 5 } else { 0 },
+        se: if is_last { 5 } else { 0 },
+    };
+    painter.rect_filled(card_rect, card_rounding, bg_color);
 
-    // Accent bar — flush with card left edge, inset 2px vertically for rounded ends.
-    let bar_inset_y = 3.0;
-    let bar_rect = Rect::from_min_max(
-        pos2(card_left + bar_gap, line_y + bar_inset_y),
-        pos2(card_left + bar_gap + bar_w, line_y + line_h - bar_inset_y),
-    );
+    // Accent bars — step INWARD to the right for each nesting depth level
+    let bar_inset_top = if is_first { 3.0 } else { 0.0 };
+    let bar_inset_bottom = if is_last { 3.0 } else { 0.0 };
+    let bar_rounding = CornerRadius {
+        nw: if is_first { 2 } else { 0 },
+        ne: if is_first { 2 } else { 0 },
+        sw: if is_last { 2 } else { 0 },
+        se: if is_last { 2 } else { 0 },
+    };
 
-    // Full accent when caret is on this line, soft 65% opacity when resting.
-    let accent_alpha: u8 = if is_active { 255 } else { 165 };
-    let bar_color = Color32::from_rgba_unmultiplied(
-        theme.accent.r(),
-        theme.accent.g(),
-        theme.accent.b(),
-        accent_alpha,
-    );
-    painter.rect_filled(bar_rect, 1.5, bar_color);
+    for lvl in 0..effective_depth {
+        let bx = card_left + bar_gap + (lvl as f32 * bar_pitch);
+        let bar_rect = Rect::from_min_max(
+            pos2(bx, line_y + bar_inset_top),
+            pos2(bx + bar_w, line_y + line_h - bar_inset_bottom),
+        );
+
+        let is_innermost = lvl + 1 == effective_depth;
+        let alpha: u8 = if is_active {
+            if is_innermost { 255 } else { 185 }
+        } else if is_innermost {
+            165
+        } else {
+            100
+        };
+
+        let bar_color = Color32::from_rgba_unmultiplied(
+            theme.accent.r(),
+            theme.accent.g(),
+            theme.accent.b(),
+            alpha,
+        );
+        painter.rect_filled(bar_rect, bar_rounding, bar_color);
+    }
 }
