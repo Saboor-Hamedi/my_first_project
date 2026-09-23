@@ -1,5 +1,6 @@
 //! Dedicated bottom command & status bar dock.
 
+use crate::theme::Theme;
 use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, Stroke};
 
 pub fn render_bottom_dock(
@@ -19,15 +20,17 @@ pub fn render_bottom_dock(
     total_words: usize,
     mode_badge: Option<&str>,
     search_prompt: Option<(&str, &str, usize)>,
-    accent: Color32,
-    muted: Color32,
+    theme: &Theme,
 ) {
-    // Detached modern bottom dock card with uniform 5px radius and subtle 1px border
+    let accent = theme.accent;
+    let muted = theme.muted;
+
+    // Detached modern bottom dock card with uniform 5px radius and subtle 1px border derived from theme
     painter.rect(
         dock_rect,
         5.0,
-        Color32::from_rgb(12, 13, 16),
-        Stroke::new(1.0, Color32::from_rgb(32, 34, 40)),
+        theme.surface(),
+        Stroke::new(1.0, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -41,7 +44,7 @@ pub fn render_bottom_dock(
     } else {
         format!("Ln {}, Col {}", cursor_row, cursor_col)
     };
-    let stats_galley = painter.layout_no_wrap(stats, FontId::monospace(12.0), Color32::from_gray(120));
+    let stats_galley = painter.layout_no_wrap(stats, FontId::monospace(12.0), theme.muted);
     let stats_pos = pos2(dock_rect.max.x - 34.0, cmd_y);
     let stats_left_x = stats_pos.x - stats_galley.size().x;
     let max_cmd_x = (stats_left_x - 16.0).max(cmd_x + 120.0);
@@ -67,8 +70,8 @@ pub fn render_bottom_dock(
             valid_cur -= 1;
         }
         let before_cur = &cmd_text[..valid_cur];
-        let cursor_offset_x = painter.layout_no_wrap(before_cur.to_string(), font.clone(), Color32::WHITE).size().x;
-        let total_text_w = painter.layout_no_wrap(cmd_text.to_string(), font.clone(), Color32::WHITE).size().x;
+        let cursor_offset_x = painter.layout_no_wrap(before_cur.to_string(), font.clone(), theme.text).size().x;
+        let total_text_w = painter.layout_no_wrap(cmd_text.to_string(), font.clone(), theme.text).size().x;
 
         // Auto-scroll offset so cursor is always within view and long commands push left
         let scroll_x = if total_text_w > cmd_avail_w {
@@ -99,8 +102,8 @@ pub fn render_bottom_dock(
             }
             let prefix = &cmd_text[..valid_min];
             let selected_part = &cmd_text[valid_min..valid_max];
-            let x_off = cmd_painter.layout_no_wrap(prefix.to_string(), font.clone(), Color32::WHITE).size().x;
-            let sel_w = cmd_painter.layout_no_wrap(selected_part.to_string(), font.clone(), Color32::WHITE).size().x;
+            let x_off = cmd_painter.layout_no_wrap(prefix.to_string(), font.clone(), theme.text).size().x;
+            let sel_w = cmd_painter.layout_no_wrap(selected_part.to_string(), font.clone(), theme.text).size().x;
             cmd_painter.rect_filled(
                 Rect::from_min_size(pos2(text_origin.x + x_off, text_origin.y), vec2(sel_w, 18.0)),
                 2.0,
@@ -109,8 +112,8 @@ pub fn render_bottom_dock(
         }
 
         // Draw command line text
-        let galley = cmd_painter.layout_no_wrap(cmd_text.to_string(), font.clone(), Color32::WHITE);
-        cmd_painter.galley(text_origin, galley, Color32::WHITE);
+        let galley = cmd_painter.layout_no_wrap(cmd_text.to_string(), font.clone(), theme.text);
+        cmd_painter.galley(text_origin, galley, theme.text);
 
         // Draw cursor beam at the exact cmd_cur position
         let cursor_x = text_origin.x + cursor_offset_x;
@@ -146,7 +149,7 @@ pub fn render_bottom_dock(
             Align2::LEFT_TOP,
             query_display,
             FontId::monospace(14.0),
-            Color32::WHITE,
+            theme.text,
         );
 
         if !query.is_empty() {
@@ -182,7 +185,7 @@ pub fn render_bottom_dock(
                 Align2::CENTER_CENTER,
                 badge,
                 FontId::monospace(9.5),
-                Color32::from_gray(190),
+                theme.text,
             );
             text_x += badge_w + 10.0;
         }
@@ -222,7 +225,7 @@ pub fn render_bottom_dock(
     let knob_color = if is_knob_hovered {
         accent
     } else {
-        Color32::from_gray(75)
+        theme.muted
     };
 
     // Tactile diagonal gripper ridges
@@ -240,6 +243,6 @@ pub fn render_bottom_dock(
     painter.galley(
         pos2(stats_left_x, stats_pos.y),
         stats_galley,
-        Color32::from_gray(120),
+        theme.muted,
     );
 }

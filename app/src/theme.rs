@@ -1,6 +1,14 @@
+//! Theme palette definitions.
+//!
+//! Every theme's text/accent/muted/highlight colors are checked against its
+//! background at test time using a real WCAG contrast-ratio calculation
+//! (see `contrast_ratio` + the `readability` test module at the bottom).
+//! Adding a theme with poor contrast fails `cargo test` instead of shipping
+//! something hard to read.
+
 use eframe::egui::Color32;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ThemeKind {
     Shell,
     TokyoNight,
@@ -13,6 +21,12 @@ pub enum ThemeKind {
     Amber,
     Ice,
     White,
+    Gruvbox,
+    Everforest,
+    Monokai,
+    OneDark,
+    Ayu,
+    Kanagawa,
 }
 
 impl ThemeKind {
@@ -28,6 +42,12 @@ impl ThemeKind {
         ThemeKind::Amber,
         ThemeKind::Ice,
         ThemeKind::White,
+        ThemeKind::Gruvbox,
+        ThemeKind::Everforest,
+        ThemeKind::Monokai,
+        ThemeKind::OneDark,
+        ThemeKind::Ayu,
+        ThemeKind::Kanagawa,
     ];
 
     pub fn parse(s: &str) -> Option<Self> {
@@ -43,6 +63,12 @@ impl ThemeKind {
             "rose" | "rosepine" => Some(Self::RosePine),
             "ice" => Some(Self::Ice),
             "white" | "mono" | "monochrome" => Some(Self::White),
+            "gruvbox" | "gruv" => Some(Self::Gruvbox),
+            "everforest" | "forest" => Some(Self::Everforest),
+            "monokai" | "monokaipro" => Some(Self::Monokai),
+            "onedark" | "atom" => Some(Self::OneDark),
+            "ayu" | "ayudark" => Some(Self::Ayu),
+            "kanagawa" => Some(Self::Kanagawa),
             _ => None,
         }
     }
@@ -60,6 +86,12 @@ impl ThemeKind {
             Self::Amber => "amber",
             Self::Ice => "ice",
             Self::White => "white",
+            Self::Gruvbox => "gruvbox",
+            Self::Everforest => "everforest",
+            Self::Monokai => "monokai",
+            Self::OneDark => "onedark",
+            Self::Ayu => "ayu",
+            Self::Kanagawa => "kanagawa",
         }
     }
 
@@ -76,6 +108,12 @@ impl ThemeKind {
             Self::Amber => "Amber CRT",
             Self::Ice => "Glacier Ice",
             Self::White => "Monochrome",
+            Self::Gruvbox => "Gruvbox Dark",
+            Self::Everforest => "Everforest",
+            Self::Monokai => "Monokai Pro",
+            Self::OneDark => "One Dark",
+            Self::Ayu => "Ayu Dark",
+            Self::Kanagawa => "Kanagawa",
         }
     }
 }
@@ -119,15 +157,15 @@ impl Theme {
         match kind {
             ThemeKind::Shell => Self {
                 kind,
-                bg: Color32::from_rgb(1, 43, 54),       // #012b36 (Solarized deep teal shell)
-                text: Color32::from_rgb(238, 232, 213), // #eee8d5 Solarized base3
-                accent: Color32::from_rgb(42, 161, 152), // #2aa198 Solarized cyan
-                muted: Color32::from_rgb(101, 123, 131), // #657b83 Solarized base00
-                highlight: Color32::from_rgb(38, 139, 210), // #268bd2 Solarized blue
+                bg: Color32::from_rgb(1, 43, 54),
+                text: Color32::from_rgb(238, 232, 213),
+                accent: Color32::from_rgb(42, 161, 152),
+                muted: Color32::from_rgb(101, 123, 131),
+                highlight: Color32::from_rgb(38, 139, 210),
             },
             ThemeKind::TokyoNight => Self {
                 kind,
-                bg: Color32::from_rgb(26, 27, 38),      // #1a1b26
+                bg: Color32::from_rgb(26, 27, 38),
                 text: Color32::from_rgb(192, 202, 245),
                 accent: Color32::from_rgb(122, 162, 247),
                 muted: Color32::from_rgb(115, 125, 165),
@@ -135,7 +173,7 @@ impl Theme {
             },
             ThemeKind::Dracula => Self {
                 kind,
-                bg: Color32::from_rgb(40, 42, 54),      // #282a36
+                bg: Color32::from_rgb(40, 42, 54),
                 text: Color32::from_rgb(248, 248, 242),
                 accent: Color32::from_rgb(255, 121, 198),
                 muted: Color32::from_rgb(139, 147, 184),
@@ -143,7 +181,7 @@ impl Theme {
             },
             ThemeKind::Catppuccin => Self {
                 kind,
-                bg: Color32::from_rgb(30, 30, 46),      // #1e1e2e
+                bg: Color32::from_rgb(30, 30, 46),
                 text: Color32::from_rgb(205, 214, 244),
                 accent: Color32::from_rgb(203, 166, 247),
                 muted: Color32::from_rgb(140, 146, 175),
@@ -151,7 +189,7 @@ impl Theme {
             },
             ThemeKind::Nord => Self {
                 kind,
-                bg: Color32::from_rgb(46, 52, 64),      // #2e3440
+                bg: Color32::from_rgb(46, 52, 64),
                 text: Color32::from_rgb(236, 239, 244),
                 accent: Color32::from_rgb(136, 192, 208),
                 muted: Color32::from_rgb(140, 150, 175),
@@ -159,7 +197,7 @@ impl Theme {
             },
             ThemeKind::RosePine => Self {
                 kind,
-                bg: Color32::from_rgb(31, 29, 46),      // #1f1d2e
+                bg: Color32::from_rgb(31, 29, 46),
                 text: Color32::from_rgb(224, 222, 244),
                 accent: Color32::from_rgb(235, 111, 146),
                 muted: Color32::from_rgb(140, 135, 168),
@@ -205,6 +243,56 @@ impl Theme {
                 muted: Color32::from_rgb(150, 150, 150),
                 highlight: Color32::from_rgb(210, 230, 255),
             },
+
+            // --- New themes ---
+            ThemeKind::Gruvbox => Self {
+                kind,
+                bg: Color32::from_rgb(40, 40, 40),        // #282828
+                text: Color32::from_rgb(235, 219, 178),   // #ebdbb2
+                accent: Color32::from_rgb(254, 128, 25),  // #fe8019 (orange)
+                muted: Color32::from_rgb(168, 153, 132),  // #a89984
+                highlight: Color32::from_rgb(184, 187, 38), // #b8bb26 (green)
+            },
+            ThemeKind::Everforest => Self {
+                kind,
+                bg: Color32::from_rgb(39, 46, 51),        // #272e33
+                text: Color32::from_rgb(211, 198, 170),   // #d3c6aa
+                accent: Color32::from_rgb(167, 192, 128), // #a7c080 (green)
+                muted: Color32::from_rgb(148, 158, 145),  // #949e91
+                highlight: Color32::from_rgb(127, 187, 179), // #7fbbb3 (aqua)
+            },
+            ThemeKind::Monokai => Self {
+                kind,
+                bg: Color32::from_rgb(45, 42, 46),        // #2d2a2e
+                text: Color32::from_rgb(252, 252, 250),   // #fcfcfa
+                accent: Color32::from_rgb(255, 216, 102), // #ffd866 (yellow)
+                muted: Color32::from_rgb(163, 158, 165),  // #a39ea5
+                highlight: Color32::from_rgb(255, 97, 136), // #ff6188 (pink)
+            },
+            ThemeKind::OneDark => Self {
+                kind,
+                bg: Color32::from_rgb(40, 44, 52),        // #282c34
+                text: Color32::from_rgb(220, 223, 228),   // brighter than stock abb2bf for AA on body text
+                accent: Color32::from_rgb(97, 175, 239),  // #61afef (blue)
+                muted: Color32::from_rgb(150, 158, 175),  // lifted slightly from #5c6370 for legibility
+                highlight: Color32::from_rgb(198, 120, 221), // #c678dd (purple)
+            },
+            ThemeKind::Ayu => Self {
+                kind,
+                bg: Color32::from_rgb(10, 14, 20),        // #0a0e14
+                text: Color32::from_rgb(191, 189, 182),   // #bfbdb6
+                accent: Color32::from_rgb(255, 180, 84),  // #ffb454 (orange)
+                muted: Color32::from_rgb(110, 122, 140),  // lifted from #4d5566 for AA
+                highlight: Color32::from_rgb(89, 194, 255), // #59c2ff (blue)
+            },
+            ThemeKind::Kanagawa => Self {
+                kind,
+                bg: Color32::from_rgb(31, 31, 40),        // #1f1f28
+                text: Color32::from_rgb(220, 215, 186),   // #dcd7ba
+                accent: Color32::from_rgb(126, 156, 216), // #7e9cd8 (crystal blue)
+                muted: Color32::from_rgb(146, 143, 129),  // lifted from #727169 for AA
+                highlight: Color32::from_rgb(210, 126, 153), // #d27e99 (sakura pink)
+            },
         }
     }
 }
@@ -212,5 +300,78 @@ impl Theme {
 impl Default for Theme {
     fn default() -> Self {
         Self::from_kind(ThemeKind::Shell)
+    }
+}
+
+/// WCAG relative luminance of an sRGB color (0.0 = black, 1.0 = white).
+/// https://www.w3.org/TR/WCAG21/#dfn-relative-luminance
+fn relative_luminance(c: Color32) -> f32 {
+    let chan = |v: u8| -> f32 {
+        let s = v as f32 / 255.0;
+        if s <= 0.03928 {
+            s / 12.92
+        } else {
+            ((s + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    0.2126 * chan(c.r()) + 0.7152 * chan(c.g()) + 0.0722 * chan(c.b())
+}
+
+/// WCAG contrast ratio between two colors, from 1.0 (no contrast) to 21.0
+/// (black on white). 4.5 is the AA threshold for normal text; 3.0 is the AA
+/// threshold for large text and UI components. Order of arguments doesn't
+/// matter — the lighter color is detected automatically.
+pub fn contrast_ratio(a: Color32, b: Color32) -> f32 {
+    let (l1, l2) = (relative_luminance(a), relative_luminance(b));
+    let (lighter, darker) = if l1 >= l2 { (l1, l2) } else { (l2, l1) };
+    (lighter + 0.05) / (darker + 0.05)
+}
+
+#[cfg(test)]
+mod readability {
+    use super::*;
+
+    /// Body text must clear the WCAG AA threshold for normal text against
+    /// the background. This is the color people spend the most time reading.
+    const MIN_TEXT_CONTRAST: f32 = 4.5;
+    /// Accent/highlight/muted are decorative or used sparingly (labels,
+    /// borders, small UI bits) — WCAG's lower "large text / UI component"
+    /// threshold applies.
+    const MIN_UI_CONTRAST: f32 = 3.0;
+
+    #[test]
+    fn every_theme_is_readable() {
+        for &kind in ThemeKind::ALL {
+            let t = Theme::from_kind(kind);
+            let text_c = contrast_ratio(t.text, t.bg);
+            assert!(
+                text_c >= MIN_TEXT_CONTRAST,
+                "{}: text vs bg contrast {:.2} is below {} (text is hard to read)",
+                kind.name(), text_c, MIN_TEXT_CONTRAST
+            );
+
+            for (label, color) in [("accent", t.accent), ("muted", t.muted), ("highlight", t.highlight)] {
+                let c = contrast_ratio(color, t.bg);
+                assert!(
+                    c >= MIN_UI_CONTRAST,
+                    "{}: {} vs bg contrast {:.2} is below {}",
+                    kind.name(), label, c, MIN_UI_CONTRAST
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn contrast_ratio_is_symmetric_and_sane() {
+        assert!((contrast_ratio(Color32::BLACK, Color32::WHITE) - 21.0).abs() < 0.1);
+        assert!((contrast_ratio(Color32::WHITE, Color32::BLACK) - 21.0).abs() < 0.1);
+        assert!((contrast_ratio(Color32::WHITE, Color32::WHITE) - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn parse_round_trips_for_all_themes() {
+        for &kind in ThemeKind::ALL {
+            assert_eq!(ThemeKind::parse(kind.name()), Some(kind), "name() -> parse() round trip failed for {kind:?}");
+        }
     }
 }

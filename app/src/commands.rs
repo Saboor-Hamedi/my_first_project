@@ -29,148 +29,156 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
         "set" => {
             let opt = args.to_lowercase();
             let opt = opt.trim();
-            let is_disable = matches!(
-                opt,
+            match opt {
                 "noshowcmd"
-                    | "nonshowcmd"
-                    | "nosc"
-                    | "nonsc"
-                    | "noshow"
-                    | "nonshow"
-                    | "no_showcmd"
-                    | "non_showcmd"
-                    | "showcmd off"
-                    | "showcmd=off"
-                    | "showcmd 0"
-                    | "showcmd=0"
-                    | "showcmd false"
-                    | "showcmd=false"
-                    | "showcmd disable"
-            );
-            let is_enable = matches!(
-                opt,
-                "showcmd"
-                    | "sc"
-                    | "showcmd on"
-                    | "showcmd=on"
-                    | "showcmd 1"
-                    | "showcmd=1"
-                    | "showcmd true"
-                    | "showcmd=true"
-                    | "showcmd enable"
-            );
-            let is_toggle = matches!(opt, "showcmd!" | "sc!");
-
-            let is_disable_nu = matches!(
-                opt,
-                "nonu" | "nonumber" | "no_number" | "no_nu" | "nu off" | "nu=off" | "nu 0" | "number off" | "number=off" | "number 0"
-            );
-            let is_enable_nu = matches!(
-                opt,
-                "nu" | "number" | "nu on" | "nu=on" | "nu 1" | "number on" | "number=on" | "number 1"
-            );
-            let is_toggle_nu = matches!(opt, "nu!" | "number!");
-
-            let is_disable_preview = matches!(
-                opt,
-                "nopreview" | "no_preview" | "noprev" | "preview off" | "preview=off" | "preview 0" | "preview disable"
-            );
-            let is_enable_preview = matches!(
-                opt,
-                "preview" | "prev" | "preview on" | "preview=on" | "preview 1" | "preview enable"
-            );
-            let is_toggle_preview = matches!(opt, "preview!" | "prev!");
-
-            if is_disable {
-                app.showcmd.enabled = false;
-                app.showcmd.clear();
-                let _ = app.db_tx.send(DbMsg::SaveSetting {
-                    key: "showcmd".into(),
-                    val: "false".into(),
-                });
-                app.set_status(":set noshowcmd (Keystroke card OFF)", now);
-            } else if is_enable {
-                app.showcmd.enabled = true;
-                let _ = app.db_tx.send(DbMsg::SaveSetting {
-                    key: "showcmd".into(),
-                    val: "true".into(),
-                });
-                app.set_status(":set showcmd (Keystroke card ON)", now);
-            } else if is_toggle {
-                app.showcmd.enabled = !app.showcmd.enabled;
-                if !app.showcmd.enabled {
+                | "nonshowcmd"
+                | "nosc"
+                | "nonsc"
+                | "noshow"
+                | "nonshow"
+                | "no_showcmd"
+                | "non_showcmd"
+                | "showcmd off"
+                | "showcmd=off"
+                | "showcmd 0"
+                | "showcmd=0"
+                | "showcmd false"
+                | "showcmd=false"
+                | "showcmd disable" => {
+                    app.showcmd.enabled = false;
                     app.showcmd.clear();
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "showcmd".into(),
+                        val: "false".into(),
+                    });
+                    app.set_status(":set noshowcmd (Keystroke card OFF)", now);
                 }
-                let val = if app.showcmd.enabled { "true" } else { "false" };
-                let _ = app.db_tx.send(DbMsg::SaveSetting {
-                    key: "showcmd".into(),
-                    val: val.into(),
-                });
-                let msg = if app.showcmd.enabled {
-                    ":set showcmd (Keystroke card ON)"
-                } else {
-                    ":set noshowcmd (Keystroke card OFF)"
-                };
-                app.set_status(msg, now);
-            } else if is_disable_nu {
-                app.show_line_numbers = false;
-                let _ = app.db_tx.send(DbMsg::SaveSetting {
-                    key: "line_numbers".into(),
-                    val: "false".into(),
-                });
-                app.set_status(":set nonu (Line numbers hidden)", now);
-            } else if is_enable_nu {
-                app.show_line_numbers = true;
-                let _ = app.db_tx.send(DbMsg::SaveSetting {
-                    key: "line_numbers".into(),
-                    val: "true".into(),
-                });
-                app.set_status(":set nu (Line numbers visible)", now);
-            } else if is_toggle_nu {
-                app.show_line_numbers = !app.show_line_numbers;
-                let val = if app.show_line_numbers { "true" } else { "false" };
-                let _ = app.db_tx.send(DbMsg::SaveSetting {
-                    key: "line_numbers".into(),
-                    val: val.into(),
-                });
-                let msg = if app.show_line_numbers {
-                    ":set nu (Line numbers visible)"
-                } else {
-                    ":set nonu (Line numbers hidden)"
-                };
-                app.set_status(msg, now);
-            } else if is_disable_preview {
-                app.preview_open = false;
-                let _ = app.db_tx.send(DbMsg::SaveSetting {
-                    key: "preview".into(),
-                    val: "false".into(),
-                });
-                app.set_status(":set nopreview (Live preview closed)", now);
-            } else if is_enable_preview {
-                app.preview_open = true;
-                let _ = app.db_tx.send(DbMsg::SaveSetting {
-                    key: "preview".into(),
-                    val: "true".into(),
-                });
-                app.set_status(":set preview (Live preview opened side-by-side)", now);
-            } else if is_toggle_preview {
-                app.preview_open = !app.preview_open;
-                let val = if app.preview_open { "true" } else { "false" };
-                let _ = app.db_tx.send(DbMsg::SaveSetting {
-                    key: "preview".into(),
-                    val: val.into(),
-                });
-                let msg = if app.preview_open {
-                    ":set preview (Live preview opened side-by-side)"
-                } else {
-                    ":set nopreview (Live preview closed)"
-                };
-                app.set_status(msg, now);
-            } else {
-                app.set_status(
-                    format!("Unknown option: :set {}. Try :set nu / :set nonu or :set preview / :set nopreview", opt),
-                    now,
-                );
+                "showcmd"
+                | "sc"
+                | "showcmd on"
+                | "showcmd=on"
+                | "showcmd 1"
+                | "showcmd=1"
+                | "showcmd true"
+                | "showcmd=true"
+                | "showcmd enable" => {
+                    app.showcmd.enabled = true;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "showcmd".into(),
+                        val: "true".into(),
+                    });
+                    app.set_status(":set showcmd (Keystroke card ON)", now);
+                }
+                "showcmd!" | "sc!" => {
+                    app.showcmd.enabled = !app.showcmd.enabled;
+                    if !app.showcmd.enabled {
+                        app.showcmd.clear();
+                    }
+                    let val = if app.showcmd.enabled { "true" } else { "false" };
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "showcmd".into(),
+                        val: val.into(),
+                    });
+                    let msg = if app.showcmd.enabled {
+                        ":set showcmd (Keystroke card ON)"
+                    } else {
+                        ":set noshowcmd (Keystroke card OFF)"
+                    };
+                    app.set_status(msg, now);
+                }
+                "nonu"
+                | "nonumber"
+                | "no_number"
+                | "no_nu"
+                | "nu off"
+                | "nu=off"
+                | "nu 0"
+                | "number off"
+                | "number=off"
+                | "number 0" => {
+                    app.show_line_numbers = false;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "line_numbers".into(),
+                        val: "false".into(),
+                    });
+                    app.set_status(":set nonu (Line numbers hidden)", now);
+                }
+                "nu"
+                | "number"
+                | "nu on"
+                | "nu=on"
+                | "nu 1"
+                | "number on"
+                | "number=on"
+                | "number 1" => {
+                    app.show_line_numbers = true;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "line_numbers".into(),
+                        val: "true".into(),
+                    });
+                    app.set_status(":set nu (Line numbers visible)", now);
+                }
+                "nu!" | "number!" => {
+                    app.show_line_numbers = !app.show_line_numbers;
+                    let val = if app.show_line_numbers { "true" } else { "false" };
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "line_numbers".into(),
+                        val: val.into(),
+                    });
+                    let msg = if app.show_line_numbers {
+                        ":set nu (Line numbers visible)"
+                    } else {
+                        ":set nonu (Line numbers hidden)"
+                    };
+                    app.set_status(msg, now);
+                }
+                "nopreview"
+                | "no_preview"
+                | "noprev"
+                | "preview off"
+                | "preview=off"
+                | "preview 0"
+                | "preview disable" => {
+                    app.preview_open = false;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "preview".into(),
+                        val: "false".into(),
+                    });
+                    app.set_status(":set nopreview (Live preview closed)", now);
+                }
+                "preview"
+                | "prev"
+                | "preview on"
+                | "preview=on"
+                | "preview 1"
+                | "preview enable" => {
+                    app.preview_open = true;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "preview".into(),
+                        val: "true".into(),
+                    });
+                    app.set_status(":set preview (Live preview opened side-by-side)", now);
+                }
+                "preview!" | "prev!" => {
+                    app.preview_open = !app.preview_open;
+                    let val = if app.preview_open { "true" } else { "false" };
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "preview".into(),
+                        val: val.into(),
+                    });
+                    let msg = if app.preview_open {
+                        ":set preview (Live preview opened side-by-side)"
+                    } else {
+                        ":set nopreview (Live preview closed)"
+                    };
+                    app.set_status(msg, now);
+                }
+                _ => {
+                    app.set_status(
+                        format!("Unknown option: :set {}. Try :set nu / :set nonu or :set preview / :set nopreview", opt),
+                        now,
+                    );
+                }
             }
         }
         "showcmd" => {

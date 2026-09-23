@@ -63,6 +63,14 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
         return Some(false);
     }
 
+    // Accent Color Dropdown input priority
+    if app.accent_dropdown_open {
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            app.accent_dropdown_open = false;
+        }
+        return Some(false);
+    }
+
     // Settings Modal input priority
     if app.settings_open {
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {

@@ -1072,12 +1072,32 @@ impl App {
         }
 
         // Detached Editor & Preview Panel Surface (subtle card background & border derived from theme)
-        painter.rect(
-            editor_panel_rect,
-            5.0,
-            self.theme.bg,
-            Stroke::new(1.0, self.theme.border()),
-            egui::StrokeKind::Inside,
+        // Bottom border removed so editor and preview seamlessly share identical gap and margins above the statusbar
+        painter.rect_filled(editor_panel_rect, 5.0, self.theme.bg);
+        let panel_stroke = Stroke::new(1.0, self.theme.border());
+        // Left border
+        painter.line_segment(
+            [pos2(editor_panel_rect.min.x, editor_panel_rect.min.y + 4.0), pos2(editor_panel_rect.min.x, editor_panel_rect.max.y)],
+            panel_stroke,
+        );
+        // Top border
+        painter.line_segment(
+            [pos2(editor_panel_rect.min.x + 4.0, editor_panel_rect.min.y), pos2(editor_panel_rect.max.x - 4.0, editor_panel_rect.min.y)],
+            panel_stroke,
+        );
+        // Right border
+        painter.line_segment(
+            [pos2(editor_panel_rect.max.x, editor_panel_rect.min.y + 4.0), pos2(editor_panel_rect.max.x, editor_panel_rect.max.y)],
+            panel_stroke,
+        );
+        // Top-left and top-right subtle rounded corners
+        painter.line_segment(
+            [pos2(editor_panel_rect.min.x, editor_panel_rect.min.y + 4.0), pos2(editor_panel_rect.min.x + 4.0, editor_panel_rect.min.y)],
+            panel_stroke,
+        );
+        painter.line_segment(
+            [pos2(editor_panel_rect.max.x - 4.0, editor_panel_rect.min.y), pos2(editor_panel_rect.max.x, editor_panel_rect.min.y + 4.0)],
+            panel_stroke,
         );
 
         // Tab strip at the top of the editor panel (inside the panel card)
@@ -1085,6 +1105,21 @@ impl App {
             editor_panel_rect.min,
             pos2(editor_panel_rect.max.x, editor_panel_rect.min.y + crate::view_editor::TAB_ROW_H),
         );
+
+        let tab_occluded_rect = if self.settings_open
+            || self.search_open
+            || self.help_open
+            || self.rename_open
+            || self.delete_confirm_open
+        {
+            Some(bounds)
+        } else if self.accent_dropdown_open {
+            let min_x = (accent_anchor_rect.max.x - 320.0).max(8.0);
+            let min_y = accent_anchor_rect.max.y + 4.0;
+            Some(Rect::from_min_size(pos2(min_x, min_y), vec2(320.0, 400.0)))
+        } else {
+            None
+        };
 
         if self.mode == Mode::Normal {
             self.sync_active_tab();
@@ -1112,6 +1147,7 @@ impl App {
                 &self.theme,
                 &mut self.tab_scroll_offset,
                 active_changed,
+                tab_occluded_rect,
             ) {
                 match action {
                     crate::view_editor::TabAction::Select(idx) => {
@@ -1151,6 +1187,7 @@ impl App {
                 &self.theme,
                 &mut self.doc_tab_scroll_offset,
                 active_doc_changed,
+                tab_occluded_rect,
             ) {
                 match action {
                     crate::view_editor::TabAction::Select(idx) => {
@@ -1334,6 +1371,7 @@ impl App {
                         || self.help_open
                         || self.rename_open
                         || self.delete_confirm_open
+                        || self.accent_dropdown_open
                         || self.is_dragging_splitter
                         || self.is_dragging_sidebar_splitter,
                     search_matches,
@@ -1475,8 +1513,7 @@ impl App {
             word_count,
             Some(mode_badge_str.as_str()),
             search_prompt,
-            self.theme.accent,
-            self.theme.muted,
+            &self.theme,
         );
 
         // Sleek Sidebar (Ctrl+B)
@@ -1947,7 +1984,8 @@ impl eframe::App for App {
                 || self.settings_open
                 || self.help_open
                 || self.rename_open
-                || self.delete_confirm_open)
+                || self.delete_confirm_open
+                || self.accent_dropdown_open)
         {
             ctx.request_repaint();
         } else {

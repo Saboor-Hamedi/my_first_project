@@ -1,0 +1,6 @@
+{
+    "rust-analyzer.cargo.sysroot": "C:\\ProgramData\\chocolatey\\lib\\rust\\tools",
+    "rust-analyzer.cargo.sysrootSrc": "C:\\ProgramData\\chocolatey\\lib\\rust\\tools\\lib\\rustlib\\src\\rust\\library",
+    "rust-analyzer.rustc.source": "C:\\ProgramData\\chocolatey\\lib\\rust\\tools\\lib\\rustlib\\src\\rust\\library",
+    "rust-analyzer.check.command": "check"
+}

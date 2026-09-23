@@ -27,6 +27,7 @@ pub fn render_tab_bar(
     theme: &Theme,
     scroll_offset: &mut f32,
     active_changed: bool,
+    occluded_rect: Option<Rect>,
 ) -> Option<TabAction> {
     if tabs.is_empty() {
         return None;
@@ -47,7 +48,8 @@ pub fn render_tab_bar(
     let tab_h = tab_bar_rect.height() - 2.0;
     let primary_clicked = ui.input(|i| i.pointer.primary_clicked());
     let mouse_pos = ui.input(|i| i.pointer.interact_pos());
-    let mouse_in_bar = ui.rect_contains_pointer(tab_bar_rect);
+    let is_occluded = occluded_rect.map_or(false, |r| mouse_pos.map_or(false, |p| r.contains(p)));
+    let mouse_in_bar = !is_occluded && ui.rect_contains_pointer(tab_bar_rect);
 
     // 1. Measure all tabs and calculate relative positions
     let mut tab_widths: Vec<f32> = Vec::with_capacity(tabs.len());

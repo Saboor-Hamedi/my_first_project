@@ -269,9 +269,9 @@ fn build_inline_job(
                 let code_end = i + 1 + end_rel;
                 flush_plain(&mut plain_acc, &mut job);
                 let code_text: String = chars[i + 1..code_end].iter().collect();
-                let mut fmt = TextFormat::simple(FontId::monospace(base_font_size * 0.88), theme.accent);
-                fmt.background = Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 32);
-                job.append(&format!(" {} ", code_text), 0.0, fmt);
+                let mut fmt = TextFormat::simple(FontId::monospace(base_font_size * 0.92), theme.accent);
+                fmt.background = Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 26);
+                job.append(&code_text, 0.0, fmt);
                 i = code_end + 1;
                 continue;
             }
@@ -464,11 +464,6 @@ pub fn render_markdown_preview(
     theme: &Theme,
     font_size: f32,
 ) {
-    let preview_painter = painter.with_clip_rect(rect);
-
-    // Seamless background matching editor body
-    preview_painter.rect_filled(rect, 0.0, theme.bg);
-
     let blocks = parse_markdown(content);
 
     // Inner padding & content area aligned with editor body
@@ -667,46 +662,58 @@ pub fn render_markdown_preview(
                 current_y += 6.0;
                 let lines: Vec<&str> = code.lines().collect();
                 let line_count = lines.len().max(1);
-                let line_h = (font_size * 1.50).round();
-                let gutter_w = (line_count.to_string().len() as f32 * (font_size * 0.60) + 20.0).max(36.0);
-                let block_pad_y = 12.0;
-                let top_strip_h = 30.0;
-                let block_h = top_strip_h + (line_count as f32 * line_h) + block_pad_y * 2.0;
+                let line_h = (font_size * 1.45).round();
+                let has_header = !lang.is_empty();
+                let pad_x = 14.0;
+                let pad_top = if has_header { 28.0 } else { 12.0 };
+
+                let avail_w = (max_text_w - pad_x * 2.0).max(10.0);
+                let line_galleys: Vec<std::sync::Arc<egui::Galley>> = lines
+                    .iter()
+                    .map(|line_str| painter.layout_job(highlight_code_line(line_str, lang, font_size, theme)))
+                    .collect();
+                let max_line_w = line_galleys.iter().map(|g| g.size().x).fold(0.0f32, f32::max);
+                let max_scroll_x = (max_line_w - avail_w).max(0.0);
+                let needs_h_scroll = max_scroll_x > 0.0;
+                let pad_bottom = if needs_h_scroll { 16.0 } else { 12.0 };
+                let block_h = pad_top + (line_count as f32 * line_h) + pad_bottom;
 
                 if current_y + block_h >= rect.min.y && current_y <= rect.max.y {
                     let code_rect = Rect::from_min_size(pos2(start_x, current_y), vec2(max_text_w, block_h));
 
-                    // Subtle background fill using theme's muted/surface color - NO border / NO hard outline
-                    let bg_color = Color32::from_rgba_unmultiplied(
-                        theme.muted.r(),
-                        theme.muted.g(),
-                        theme.muted.b(),
-                        26,
-                    );
-                    content_painter.rect_filled(code_rect, 6.0, bg_color);
-
-                    // Top Bar Header inside Code Block
-                    let code_top_bar = Rect::from_min_size(code_rect.min, vec2(code_rect.width(), top_strip_h));
-                    content_painter.rect_filled(
-                        code_top_bar,
-                        egui::CornerRadius { nw: 6, ne: 6, sw: 0, se: 0 },
-                        Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 18),
-                    );
-                    content_painter.line_segment(
-                        [code_top_bar.left_bottom(), code_top_bar.right_bottom()],
-                        Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 26)),
+                    // Single cohesive code wrapper card matching theme surface and border
+                    content_painter.rect(
+                        code_rect,
+                        5.0,
+                        theme.surface(),
+                        Stroke::new(1.0, theme.border()),
+                        egui::StrokeKind::Inside,
                     );
 
-                    // Left: Glowing dot + language label
-                    let lang_label = if lang.is_empty() { "CODE".to_string() } else { lang.to_uppercase() };
-                    content_painter.circle_filled(pos2(code_top_bar.min.x + 12.0, code_top_bar.center().y), 3.0, theme.accent);
-                    content_painter.text(
-                        pos2(code_top_bar.min.x + 22.0, code_top_bar.center().y),
-                        Align2::LEFT_CENTER,
-                        lang_label,
-                        FontId::monospace(10.5),
-                        theme.accent,
-                    );
+                    // Horizontal scrolling state & input handling
+                    let scroll_id = ui.id().with(("code_block_scroll_x", code_block_idx));
+                    let mut scroll_x: f32 = ui.data(|d| d.get_temp(scroll_id).unwrap_or(0.0));
+                    if ui.rect_contains_pointer(code_rect) && needs_h_scroll {
+                        let h_delta = ui.input(|i| {
+                            if i.modifiers.shift {
+                                if i.smooth_scroll_delta.y.abs() > 0.001 {
+                                    i.smooth_scroll_delta.y
+                                } else {
+                                    i.raw_scroll_delta.y * 0.5
+                                }
+                            } else if i.smooth_scroll_delta.x.abs() > 0.001 {
+                                i.smooth_scroll_delta.x
+                            } else {
+                                i.raw_scroll_delta.x * 0.5
+                            }
+                        });
+                        if h_delta != 0.0 {
+                            scroll_x = (scroll_x - h_delta).clamp(0.0, max_scroll_x);
+                            ui.data_mut(|d| d.insert_temp(scroll_id, scroll_x));
+                            ui.ctx().request_repaint();
+                        }
+                    }
+                    scroll_x = scroll_x.clamp(0.0, max_scroll_x);
 
                     // Copy button logic & state
                     let copy_id = ui.id().with(("code_block_copy", code_block_idx));
@@ -714,10 +721,10 @@ pub fn render_markdown_preview(
                     let last_copied: Option<f64> = ui.data(|d| d.get_temp(copy_id));
                     let is_copied = last_copied.map_or(false, |t| current_time - t < 1.0);
 
-                    let btn_w = 72.0;
-                    let btn_h = 20.0;
+                    let btn_w = 58.0;
+                    let btn_h = 18.0;
                     let btn_rect = Rect::from_min_size(
-                        pos2(code_top_bar.max.x - btn_w - 8.0, code_top_bar.center().y - btn_h * 0.5),
+                        pos2(code_rect.max.x - btn_w - 10.0, code_rect.min.y + 6.0),
                         vec2(btn_w, btn_h),
                     );
 
@@ -738,7 +745,18 @@ pub fn render_markdown_preview(
                         }
                     }
 
-                    // Render Copy button
+                    if has_header {
+                        // Subtle language label on the left (integrated into card, NO separate top layer)
+                        content_painter.text(
+                            pos2(code_rect.min.x + pad_x, code_rect.min.y + 15.0),
+                            Align2::LEFT_CENTER,
+                            lang.to_uppercase(),
+                            FontId::monospace(10.0),
+                            theme.accent,
+                        );
+                    }
+
+                    // Render Copy button in top-right
                     let (btn_bg, btn_text, btn_color) = if is_copied {
                         (
                             Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 45),
@@ -747,66 +765,86 @@ pub fn render_markdown_preview(
                         )
                     } else if is_btn_hovered {
                         (
-                            Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 55),
-                            "📋 Copy",
+                            Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 45),
+                            "Copy",
                             theme.text,
                         )
                     } else {
                         (
-                            Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 26),
-                            "📋 Copy",
-                            Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 200),
+                            Color32::TRANSPARENT,
+                            "Copy",
+                            theme.muted,
                         )
                     };
-                    content_painter.rect_filled(btn_rect, 4.0, btn_bg);
+                    if btn_bg != Color32::TRANSPARENT {
+                        content_painter.rect_filled(btn_rect, 3.0, btn_bg);
+                    }
                     content_painter.text(
                         btn_rect.center(),
                         Align2::CENTER_CENTER,
                         btn_text,
-                        FontId::monospace(10.5),
+                        FontId::monospace(9.5),
                         btn_color,
                     );
 
-                    // Right (to the left of copy button): line count
-                    content_painter.text(
-                        pos2(btn_rect.min.x - 10.0, code_top_bar.center().y),
-                        Align2::RIGHT_CENTER,
-                        format!("{} lines", line_count),
-                        FontId::monospace(10.0),
-                        Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 130),
+                    // Render lines cleanly with horizontal scroll offset inside clip rect
+                    let code_clip = Rect::from_min_max(
+                        pos2(code_rect.min.x + pad_x, code_rect.min.y),
+                        pos2(code_rect.max.x - pad_x, code_rect.max.y),
                     );
+                    let code_painter = content_painter.with_clip_rect(code_clip);
 
-                    // Line numbers gutter divider line
-                    let gutter_x = code_rect.min.x + gutter_w;
-                    content_painter.line_segment(
-                        [pos2(gutter_x, code_top_bar.max.y), pos2(gutter_x, code_rect.max.y)],
-                        Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 25)),
-                    );
-
-                    // Render lines with line numbers & syntax highlighting
-                    let mut line_y = code_top_bar.max.y + block_pad_y;
-                    let num_font = FontId::monospace(font_size * 0.88);
-                    let num_color = Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 90);
-
-                    for (idx, line_str) in lines.iter().enumerate() {
-                        // Line number
-                        content_painter.text(
-                            pos2(gutter_x - 8.0, line_y + 1.0),
-                            Align2::RIGHT_TOP,
-                            (idx + 1).to_string(),
-                            num_font.clone(),
-                            num_color,
+                    let mut line_y = code_rect.min.y + pad_top;
+                    for galley in line_galleys {
+                        code_painter.galley(
+                            pos2(code_rect.min.x + pad_x - scroll_x, line_y),
+                            galley,
+                            Color32::WHITE,
                         );
-
-                        // Highlighted code line
-                        let job = highlight_code_line(line_str, lang, font_size, theme);
-                        let galley = painter.layout_job(job);
-                        content_painter.galley(pos2(gutter_x + 12.0, line_y), galley, Color32::WHITE);
-
                         line_y += line_h;
                     }
+
+                    // Interactive horizontal scrollbar at bottom of code block when text overflows
+                    if needs_h_scroll {
+                        let track_h = 3.5;
+                        let track_y = code_rect.max.y - 7.0;
+                        let track_rect = Rect::from_min_size(
+                            pos2(code_rect.min.x + pad_x, track_y),
+                            vec2(avail_w, track_h),
+                        );
+                        let thumb_w = ((avail_w / max_line_w) * avail_w).clamp(24.0, avail_w);
+                        let ratio = if max_scroll_x > 0.0 { scroll_x / max_scroll_x } else { 0.0 };
+                        let thumb_x = code_rect.min.x + pad_x + ratio * (avail_w - thumb_w);
+                        let thumb_rect = Rect::from_min_size(pos2(thumb_x, track_y), vec2(thumb_w, track_h));
+
+                        let hit_track = Rect::from_min_size(
+                            pos2(code_rect.min.x + pad_x, track_y - 3.0),
+                            vec2(avail_w, track_h + 6.0),
+                        );
+                        let is_hit = ui.rect_contains_pointer(hit_track);
+                        if is_hit && ui.input(|i| i.pointer.primary_down()) {
+                            if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+                                let r = ((pos.x - (code_rect.min.x + pad_x) - thumb_w * 0.5) / (avail_w - thumb_w).max(1.0)).clamp(0.0, 1.0);
+                                scroll_x = r * max_scroll_x;
+                                ui.data_mut(|d| d.insert_temp(scroll_id, scroll_x));
+                                ui.ctx().request_repaint();
+                            }
+                        }
+
+                        content_painter.rect_filled(
+                            track_rect,
+                            1.75,
+                            Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 30),
+                        );
+                        let thumb_color = if is_hit {
+                            Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 180)
+                        } else {
+                            Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 110)
+                        };
+                        content_painter.rect_filled(thumb_rect, 1.75, thumb_color);
+                    }
                 }
-                current_y += block_h + 14.0;
+                current_y += block_h + 12.0;
             }
             MdBlock::Table { headers, rows } => {
                 current_y += 8.0;
@@ -892,9 +930,10 @@ pub fn render_markdown_preview(
         }
     }
 
-    // Clamp scroll
+    // Clamp scroll with bottom breathing room aligned with editor body
     let total_h = (current_y + *scroll_y - (rect.min.y + pad_y)).max(0.0);
-    let max_scroll = (total_h - rect.height() + pad_y * 2.0).max(0.0);
+    let bottom_pad = 28.0;
+    let max_scroll = (total_h + bottom_pad - rect.height()).max(0.0);
     *scroll_y = scroll_y.clamp(0.0, max_scroll);
 }
 
