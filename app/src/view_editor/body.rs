@@ -10,7 +10,7 @@ use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, Stroke};
 pub fn render_editor_body(
     ui: &egui::Ui,
     painter: &egui::Painter,
-    window_bounds: Rect,
+    _window_bounds: Rect,
     editor_rect: Rect,
     ed: &mut Editor,
     visual_lines: &[VisualLine],
@@ -41,7 +41,7 @@ pub fn render_editor_body(
     let max_scroll = (total_content_h + 16.0 - visible_h + lh * 4.0).max(0.0);
 
     // Mouse wheel scrolling: prioritize smooth scroll delta, fallback to scaled raw delta
-    if !block_scroll {
+    if !block_scroll && ui.rect_contains_pointer(editor_rect) {
         let is_ctrl = ui.input(|i| i.modifiers.ctrl || i.modifiers.command);
         if !is_ctrl {
             let scroll_delta = ui.input(|i| {
@@ -322,11 +322,11 @@ pub fn render_editor_body(
         let thumb_h = ((visible_h / total_content_h) * visible_h).clamp(28.0, max_thumb);
         let scroll_ratio = (*scroll_y / max_scroll).clamp(0.0, 1.0);
         let thumb_y = editor_rect.min.y + scroll_ratio * (visible_h - thumb_h);
-        let track_x = window_bounds.max.x - 8.0;
+        let track_x = editor_rect.max.x - 8.0;
         let thumb_rect = Rect::from_min_size(pos2(track_x - 1.5, thumb_y), vec2(3.0, thumb_h));
         let track_rect = Rect::from_min_max(
             pos2(track_x - 8.0, editor_rect.min.y),
-            pos2(window_bounds.max.x, editor_rect.max.y),
+            pos2(editor_rect.max.x, editor_rect.max.y),
         );
 
         let is_track_hovered = ui.rect_contains_pointer(track_rect);

@@ -34,8 +34,10 @@ pub fn render_bottom_dock(
         egui::StrokeKind::Inside,
     );
 
-    let cmd_y = dock_rect.min.y + 9.0;
-    let cmd_x = dock_rect.min.x + 24.0;
+    let cmd_x = dock_rect.min.x + 14.0;
+    let badge_h = 20.0;
+    let badge_y = dock_rect.center().y - badge_h * 0.5;
+    let cmd_y = dock_rect.center().y - 8.0;
     let mut text_x = cmd_x;
 
     // Right side stats: Line, Col, word count (padded before resize knob)
@@ -45,22 +47,22 @@ pub fn render_bottom_dock(
         format!("Ln {}, Col {}", cursor_row, cursor_col)
     };
     let stats_galley = painter.layout_no_wrap(stats, FontId::monospace(12.0), theme.muted);
-    let stats_pos = pos2(dock_rect.max.x - 34.0, cmd_y);
+    let stats_pos = pos2(dock_rect.max.x - 34.0, dock_rect.center().y - 7.0);
     let stats_left_x = stats_pos.x - stats_galley.size().x;
     let max_cmd_x = (stats_left_x - 16.0).max(cmd_x + 120.0);
-    let cmd_input_left = cmd_x + 52.0;
+    let cmd_input_left = cmd_x + 58.0;
     let cmd_avail_w = (max_cmd_x - cmd_input_left).max(40.0);
 
     if in_command {
         // [:CMD] badge
-        let badge_rect = Rect::from_min_size(pos2(cmd_x, cmd_y - 2.0), vec2(44.0, 20.0));
-        painter.rect_filled(badge_rect, 3.0, accent);
+        let badge_rect = Rect::from_min_size(pos2(cmd_x, badge_y), vec2(48.0, badge_h));
+        painter.rect_filled(badge_rect, 4.0, accent);
         painter.text(
             badge_rect.center(),
             Align2::CENTER_CENTER,
             ":CMD",
-            FontId::monospace(11.0),
-            Color32::BLACK,
+            FontId::monospace(10.5),
+            if theme.is_light() { Color32::WHITE } else { theme.bg },
         );
 
         let font = FontId::monospace(14.0);
@@ -128,24 +130,24 @@ pub fn render_bottom_dock(
     } else if let Some((symbol, query, match_count)) = search_prompt {
         // [SEARCH] badge
         let badge_label = if symbol == "?" { "? SEARCH" } else { "/ SEARCH" };
-        let badge_rect = Rect::from_min_size(pos2(cmd_x, cmd_y - 2.0), vec2(64.0, 20.0));
-        painter.rect_filled(badge_rect, 3.0, accent);
+        let badge_rect = Rect::from_min_size(pos2(cmd_x, badge_y), vec2(68.0, badge_h));
+        painter.rect_filled(badge_rect, 4.0, accent);
         painter.text(
             badge_rect.center(),
             Align2::CENTER_CENTER,
             badge_label,
             FontId::monospace(10.0),
-            Color32::BLACK,
+            if theme.is_light() { Color32::WHITE } else { theme.bg },
         );
 
         let search_clip_rect = Rect::from_min_max(
-            pos2(cmd_x + 72.0, dock_rect.min.y),
+            pos2(cmd_x + 78.0, dock_rect.min.y),
             pos2(max_cmd_x, dock_rect.max.y),
         );
         let search_painter = painter.with_clip_rect(search_clip_rect);
         let query_display = format!("{}_", query);
         search_painter.text(
-            pos2(cmd_x + 72.0, cmd_y),
+            pos2(cmd_x + 78.0, cmd_y),
             Align2::LEFT_TOP,
             query_display,
             FontId::monospace(14.0),
@@ -160,7 +162,7 @@ pub fn render_bottom_dock(
             };
             let query_w = (query.len() + 2) as f32 * 8.5;
             search_painter.text(
-                pos2(cmd_x + 75.0 + query_w, cmd_y + 2.0),
+                pos2(cmd_x + 82.0 + query_w, cmd_y + 2.0),
                 Align2::LEFT_TOP,
                 count_info,
                 FontId::monospace(11.0),
@@ -169,25 +171,55 @@ pub fn render_bottom_dock(
         }
     } else {
         if let Some(badge) = mode_badge {
-            let badge_w = 10.0 + badge.len() as f32 * 6.5;
-            let badge_rect = Rect::from_min_size(pos2(cmd_x, cmd_y - 0.5), vec2(badge_w, 16.0));
-            let pill_bg = Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 18);
-            let pill_border = Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 45);
+            let font = FontId::monospace(10.5);
+            let layout = painter.layout_no_wrap(badge.to_string(), font.clone(), theme.highlight);
+            let badge_w = (layout.size().x + 20.0).max(64.0);
+            let badge_rect = Rect::from_min_size(pos2(cmd_x, badge_y), vec2(badge_w, badge_h));
+
+            let is_insert = badge == "INSERT";
+            let is_visual = badge.starts_with("VISUAL");
+
+            let (pill_bg, pill_stroke, text_color) = if is_insert {
+                (
+                    accent,
+                    Stroke::NONE,
+                    if theme.is_light() { Color32::WHITE } else { theme.bg },
+                )
+            } else if is_visual {
+                (
+                    Color32::from_rgb(224, 108, 117), // coral
+                    Stroke::NONE,
+                    Color32::WHITE,
+                )
+            } else if theme.is_light() {
+                (
+                    theme.surface().lerp_to_gamma(accent, 0.18),
+                    Stroke::new(1.0, Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 120)),
+                    accent,
+                )
+            } else {
+                (
+                    Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 38),
+                    Stroke::new(1.0, Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 95)),
+                    accent,
+                )
+            };
+
             painter.rect(
                 badge_rect,
-                3.0,
+                4.0,
                 pill_bg,
-                Stroke::new(1.0, pill_border),
+                pill_stroke,
                 egui::StrokeKind::Inside,
             );
             painter.text(
                 badge_rect.center(),
                 Align2::CENTER_CENTER,
                 badge,
-                FontId::monospace(9.5),
-                theme.text,
+                font,
+                text_color,
             );
-            text_x += badge_w + 10.0;
+            text_x = badge_rect.max.x + 12.0;
         }
 
         if !status_msg.is_empty() && (now - status_time) < 3.0 {

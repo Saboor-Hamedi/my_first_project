@@ -85,12 +85,7 @@ pub fn render_tab_bar(
     }
     let total_content_w = (current_offset - tab_gap + initial_pad).max(0.0);
 
-    let has_overflow = total_content_w > tab_bar_rect.width();
-    let scroll_btn_w = if has_overflow { 48.0 } else { 0.0 };
-    let visible_tab_area = Rect::from_min_max(
-        tab_bar_rect.min,
-        pos2(tab_bar_rect.max.x - scroll_btn_w, tab_bar_rect.max.y),
-    );
+    let visible_tab_area = tab_bar_rect;
     let viewport_w = visible_tab_area.width().max(1.0);
     let max_scroll = (total_content_w - viewport_w).max(0.0);
 
@@ -262,70 +257,6 @@ pub fn render_tab_bar(
                 [pos2(tick_x, tick_mid_y - 6.0), pos2(tick_x, tick_mid_y + 6.0)],
                 Stroke::new(1.0, theme.border()),
             );
-        }
-    }
-
-    // 5. Overflow chevron scroll navigation buttons — matching exact tab row height with zero gap
-    if has_overflow {
-        let btn_w = 24.0;
-        let left_btn_rect = Rect::from_min_max(
-            pos2(tab_bar_rect.max.x - btn_w * 2.0, tab_bar_rect.min.y),
-            pos2(tab_bar_rect.max.x - btn_w, tab_bar_rect.max.y),
-        );
-        let right_btn_rect = Rect::from_min_max(
-            pos2(tab_bar_rect.max.x - btn_w, tab_bar_rect.min.y),
-            tab_bar_rect.max,
-        );
-
-        let left_hover = mouse_in_bar && ui.rect_contains_pointer(left_btn_rect);
-        let right_hover = mouse_in_bar && ui.rect_contains_pointer(right_btn_rect);
-
-        // Vertical divider separating scroll buttons toolbar from tab strip
-        painter.line_segment(
-            [left_btn_rect.left_top(), left_btn_rect.left_bottom()],
-            Stroke::new(1.0, theme.border()),
-        );
-
-        // Left chevron button (same height as tabs, 0 gap)
-        let left_bg = if left_hover { theme.surface() } else { theme.bg };
-        painter.rect_filled(left_btn_rect, 0.0, left_bg);
-        painter.line_segment(
-            [left_btn_rect.right_top(), left_btn_rect.right_bottom()],
-            Stroke::new(1.0, theme.border()),
-        );
-        painter.text(
-            left_btn_rect.center(),
-            Align2::CENTER_CENTER,
-            "◀",
-            FontId::monospace(10.5),
-            if left_hover { theme.accent } else { theme.muted },
-        );
-
-        // Right chevron button (same height as tabs, 0 gap, matching top-right corner)
-        let right_bg = if right_hover { theme.surface() } else { theme.bg };
-        painter.rect(
-            right_btn_rect,
-            egui::CornerRadius { nw: 0, ne: 4, sw: 0, se: 0 },
-            right_bg,
-            Stroke::NONE,
-            egui::StrokeKind::Inside,
-        );
-        painter.text(
-            right_btn_rect.center(),
-            Align2::CENTER_CENTER,
-            "▶",
-            FontId::monospace(10.5),
-            if right_hover { theme.accent } else { theme.muted },
-        );
-
-        if primary_clicked && mouse_in_bar {
-            if let Some(pos) = mouse_pos {
-                if left_btn_rect.contains(pos) {
-                    *scroll_offset = (*scroll_offset - 160.0).max(0.0);
-                } else if right_btn_rect.contains(pos) {
-                    *scroll_offset = (*scroll_offset + 160.0).min(max_scroll);
-                }
-            }
         }
     }
 

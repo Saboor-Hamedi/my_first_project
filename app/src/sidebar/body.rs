@@ -127,11 +127,29 @@ pub fn render_sidebar_body(
                         });
                     }
 
-                    let display_title = if note.topic.len() > 18 {
-                        format!("{}...", &note.topic[..18])
-                    } else {
-                        note.topic.clone()
-                    };
+                    let text_x = pill_rect.min.x + 12.0;
+                    let text_right_limit = (rect.max.x - del_w - 6.0).min(sb_rect.max.x - 20.0);
+                    let avail_w = (text_right_limit - text_x).max(10.0);
+
+                    let font_id = FontId::proportional(12.5);
+                    let mut display_title = note.topic.clone();
+                    let full_w = ui.fonts(|f| f.layout_no_wrap(display_title.clone(), font_id.clone(), Color32::WHITE).size().x);
+                    if full_w > avail_w {
+                        let mut truncated = String::new();
+                        for ch in note.topic.chars() {
+                            let candidate = format!("{}...", truncated);
+                            let w = ui.fonts(|f| f.layout_no_wrap(candidate.clone(), font_id.clone(), Color32::WHITE).size().x);
+                            if w > avail_w {
+                                break;
+                            }
+                            truncated.push(ch);
+                        }
+                        display_title = if truncated.is_empty() {
+                            "…".to_string()
+                        } else {
+                            format!("{}…", truncated)
+                        };
+                    }
 
                     let title_color = if is_active {
                         theme.accent
@@ -143,11 +161,17 @@ pub fn render_sidebar_body(
                         theme.text.lerp_to_gamma(theme.muted, 0.35)
                     };
 
-                    ui.painter().text(
-                        pos2(pill_rect.min.x + 12.0, pill_rect.center().y),
+                    let row_clip = Rect::from_min_max(
+                        pos2(rect.min.x, rect.min.y),
+                        pos2(text_right_limit, rect.max.y),
+                    ).intersect(sb_rect);
+                    let row_painter = ui.painter().with_clip_rect(row_clip);
+
+                    row_painter.text(
+                        pos2(text_x, pill_rect.center().y),
                         Align2::LEFT_CENTER,
                         display_title,
-                        FontId::proportional(12.5),
+                        font_id,
                         title_color,
                     );
 

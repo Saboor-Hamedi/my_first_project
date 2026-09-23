@@ -1102,26 +1102,55 @@ impl App {
             }
         }
 
+        // Docked bottom terminal layout: splits editor_panel_rect vertically so terminal sits under editor & preview
+        let (top_panel_rect, bottom_terminal_rect, term_splitter_rect_opt) = if self.terminal_open && (self.mode == Mode::Normal || self.mode == Mode::Doc) {
+            let total_h = editor_panel_rect.height();
+            let divider_h = 10.0;
+            let tab_bar_h = crate::view_editor::TAB_ROW_H;
+            let min_top_h = tab_bar_h + 60.0;
+            let available_h = (total_h - divider_h).max(min_top_h + 80.0);
+            let min_h = 80.0f32;
+            let max_h = (total_h - divider_h - min_top_h).max(min_h);
+            let term_h = (available_h * self.terminal_split_ratio).clamp(min_h, max_h);
+
+            let top_split_y = (editor_panel_rect.max.y - term_h - divider_h).max(editor_panel_rect.min.y + min_top_h);
+            let top_rect = Rect::from_min_max(
+                editor_panel_rect.min,
+                pos2(editor_panel_rect.max.x, top_split_y),
+            );
+            let divider_rect = Rect::from_min_max(
+                pos2(editor_panel_rect.min.x, top_rect.max.y),
+                pos2(editor_panel_rect.max.x, top_rect.max.y + divider_h),
+            );
+            let bottom_rect = Rect::from_min_max(
+                pos2(editor_panel_rect.min.x, divider_rect.max.y),
+                editor_panel_rect.max,
+            );
+            (top_rect, Some(bottom_rect), Some(divider_rect))
+        } else {
+            (editor_panel_rect, None, None)
+        };
+
         // Detached Editor & Preview Panel Surface (subtle card background & border derived from theme)
         let is_preview_active = self.preview_open && self.mode == Mode::Normal;
         let divider_w = 11.0;
-        let available_w = (editor_panel_rect.width() - divider_w).max(200.0);
+        let available_w = (top_panel_rect.width() - divider_w).max(200.0);
         let min_w = 140.0f32;
         let max_w = (available_w - 140.0f32).max(min_w);
         let left_w = if is_preview_active {
             (available_w * self.split_ratio).clamp(min_w, max_w)
         } else {
-            editor_panel_rect.width()
+            top_panel_rect.width()
         };
 
         let ed_card_rect = Rect::from_min_max(
-            editor_panel_rect.min,
-            pos2(editor_panel_rect.min.x + left_w, editor_panel_rect.max.y),
+            top_panel_rect.min,
+            pos2(top_panel_rect.min.x + left_w, top_panel_rect.max.y),
         );
         let preview_card_rect = if is_preview_active {
             Some(Rect::from_min_max(
-                pos2(ed_card_rect.max.x + divider_w, editor_panel_rect.min.y),
-                editor_panel_rect.max,
+                pos2(ed_card_rect.max.x + divider_w, top_panel_rect.min.y),
+                top_panel_rect.max,
             ))
         } else {
             None
@@ -1259,34 +1288,6 @@ impl App {
             }
         }
 
-        // Docked bottom terminal layout: splits editor_panel_rect vertically so terminal sits under editor & preview
-        let (top_panel_rect, bottom_terminal_rect, term_splitter_rect_opt) = if self.terminal_open && (self.mode == Mode::Normal || self.mode == Mode::Doc) {
-            let total_h = editor_panel_rect.height();
-            let divider_h = 10.0;
-            let tab_bar_h = tab_bar_rect.height().max(30.0);
-            let min_top_h = tab_bar_h + 60.0;
-            let available_h = (total_h - divider_h).max(min_top_h + 80.0);
-            let min_h = 80.0f32;
-            let max_h = (total_h - divider_h - min_top_h).max(min_h);
-            let term_h = (available_h * self.terminal_split_ratio).clamp(min_h, max_h);
-
-            let top_split_y = (editor_panel_rect.max.y - term_h - divider_h).max(editor_panel_rect.min.y + min_top_h);
-            let top_rect = Rect::from_min_max(
-                editor_panel_rect.min,
-                pos2(editor_panel_rect.max.x, top_split_y),
-            );
-            let divider_rect = Rect::from_min_max(
-                pos2(editor_panel_rect.min.x, top_rect.max.y),
-                pos2(editor_panel_rect.max.x, top_rect.max.y + divider_h),
-            );
-            let bottom_rect = Rect::from_min_max(
-                pos2(editor_panel_rect.min.x, divider_rect.max.y),
-                editor_panel_rect.max,
-            );
-            (top_rect, Some(bottom_rect), Some(divider_rect))
-        } else {
-            (editor_panel_rect, None, None)
-        };
 
         // Body area below tab strip (for editor, gutter, preview, help)
         let body_rect = if self.mode == Mode::Normal || self.mode == Mode::Doc || self.mode == Mode::Help {
@@ -1568,26 +1569,35 @@ impl App {
                     }
 
                     let is_active = is_divider_hovered || self.is_dragging_terminal_splitter;
-                    let divider_color = if is_active {
-                        self.theme.accent
-                    } else {
-                        Color32::from_rgba_unmultiplied(self.theme.muted.r(), self.theme.muted.g(), self.theme.muted.b(), 65)
-                    };
                     let mid_y = divider_rect.center().y;
-                    painter.line_segment(
-                        [pos2(divider_rect.min.x, mid_y), pos2(divider_rect.max.x, mid_y)],
-                        Stroke::new(if is_active { 1.5 } else { 1.0 }, divider_color),
+                    let panel_left = divider_rect.min.x;
+                    let panel_right = divider_rect.max.x;
+                    if is_active {
+                        let line_rect = Rect::from_center_size(
+                            pos2((panel_left + panel_right) * 0.5, mid_y),
+                            vec2((panel_right - panel_left).max(0.0), 5.0),
+                        );
+                        painter.rect_filled(line_rect, 2.5, self.theme.accent);
+                    }
+                    // Tactile knob handle with grip dots (matching sidebar & preview splitters)
+                    let knob_w = 42.0;
+                    let knob_h = if is_active { 7.0 } else { 5.0 };
+                    let knob_rect = Rect::from_center_size(pos2((panel_left + panel_right) * 0.5, mid_y), vec2(knob_w, knob_h));
+                    painter.rect_filled(
+                        knob_rect,
+                        3.0,
+                        if is_active {
+                            self.theme.accent
+                        } else {
+                            Color32::from_rgba_unmultiplied(self.theme.muted.r(), self.theme.muted.g(), self.theme.muted.b(), 100)
+                        },
                     );
-                    let knob_w = 48.0;
-                    let knob_h = if is_active { 8.0 } else { 5.0 };
-                    let knob_rect = Rect::from_center_size(pos2(divider_rect.center().x, mid_y), vec2(knob_w, knob_h));
-                    painter.rect_filled(knob_rect, 3.5, divider_color);
 
                     let knob_mid = knob_rect.center();
                     let grip_color = self.theme.bg;
-                    for dx in [-8.0, -4.0, 0.0, 4.0, 8.0] {
+                    for dx in [-6.0, 0.0, 6.0] {
                         painter.line_segment(
-                            [pos2(knob_mid.x + dx, knob_mid.y - 2.0), pos2(knob_mid.x + dx, knob_mid.y + 2.0)],
+                            [pos2(knob_mid.x + dx, knob_mid.y - 1.5), pos2(knob_mid.x + dx, knob_mid.y + 1.5)],
                             Stroke::new(1.0, grip_color),
                         );
                     }
