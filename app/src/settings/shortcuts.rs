@@ -143,4 +143,47 @@ pub fn render_shortcuts_tab(
 
         cur_y += group_gap;
     }
+
+    // Keymap file info footer (pointing to keymap.json in settings directory)
+    let keymap_path = crate::vim::VimKeymap::get_keymap_path();
+    let footer_rect = Rect::from_min_size(pos2(p_origin.x, cur_y + 4.0), vec2(row_w, 24.0));
+    painter.rect(
+        footer_rect,
+        4.0,
+        Color32::from_rgb(16, 17, 22),
+        Stroke::new(1.0, Color32::from_rgb(32, 34, 44)),
+        egui::StrokeKind::Inside,
+    );
+    let path_display = keymap_path.to_string_lossy();
+    let short_path = if path_display.len() > 42 {
+        format!("...{}", &path_display[path_display.len().saturating_sub(40)..])
+    } else {
+        path_display.to_string()
+    };
+    painter.text(
+        pos2(footer_rect.min.x + 8.0, footer_rect.center().y),
+        Align2::LEFT_CENTER,
+        format!("⚙ Config: {}", short_path),
+        FontId::monospace(10.5),
+        theme.muted,
+    );
+    let open_btn = Rect::from_min_size(pos2(footer_rect.max.x - 94.0, footer_rect.min.y + 2.0), vec2(90.0, 20.0));
+    let open_hover = ui.rect_contains_pointer(open_btn);
+    painter.rect_filled(
+        open_btn,
+        3.0,
+        if open_hover { Color32::from_rgb(34, 38, 48) } else { Color32::from_rgb(22, 24, 32) },
+    );
+    painter.text(
+        open_btn.center(),
+        Align2::CENTER_CENTER,
+        "Open Folder",
+        FontId::monospace(10.5),
+        if open_hover { theme.accent } else { Color32::from_gray(180) },
+    );
+    if open_hover && ui.input(|i| i.pointer.primary_clicked()) {
+        if let Some(parent) = keymap_path.parent() {
+            let _ = std::process::Command::new("explorer").arg(parent).spawn();
+        }
+    }
 }

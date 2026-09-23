@@ -362,16 +362,7 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
                 return;
             }
             if !args.is_empty() {
-                app.active_note_title = args.to_string();
-                if let Some(id) = app.active_note_id {
-                    if let Some(ref db) = app.db {
-                        let _ = db.rename_note(id, args);
-                    }
-                    if let Some(n) = app.notes_list.iter_mut().find(|n| n.id == id) {
-                        n.topic = args.to_string();
-                    }
-                    app.set_status("Renamed", now);
-                }
+                app.rename_active_note(args, now);
             } else {
                 app.rename_open = true;
                 app.rename_input = app.active_note_title.clone();

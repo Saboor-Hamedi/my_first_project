@@ -22,22 +22,13 @@ pub fn render_bottom_dock(
     accent: Color32,
     muted: Color32,
 ) {
-    // Solid background dock with 5px rounded bottom corners matching window
+    // Detached modern bottom dock card with uniform 5px radius and subtle 1px border
     painter.rect(
         dock_rect,
-        egui::CornerRadius {
-            nw: 0,
-            ne: 0,
-            sw: 5,
-            se: 5,
-        },
-        Color32::from_rgb(10, 10, 13),
-        Stroke::NONE,
+        5.0,
+        Color32::from_rgb(12, 13, 16),
+        Stroke::new(1.0, Color32::from_rgb(32, 34, 40)),
         egui::StrokeKind::Inside,
-    );
-    painter.line_segment(
-        [dock_rect.left_top(), dock_rect.right_top()],
-        Stroke::new(1.0, Color32::from_rgb(26, 26, 32)),
     );
 
     let cmd_y = dock_rect.min.y + 9.0;

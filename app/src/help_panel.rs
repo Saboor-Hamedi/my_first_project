@@ -28,10 +28,10 @@ impl HelpCategory {
 
     pub fn title(&self) -> &'static str {
         match self {
-            Self::QuickStart => "QUICK START",
-            Self::VimMotions => "VIM MOTIONS",
-            Self::Commands => "COMMANDS (:)",
-            Self::Shortcuts => "SHORTCUTS",
+            Self::QuickStart => "⚡ Quick Start",
+            Self::VimMotions => "⌨ Vim Motions",
+            Self::Commands => "▶ Commands (:)",
+            Self::Shortcuts => "✨ Shortcuts",
         }
     }
 }
@@ -51,17 +51,12 @@ pub fn render_help_panel(
         should_close: false,
     };
 
-    // Dimmed backdrop
-    painter.rect_filled(bounds, 0.0, Color32::from_black_alpha(175));
-
-    // Handle Escape to dismiss
-    if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-        action.should_close = true;
-    }
+    // Dimmed backdrop with deep focus overlay
+    painter.rect_filled(bounds, 0.0, Color32::from_black_alpha(195));
 
     // Centered modal dimensions
-    let modal_w = 720.0f32.min(bounds.width() - 32.0);
-    let modal_h = 520.0f32.min(bounds.height() - 40.0);
+    let modal_w = 740.0f32.min(bounds.width() - 32.0);
+    let modal_h = 530.0f32.min(bounds.height() - 40.0);
     let modal_rect = Rect::from_center_size(bounds.center(), vec2(modal_w, modal_h));
 
     // Click outside to dismiss
@@ -73,52 +68,70 @@ pub fn render_help_panel(
         }
     }
 
-    // Modal frame: Frosted obsidian surface
+    // Modal frame: Deep frosted obsidian surface with subtle accent glow border
     painter.rect(
         modal_rect,
         8.0,
-        Color32::from_rgb(14, 16, 22),
-        Stroke::new(1.0, Color32::from_rgb(34, 38, 50)),
+        Color32::from_rgb(13, 15, 20),
+        Stroke::new(1.2, Color32::from_rgb(42, 46, 62)),
         egui::StrokeKind::Inside,
     );
 
     // ── Header Bar ──────────────────────────────────────────────────────────
-    let header_h = 56.0;
+    let header_h = 58.0;
     let header_rect = Rect::from_min_size(modal_rect.min, vec2(modal_w, header_h));
 
-    // Header title & badge
-    painter.text(
-        pos2(header_rect.min.x + 20.0, header_rect.min.y + 16.0),
-        Align2::LEFT_TOP,
-        "MIND FORGE GUIDANCE & HELP CENTER",
-        FontId::monospace(14.5),
-        accent,
+    // Accent mini badge
+    let badge_rect = Rect::from_min_size(
+        pos2(header_rect.min.x + 20.0, header_rect.min.y + 14.0),
+        vec2(132.0, 16.0),
+    );
+    painter.rect_filled(
+        badge_rect,
+        3.0,
+        Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 28),
     );
     painter.text(
-        pos2(header_rect.min.x + 20.0, header_rect.min.y + 35.0),
+        badge_rect.center(),
+        Align2::CENTER_CENTER,
+        "✦ HELP & GUIDANCE",
+        FontId::monospace(9.5),
+        accent,
+    );
+
+    // Header title & subtitle
+    painter.text(
+        pos2(header_rect.min.x + 160.0, header_rect.min.y + 13.0),
         Align2::LEFT_TOP,
-        "Comprehensive user guidance, Vim navigation reference, and command palette manual",
-        FontId::monospace(11.0),
+        "MINDFORGE HELP CENTER",
+        FontId::monospace(14.0),
+        Color32::WHITE,
+    );
+    painter.text(
+        pos2(header_rect.min.x + 20.0, header_rect.min.y + 36.0),
+        Align2::LEFT_TOP,
+        "Home-row Vim navigation • Essential commands • Workflows & shortcuts",
+        FontId::monospace(10.5),
         Color32::from_gray(140),
     );
 
-    // Top-right close button [✕] & Esc keycap
+    // Top-right close button [✕ Esc]
     let close_rect = Rect::from_min_size(
-        pos2(header_rect.max.x - 68.0, header_rect.min.y + 16.0),
-        vec2(48.0, 24.0),
+        pos2(header_rect.max.x - 72.0, header_rect.min.y + 16.0),
+        vec2(52.0, 24.0),
     );
     let close_hover = ui.rect_contains_pointer(close_rect);
     painter.rect(
         close_rect,
         4.0,
-        if close_hover { Color32::from_rgb(32, 36, 48) } else { Color32::from_rgb(22, 24, 32) },
-        Stroke::new(1.0, if close_hover { accent } else { Color32::from_rgb(44, 48, 62) }),
+        if close_hover { Color32::from_rgb(52, 24, 28) } else { Color32::from_rgb(22, 24, 32) },
+        Stroke::new(1.0, if close_hover { Color32::from_rgb(230, 80, 90) } else { Color32::from_rgb(44, 48, 62) }),
         egui::StrokeKind::Inside,
     );
     painter.text(
         close_rect.center(),
         Align2::CENTER_CENTER,
-        "esc ✕",
+        "✕ Esc",
         FontId::monospace(10.5),
         if close_hover { Color32::WHITE } else { Color32::from_gray(160) },
     );
@@ -139,33 +152,34 @@ pub fn render_help_panel(
     let mut tab_x = modal_rect.min.x + 20.0;
 
     for (idx, cat) in HelpCategory::ALL.iter().enumerate() {
-        let text_w = cat.title().len() as f32 * 7.5 + 24.0;
+        let text_w = cat.title().len() as f32 * 7.5 + 20.0;
         let tab_rect = Rect::from_min_size(pos2(tab_x, nav_y), vec2(text_w, tab_h));
         let is_selected = *active_tab == idx;
         let tab_hover = ui.rect_contains_pointer(tab_rect);
 
-        let bg = if is_selected {
-            Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 35)
-        } else if tab_hover {
-            Color32::from_rgb(24, 26, 34)
-        } else {
-            Color32::from_rgb(18, 20, 26)
-        };
-
-        painter.rect(
-            tab_rect,
-            5.0,
-            bg,
-            Stroke::new(1.0, if is_selected { accent } else { Color32::from_rgb(34, 38, 48) }),
-            egui::StrokeKind::Inside,
-        );
+        // Sleek active underline indicator (no chunky background box or borders)
+        if is_selected {
+            painter.line_segment(
+                [
+                    pos2(tab_rect.min.x + 4.0, tab_rect.max.y),
+                    pos2(tab_rect.max.x - 4.0, tab_rect.max.y),
+                ],
+                Stroke::new(2.0, accent),
+            );
+        }
 
         painter.text(
             tab_rect.center(),
             Align2::CENTER_CENTER,
             cat.title(),
-            FontId::monospace(11.0),
-            if is_selected { accent } else if tab_hover { Color32::WHITE } else { Color32::from_gray(170) },
+            FontId::monospace(11.5),
+            if is_selected {
+                accent
+            } else if tab_hover {
+                Color32::WHITE
+            } else {
+                Color32::from_gray(155)
+            },
         );
 
         if tab_hover && ui.input(|i| i.pointer.primary_clicked()) {
@@ -215,28 +229,29 @@ pub fn render_help_panel(
 
     let start_y = content_top - *scroll_y;
     match *active_tab {
-        0 => render_quickstart_content(&child_painter, content_rect, start_y, accent),
-        1 => render_vim_content(&child_painter, content_rect, start_y, accent),
-        2 => render_commands_content(&child_painter, content_rect, start_y, accent),
-        _ => render_shortcuts_content(&child_painter, content_rect, start_y, accent),
+        0 => render_quickstart_content(ui, &child_painter, content_rect, start_y, accent),
+        1 => render_vim_content(ui, &child_painter, content_rect, start_y, accent),
+        2 => render_commands_content(ui, &child_painter, content_rect, start_y, accent),
+        _ => render_shortcuts_content(ui, &child_painter, content_rect, start_y, accent),
     }
 
     // ── Footer Bar ──────────────────────────────────────────────────────────
-    let footer_y = modal_rect.max.y - 40.0;
+    let footer_y = modal_rect.max.y - 42.0;
     painter.line_segment(
         [pos2(modal_rect.min.x, footer_y), pos2(modal_rect.max.x, footer_y)],
         Stroke::new(1.0, Color32::from_rgb(26, 28, 36)),
     );
 
+    // Keyboard guidance pills
     painter.text(
-        pos2(modal_rect.min.x + 20.0, footer_y + 14.0),
+        pos2(modal_rect.min.x + 20.0, footer_y + 13.0),
         Align2::LEFT_TOP,
-        "Tip: Type :doc to read full guides, :set noshowcmd to disable the HUD, or Ctrl+, for Preferences.",
-        FontId::monospace(11.0),
-        Color32::from_gray(135),
+        "Tab / h,l: Switch Tab  •  j/k: Scroll  •  1-4: Jump  •  Esc: Close",
+        FontId::monospace(10.5),
+        Color32::from_gray(140),
     );
 
-    let pref_btn = Rect::from_min_size(pos2(modal_rect.max.x - 146.0, footer_y + 8.0), vec2(126.0, 24.0));
+    let pref_btn = Rect::from_min_size(pos2(modal_rect.max.x - 146.0, footer_y + 8.0), vec2(126.0, 26.0));
     let pref_hover = ui.rect_contains_pointer(pref_btn);
     painter.rect(
         pref_btn,
@@ -248,7 +263,7 @@ pub fn render_help_panel(
     painter.text(
         pref_btn.center(),
         Align2::CENTER_CENTER,
-        "⚙ Preferences",
+        "⚙ Settings (Ctrl+,)",
         FontId::monospace(10.5),
         if pref_hover { Color32::WHITE } else { Color32::from_gray(170) },
     );
@@ -261,7 +276,7 @@ pub fn render_help_panel(
 
 // ── Tab 0: Quick Start & Core Concepts ─────────────────────────────────────────
 
-fn render_quickstart_content(p: &egui::Painter, rect: Rect, mut y: f32, accent: Color32) {
+fn render_quickstart_content(ui: &egui::Ui, p: &egui::Painter, rect: Rect, mut y: f32, accent: Color32) {
     let sections: &[(&str, &[(&str, &str)])] = &[
         (
             "1. WRITING & MANAGING NOTES",
@@ -292,12 +307,12 @@ fn render_quickstart_content(p: &egui::Painter, rect: Rect, mut y: f32, accent: 
         ),
     ];
 
-    render_card_sections(p, rect, &mut y, sections, accent);
+    render_card_sections(ui, p, rect, &mut y, sections, accent);
 }
 
 // ── Tab 1: Vim Motions & Text Objects ──────────────────────────────────────────
 
-fn render_vim_content(p: &egui::Painter, rect: Rect, mut y: f32, accent: Color32) {
+fn render_vim_content(ui: &egui::Ui, p: &egui::Painter, rect: Rect, mut y: f32, accent: Color32) {
     let sections: &[(&str, &[(&str, &str)])] = &[
         (
             "HOME-ROW MOTIONS & OPERATORS",
@@ -330,12 +345,12 @@ fn render_vim_content(p: &egui::Painter, rect: Rect, mut y: f32, accent: Color32
         ),
     ];
 
-    render_card_sections(p, rect, &mut y, sections, accent);
+    render_card_sections(ui, p, rect, &mut y, sections, accent);
 }
 
 // ── Tab 2: Command Palette Reference ──────────────────────────────────────────
 
-fn render_commands_content(p: &egui::Painter, rect: Rect, mut y: f32, accent: Color32) {
+fn render_commands_content(ui: &egui::Ui, p: &egui::Painter, rect: Rect, mut y: f32, accent: Color32) {
     let sections: &[(&str, &[(&str, &str)])] = &[
         (
             "ESSENTIAL APP COMMANDS",
@@ -365,12 +380,12 @@ fn render_commands_content(p: &egui::Painter, rect: Rect, mut y: f32, accent: Co
         ),
     ];
 
-    render_card_sections(p, rect, &mut y, sections, accent);
+    render_card_sections(ui, p, rect, &mut y, sections, accent);
 }
 
 // ── Tab 3: Complete Keyboard Shortcuts ────────────────────────────────────────
 
-fn render_shortcuts_content(p: &egui::Painter, rect: Rect, mut y: f32, accent: Color32) {
+fn render_shortcuts_content(ui: &egui::Ui, p: &egui::Painter, rect: Rect, mut y: f32, accent: Color32) {
     let sections: &[(&str, &[(&str, &str)])] = &[
         (
             "GLOBAL SHORTCUTS",
@@ -400,12 +415,13 @@ fn render_shortcuts_content(p: &egui::Painter, rect: Rect, mut y: f32, accent: C
         ),
     ];
 
-    render_card_sections(p, rect, &mut y, sections, accent);
+    render_card_sections(ui, p, rect, &mut y, sections, accent);
 }
 
 // ── Helper: Section and Row Renderer ──────────────────────────────────────────
 
 fn render_card_sections(
+    ui: &egui::Ui,
     p: &egui::Painter,
     rect: Rect,
     y: &mut f32,
@@ -413,9 +429,9 @@ fn render_card_sections(
     accent: Color32,
 ) {
     let row_w = rect.width();
-    let row_h = 23.0;
-    let badge_w = 140.0;
-    let gap = 3.0;
+    let row_h = 24.0;
+    let key_col_w = 160.0;
+    let gap = 2.0;
 
     for (header, items) in sections.iter() {
         // Section header
@@ -435,37 +451,38 @@ fn render_card_sections(
 
         for (key, desc) in items.iter() {
             let row_rect = Rect::from_min_size(pos2(rect.min.x, *y), vec2(row_w, row_h));
+            let is_row_hover = ui.rect_contains_pointer(row_rect);
 
-            // Row background
-            p.rect_filled(row_rect, 4.0, Color32::from_rgb(17, 19, 26));
+            // Subtle hover tint only (no permanent chunky row background)
+            if is_row_hover {
+                p.rect_filled(row_rect, 3.0, Color32::from_rgb(22, 25, 34));
+            }
 
-            // Keycap badge
-            let badge_rect = Rect::from_min_size(
-                pos2(row_rect.min.x + 4.0, row_rect.min.y + 3.0),
-                vec2(badge_w, row_h - 6.0),
-            );
-            p.rect(
-                badge_rect,
-                3.0,
-                Color32::from_rgb(25, 28, 38),
-                Stroke::new(1.0, Color32::from_rgb(44, 48, 64)),
-                egui::StrokeKind::Inside,
-            );
+            // Keycap text: crisp, clean monospace (no bulky boxed badges)
             p.text(
-                badge_rect.center(),
-                Align2::CENTER_CENTER,
+                pos2(row_rect.min.x + 8.0, row_rect.center().y),
+                Align2::LEFT_CENTER,
                 *key,
-                FontId::monospace(10.5),
-                Color32::from_rgb(255, 255, 255),
+                FontId::monospace(11.5),
+                if is_row_hover { accent } else { Color32::from_rgb(225, 230, 242) },
+            );
+
+            // Subtle vertical separator
+            p.line_segment(
+                [
+                    pos2(row_rect.min.x + key_col_w, row_rect.min.y + 4.0),
+                    pos2(row_rect.min.x + key_col_w, row_rect.max.y - 4.0),
+                ],
+                Stroke::new(1.0, Color32::from_rgb(34, 38, 50)),
             );
 
             // Description text
             p.text(
-                pos2(row_rect.min.x + badge_w + 14.0, row_rect.center().y),
+                pos2(row_rect.min.x + key_col_w + 14.0, row_rect.center().y),
                 Align2::LEFT_CENTER,
                 *desc,
                 FontId::monospace(11.0),
-                Color32::from_gray(185),
+                if is_row_hover { Color32::WHITE } else { Color32::from_gray(175) },
             );
 
             *y += row_h + gap;

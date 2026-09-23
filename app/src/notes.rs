@@ -18,6 +18,7 @@ pub fn quick_save_active_note(app: &mut App, now: f64) {
                 n.body = content.clone();
             }
             app.save_active_note_id();
+            app.sync_active_tab();
             app.set_status("Saved", now);
         } else {
             let topic = if app.active_note_title.trim().is_empty() {
@@ -42,6 +43,7 @@ pub fn quick_save_active_note(app: &mut App, now: f64) {
                         created_at: dt,
                     },
                 );
+                app.sync_active_tab();
                 app.set_status("Saved", now);
             }
         }
@@ -102,7 +104,32 @@ pub fn rename_active_note(app: &mut App, new_title: &str, now: f64) {
         if let Some(n) = app.notes_list.iter_mut().find(|n| n.id == id) {
             n.topic = trimmed.clone();
         }
+        app.sync_active_tab();
         app.set_status("Renamed", now);
+    } else {
+        // Active note was newly created (e.g. via Ctrl+N) and not yet stored in SQLite.
+        // Save it now so it immediately exists in the DB and appears in the sidebar!
+        if let Some(ref db) = app.db {
+            let dt = Local::now().naive_local();
+            let content = app.ed.text();
+            if let Ok(new_id) = db.add_note(&trimmed, &content, None, dt) {
+                app.active_note_id = Some(new_id);
+                app.save_active_note_id();
+                app.pending_created += 1;
+                app.notes_list.insert(
+                    0,
+                    Note {
+                        id: new_id,
+                        topic: trimmed.clone(),
+                        body: content,
+                        struggled_with: None,
+                        created_at: dt,
+                    },
+                );
+                app.sync_active_tab();
+                app.set_status("Saved note", now);
+            }
+        }
     }
 }
 

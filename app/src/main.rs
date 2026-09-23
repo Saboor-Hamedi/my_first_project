@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
-mod bottom_bar;
+mod statusbar;
 mod caret;
 mod commands;
 mod db_worker;
@@ -9,6 +9,7 @@ mod editor;
 mod fuzzy;
 mod hybrid;
 mod input;
+pub mod layout;
 mod modals;
 mod mode;
 mod notes;

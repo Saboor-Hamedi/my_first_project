@@ -507,7 +507,6 @@ fn test_end_visual_reaches_last_char() {
 }
 
 #[test]
-#[test]
 fn test_end_visual_reaches_end_of_line() {
     let mut ed = Editor::new();
     ed.insert_str("hello");

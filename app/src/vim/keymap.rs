@@ -189,6 +189,164 @@ impl VimKeymap {
     pub fn bind_visual(&mut self, stroke: KeyStroke, action: VimAction) {
         self.visual.insert(stroke, action);
     }
+
+    /// Resolves the filesystem path to the user's `keymap.json` file.
+    pub fn get_keymap_path() -> std::path::PathBuf {
+        if let Some(proj) = directories::ProjectDirs::from("com", "mindforge", "mindforge") {
+            proj.config_dir().join("keymap.json")
+        } else {
+            std::path::PathBuf::from("keymap.json")
+        }
+    }
+
+    /// Loads custom keybindings from `keymap.json` if it exists, or creates the default template.
+    pub fn load_or_init() -> Self {
+        let mut keymap = Self::new_standard();
+        let path = Self::get_keymap_path();
+
+        if path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                if let Ok(cfg) = serde_json::from_str::<KeymapConfigFile>(&content) {
+                    for (k, v) in cfg.normal {
+                        if let (Some(stroke), Some(act)) = (parse_key_stroke(&k), parse_action(&v)) {
+                            keymap.normal.insert(stroke, act);
+                        }
+                    }
+                    for (k, v) in cfg.visual {
+                        if let (Some(stroke), Some(act)) = (parse_key_stroke(&k), parse_action(&v)) {
+                            keymap.visual.insert(stroke, act);
+                        }
+                    }
+                }
+            }
+        } else {
+            // Write default keymap.json so user can easily inspect and edit their keys
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let template = generate_default_keymap_json();
+            let _ = std::fs::write(&path, template);
+        }
+
+        keymap
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+struct KeymapConfigFile {
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub normal: HashMap<String, String>,
+    #[serde(default)]
+    pub visual: HashMap<String, String>,
+}
+
+fn parse_key_stroke(s: &str) -> Option<KeyStroke> {
+    let trimmed = s.trim();
+    if trimmed.chars().count() == 1 {
+        return Some(KeyStroke::Char(trimmed.chars().next().unwrap()));
+    }
+    match trimmed.to_lowercase().as_str() {
+        "ctrl+r" => Some(KeyStroke::Key { key: Key::R, ctrl: true }),
+        "ctrl+d" => Some(KeyStroke::Key { key: Key::D, ctrl: true }),
+        "enter" => Some(KeyStroke::Key { key: Key::Enter, ctrl: false }),
+        "space" => Some(KeyStroke::Key { key: Key::Space, ctrl: false }),
+        "backspace" => Some(KeyStroke::Key { key: Key::Backspace, ctrl: false }),
+        "delete" => Some(KeyStroke::Key { key: Key::Delete, ctrl: false }),
+        "left" => Some(KeyStroke::Key { key: Key::ArrowLeft, ctrl: false }),
+        "right" => Some(KeyStroke::Key { key: Key::ArrowRight, ctrl: false }),
+        "up" => Some(KeyStroke::Key { key: Key::ArrowUp, ctrl: false }),
+        "down" => Some(KeyStroke::Key { key: Key::ArrowDown, ctrl: false }),
+        "home" => Some(KeyStroke::Key { key: Key::Home, ctrl: false }),
+        "end" => Some(KeyStroke::Key { key: Key::End, ctrl: false }),
+        _ => None,
+    }
+}
+
+fn parse_action(s: &str) -> Option<VimAction> {
+    match s.trim().to_lowercase().as_str() {
+        "left" => Some(VimAction::Motion(VimMotion::Left)),
+        "right" => Some(VimAction::Motion(VimMotion::Right)),
+        "up" | "upvisual" => Some(VimAction::Motion(VimMotion::UpVisual)),
+        "down" | "downvisual" => Some(VimAction::Motion(VimMotion::DownVisual)),
+        "wordforward" => Some(VimAction::Motion(VimMotion::WordForward)),
+        "wordbackward" => Some(VimAction::Motion(VimMotion::WordBackward)),
+        "linestart" => Some(VimAction::Motion(VimMotion::LineStart)),
+        "lineend" => Some(VimAction::Motion(VimMotion::LineEnd)),
+        "bufferstart" => Some(VimAction::Motion(VimMotion::BufferStart)),
+        "bufferend" => Some(VimAction::Motion(VimMotion::BufferEnd)),
+        "deletechar" => Some(VimAction::DeleteChar),
+        "undo" => Some(VimAction::Undo),
+        "redo" => Some(VimAction::Redo),
+        "paste" | "pasteafter" => Some(VimAction::Paste { before: false }),
+        "pastebefore" => Some(VimAction::Paste { before: true }),
+        "insert" => Some(VimAction::EnterInsert(InsertPosition::AtCursor)),
+        "append" => Some(VimAction::EnterInsert(InsertPosition::AfterCursor)),
+        "insertlinestart" => Some(VimAction::EnterInsert(InsertPosition::LineStart)),
+        "appendlineend" => Some(VimAction::EnterInsert(InsertPosition::LineEnd)),
+        "openbelow" => Some(VimAction::EnterInsert(InsertPosition::LineBelow)),
+        "openabove" => Some(VimAction::EnterInsert(InsertPosition::LineAbove)),
+        "visual" => Some(VimAction::EnterVisual { is_line: false }),
+        "visualline" => Some(VimAction::EnterVisual { is_line: true }),
+        "search" => Some(VimAction::EnterSearch { backward: false }),
+        "searchbackward" => Some(VimAction::EnterSearch { backward: true }),
+        "repeatsearch" => Some(VimAction::RepeatSearch { reverse: false }),
+        "repeatsearchbackward" => Some(VimAction::RepeatSearch { reverse: true }),
+        "delete" => Some(VimAction::Operator(VimOperator::Delete)),
+        "yank" => Some(VimAction::Operator(VimOperator::Yank)),
+        "change" => Some(VimAction::Operator(VimOperator::Change)),
+        "duplicateline" => Some(VimAction::DuplicateLine),
+        _ => None,
+    }
+}
+
+fn generate_default_keymap_json() -> String {
+    r#"{
+  "description": "MindForge Vim Keybindings. Edit this file to customize your keys. Restart or reload to apply.",
+  "normal": {
+    "h": "Left",
+    "j": "DownVisual",
+    "k": "UpVisual",
+    "l": "Right",
+    "w": "WordForward",
+    "b": "WordBackward",
+    "0": "LineStart",
+    "$": "LineEnd",
+    "G": "BufferEnd",
+    "x": "DeleteChar",
+    "u": "Undo",
+    "p": "Paste",
+    "P": "PasteBefore",
+    "i": "Insert",
+    "a": "Append",
+    "I": "InsertLineStart",
+    "A": "AppendLineEnd",
+    "o": "OpenBelow",
+    "O": "OpenAbove",
+    "v": "Visual",
+    "V": "VisualLine",
+    "/": "Search",
+    "?": "SearchBackward",
+    "n": "RepeatSearch",
+    "N": "RepeatSearchBackward"
+  },
+  "visual": {
+    "h": "Left",
+    "j": "DownVisual",
+    "k": "UpVisual",
+    "l": "Right",
+    "w": "WordForward",
+    "b": "WordBackward",
+    "0": "LineStart",
+    "$": "LineEnd",
+    "G": "BufferEnd",
+    "y": "Yank",
+    "d": "Delete",
+    "x": "Delete"
+  }
+}
+"#.to_string()
 }
 
 /// Helper mapping delimiter character to `TextObjectKind`.

@@ -35,7 +35,7 @@ pub fn render_editor_body(
     let visible_h = editor_rect.height();
 
     let total_content_h = visual_lines.len() as f32 * lh;
-    let max_scroll = (total_content_h - visible_h + lh * 4.0).max(0.0);
+    let max_scroll = (total_content_h + 16.0 - visible_h + lh * 4.0).max(0.0);
 
     // Mouse wheel scrolling: prioritize smooth scroll delta, fallback to scaled raw delta
     if !block_scroll {
@@ -60,8 +60,8 @@ pub fn render_editor_body(
         0.0
     };
 
-    let pad_x = 6.0;
-    let pad_y = 2.0;
+    let pad_x = 5.0;
+    let pad_y = 8.0;
     let text_left = editor_rect.min.x + gutter_w + pad_x;
     let ed_origin = pos2(text_left, editor_rect.min.y - *scroll_y + pad_y);
 
@@ -94,9 +94,9 @@ pub fn render_editor_body(
 
     // Auto-scroll / caret follow: ONLY when user is typing or navigating by keyboard!
     if typed {
-        // Pin smoothly at bottom edge when moving downwards
-        if caret_y_in_content + lh > *scroll_y + visible_h {
-            *scroll_y = (caret_y_in_content + lh - visible_h).clamp(0.0, max_scroll);
+        // Pin smoothly at bottom edge when moving downwards (accounting for bottom padding)
+        if caret_y_in_content + lh + pad_y > *scroll_y + visible_h {
+            *scroll_y = (caret_y_in_content + lh + pad_y - visible_h).clamp(0.0, max_scroll);
         }
         // Pin smoothly at top edge when moving upwards
         if caret_y_in_content < *scroll_y {
@@ -115,11 +115,16 @@ pub fn render_editor_body(
         65,
     );
 
-    // Caret placement and animation
+    // Caret placement and animation (allow living caret embers/flames to extend into the 5px top gap without clipping)
+    let caret_clip = Rect::from_min_max(
+        pos2(editor_rect.min.x, editor_rect.min.y - 5.0),
+        editor_rect.max,
+    );
+    let caret_painter = painter.with_clip_rect(caret_clip);
     let caret_x = ed_origin.x + col as f32 * cw;
     let target = pos2(caret_x, ed_origin.y + row as f32 * lh);
     caret.update(dt, target, typed, now, cw, lh);
-    caret.paint(&editor_painter, cw, lh, now, theme.accent);
+    caret.paint(&caret_painter, cw, lh, now, theme.accent);
 
     let is_block = caret.kind == crate::caret::CaretKind::Block;
 
@@ -223,16 +228,7 @@ pub fn render_editor_body(
         );
         let gutter_painter = painter.with_clip_rect(gutter_rect);
 
-        // Gutter background: cleanly tinted with theme.muted to seamlessly harmonize with ANY theme
-        let gutter_bg = Color32::from_rgba_unmultiplied(
-            theme.muted.r(),
-            theme.muted.g(),
-            theme.muted.b(),
-            12,
-        );
-        gutter_painter.rect_filled(gutter_rect, 0.0, gutter_bg);
-
-        // Right divider line separating line numbers from text
+        // Right divider line separating line numbers from text (gutter shares panel surface)
         gutter_painter.line_segment(
             [gutter_rect.right_top(), gutter_rect.right_bottom()],
             Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 35)),

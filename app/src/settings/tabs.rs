@@ -95,22 +95,25 @@ pub fn render_setting_tabs(
         let is_sel = *active_tab == tab;
         let hovered = ui.rect_contains_pointer(item_rect);
 
-        // Background — hover only, no filled card on selected
-        if hovered && !is_sel {
+        // Background card
+        if is_sel {
             painter.rect_filled(
                 item_rect,
                 6.0,
-                Color32::from_rgb(18, 20, 26),
+                Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 26),
             );
-        }
-
-        if is_sel {
-            // Left accent border only (no background card)
+            // Left accent border bar
             let bar = Rect::from_min_size(
-                pos2(item_rect.min.x + 2.0, item_rect.min.y + 8.0),
-                vec2(3.5, item_rect.height() - 16.0),
+                pos2(item_rect.min.x + 2.0, item_rect.min.y + 7.0),
+                vec2(3.5, item_rect.height() - 14.0),
             );
             painter.rect_filled(bar, 2.0, accent);
+        } else if hovered {
+            painter.rect_filled(
+                item_rect,
+                6.0,
+                Color32::from_rgb(20, 22, 28),
+            );
         }
 
         if hovered && ui.input(|inp| inp.pointer.primary_clicked()) {

@@ -427,3 +427,14 @@ fn test_vim_operator_remap_via_keymap() {
     assert!(vim.handle_char(&mut ed, &[], 'w'));
     assert_eq!(ed.text(), "world", "remapped jw must delete a word like dw");
 }
+
+#[test]
+fn test_keymap_json_default_template() {
+    let keymap = VimKeymap::load_or_init();
+    // Default Vim keymap must have navigation keys mapped
+    assert!(keymap.lookup_normal(&'j'.into()).is_some());
+    assert!(keymap.lookup_normal(&'k'.into()).is_some());
+    assert!(keymap.lookup_normal(&'w'.into()).is_some());
+    assert!(keymap.lookup_normal(&'0'.into()).is_some());
+    assert!(keymap.lookup_normal(&'$'.into()).is_some());
+}

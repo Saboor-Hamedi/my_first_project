@@ -1,6 +1,6 @@
 //! Main application controller, state management, and egui frame loop.
 
-use crate::bottom_bar::render_bottom_dock;
+use crate::statusbar::render_bottom_dock;
 use crate::caret::{Caret, CaretKind};
 use crate::db_worker::{spawn_db_worker, DbMsg};
 use crate::editor::{Editor, VisualLine};
@@ -15,7 +15,7 @@ use crate::settings::{render_setting_panel, render_setting_tabs, SettingPanelAct
 use crate::sidebar::{render_sidebar, SidebarAction};
 use crate::sound::{SoundEngine, SoundProfile};
 use crate::theme::{Theme, ThemeKind};
-use crate::view_editor::{render_editor_body, render_editor_header, render_markdown_preview};
+use crate::view_editor::{render_editor_body, render_markdown_preview};
 use crate::view_stats::render_stats;
 use crate::vim::VimEngine;
 use crate::updater::UpdateManager;
@@ -40,6 +40,15 @@ pub fn default_backup_dir() -> std::path::PathBuf {
     }
 }
 
+#[derive(Clone)]
+pub struct OpenNote {
+    pub id: i64,
+    pub title: String,
+    pub editor: Editor,
+    pub scroll_y: f32,
+    pub is_dirty: bool,
+}
+
 pub struct App {
     pub ed: Editor,
     pub doc_ed: Editor,
@@ -61,9 +70,14 @@ pub struct App {
 
     // Sleek floating sidebar (Ctrl+B)
     pub sidebar_open: bool,
+    pub sidebar_focused: bool,
+    pub sidebar_selected_idx: usize,
+    pub sidebar_width: f32,
+    pub is_dragging_sidebar_splitter: bool,
 
     // Two-column Preferences modal (Ctrl+,)
     pub settings_open: bool,
+    pub settings_just_opened: bool,
     pub active_setting_tab: SettingTab,
     pub backup_dir: String,
     pub last_backup_status: Option<String>,
@@ -96,6 +110,14 @@ pub struct App {
     pub notes_list: Vec<Note>,
     pub sidebar_notes_limit: usize,
     pub total_notes_count: usize,
+
+    // Multi-note & Documentation Tabs
+    pub open_notes: Vec<OpenNote>,
+    pub active_tab: usize,
+    pub open_doc_tabs: Vec<usize>,
+    pub active_doc_tab: usize,
+    pub tab_scroll_offset: f32,
+    pub doc_tab_scroll_offset: f32,
 
     // Scrolling & auto-save
     pub scroll_y: f32,
@@ -132,6 +154,8 @@ pub struct App {
     // In-app auto-updater
     pub updater: UpdateManager,
     pub active_doc_idx: usize,
+    pub doc_sidebar_focused: bool,
+    pub doc_selected_idx: usize,
 
     // Webscan (:scan & :scans) state
     pub prev_mode_before_scan: Mode,
@@ -170,7 +194,12 @@ impl App {
             status_time: 0.0,
             first_frame: true,
             sidebar_open: false,
+            sidebar_focused: false,
+            sidebar_selected_idx: 0,
+            sidebar_width: crate::layout::DEFAULT_SIDEBAR_W,
+            is_dragging_sidebar_splitter: false,
             settings_open: false,
+            settings_just_opened: false,
             active_setting_tab: SettingTab::Carets,
             backup_dir: default_backup_dir().to_string_lossy().to_string(),
             last_backup_status: None,
@@ -193,6 +222,12 @@ impl App {
             notes_list: Vec::new(),
             sidebar_notes_limit: 50,
             total_notes_count: 0,
+            open_notes: Vec::new(),
+            active_tab: 0,
+            open_doc_tabs: vec![0],
+            active_doc_tab: 0,
+            tab_scroll_offset: 0.0,
+            doc_tab_scroll_offset: 0.0,
             scroll_y: 0.0,
             doc_scroll_y: 0.0,
             preview_scroll_y: 0.0,
@@ -219,6 +254,8 @@ impl App {
             lifetime_activity: (0, 0, 0, 0),
             updater: UpdateManager::new(),
             active_doc_idx: 0,
+            doc_sidebar_focused: true,
+            doc_selected_idx: 0,
             prev_mode_before_scan: Mode::Normal,
             scan_in_progress: None,
             scan_rx: None,
@@ -233,6 +270,34 @@ impl App {
 
         app.load_settings();
         app.reload_db_state();
+        if app.open_notes.is_empty() {
+            for (idx, note) in app.notes_list.iter().take(3).enumerate() {
+                let clean = note.body.replace("\r\n", "\n").replace('\r', "\n");
+                let mut ed = Editor::new();
+                ed.set_text(&clean);
+                if Some(note.id) == app.active_note_id {
+                    ed = app.ed.clone();
+                    app.active_tab = idx;
+                }
+                app.open_notes.push(OpenNote {
+                    id: note.id,
+                    title: note.topic.clone(),
+                    editor: ed,
+                    scroll_y: 0.0,
+                    is_dirty: false,
+                });
+            }
+            if app.open_notes.is_empty() {
+                app.open_notes.push(OpenNote {
+                    id: app.active_note_id.unwrap_or(0),
+                    title: app.active_note_title.clone(),
+                    editor: app.ed.clone(),
+                    scroll_y: app.scroll_y,
+                    is_dirty: app.is_dirty,
+                });
+                app.active_tab = 0;
+            }
+        }
         app
     }
 
@@ -272,6 +337,11 @@ impl App {
                     self.cell = None;
                 }
             }
+            if let Ok(Some(sw)) = db.get_setting("sidebar_w") {
+                if let Ok(val) = sw.parse::<f32>() {
+                    self.sidebar_width = val.clamp(crate::layout::MIN_SIDEBAR_W, crate::layout::MAX_SIDEBAR_W);
+                }
+            }
             if let Ok(Some(b)) = db.get_setting("backup_dir") {
                 self.backup_dir = b;
             }
@@ -290,6 +360,9 @@ impl App {
             }
             if let Ok(Some(p)) = db.get_setting("preview") {
                 self.preview_open = p == "on" || p == "true";
+            }
+            if let Ok(Some(sb)) = db.get_setting("sidebar") {
+                self.sidebar_open = sb == "on" || sb == "true";
             }
         }
     }
@@ -338,6 +411,187 @@ impl App {
                 }
             }
         }
+    }
+
+    pub fn sync_active_tab(&mut self) {
+        if let Some(tab) = self.open_notes.get_mut(self.active_tab) {
+            tab.title = self.active_note_title.clone();
+            tab.is_dirty = self.is_dirty;
+            tab.scroll_y = self.scroll_y;
+            if let Some(id) = self.active_note_id {
+                tab.id = id;
+            }
+        }
+    }
+
+    pub fn switch_tab(&mut self, new_idx: usize, now: f64) {
+        if self.open_notes.is_empty() {
+            return;
+        }
+        let new_idx = new_idx.min(self.open_notes.len() - 1);
+        if new_idx == self.active_tab {
+            return;
+        }
+
+        // 1. Sync current state into the active tab before switching
+        if let Some(cur) = self.open_notes.get_mut(self.active_tab) {
+            cur.editor = self.ed.clone();
+            cur.title = self.active_note_title.clone();
+            cur.scroll_y = self.scroll_y;
+            cur.is_dirty = self.is_dirty;
+            if let Some(cur_id) = self.active_note_id {
+                cur.id = cur_id;
+                if let Some(ref db) = self.db {
+                    let _ = db.set_setting(&format!("note_caret_{}", cur_id), &self.ed.cur.to_string());
+                    let _ = db.set_setting(&format!("note_scroll_{}", cur_id), &self.scroll_y.to_string());
+                }
+            }
+        }
+
+        // 2. Set new active tab index
+        self.active_tab = new_idx;
+
+        // 3. Load target tab state
+        let target = &self.open_notes[self.active_tab];
+        self.active_note_id = if target.id > 0 { Some(target.id) } else { None };
+        self.active_note_title = target.title.clone();
+        self.ed = target.editor.clone();
+        self.scroll_y = target.scroll_y;
+        self.is_dirty = target.is_dirty;
+        self.save_active_note_id();
+        self.mode = Mode::Normal;
+        self.vim.set_mode(crate::vim::VimSubMode::Normal, &mut self.ed);
+        let msg = format!("Switched to {}", self.active_note_title);
+        self.set_status(&msg, now);
+    }
+
+    pub fn close_tab(&mut self, idx: usize, now: f64) {
+        if idx >= self.open_notes.len() {
+            return;
+        }
+        if idx == self.active_tab && self.is_dirty {
+            self.quick_save_active_note(now);
+        }
+
+        self.open_notes.remove(idx);
+
+        if self.open_notes.is_empty() {
+            self.active_note_id = None;
+            self.active_note_title = "Untitled Note".to_string();
+            self.ed.clear();
+            self.is_dirty = false;
+            self.scroll_y = 0.0;
+            self.open_notes.push(OpenNote {
+                id: 0,
+                title: "Untitled Note".to_string(),
+                editor: self.ed.clone(),
+                scroll_y: 0.0,
+                is_dirty: false,
+            });
+            self.active_tab = 0;
+            self.save_active_note_id();
+        } else {
+            if self.active_tab >= self.open_notes.len() {
+                self.active_tab = self.open_notes.len() - 1;
+            } else if idx < self.active_tab {
+                self.active_tab = self.active_tab.saturating_sub(1);
+            }
+            let target = &self.open_notes[self.active_tab];
+            self.active_note_id = if target.id > 0 { Some(target.id) } else { None };
+            self.active_note_title = target.title.clone();
+            self.ed = target.editor.clone();
+            self.scroll_y = target.scroll_y;
+            self.is_dirty = target.is_dirty;
+            self.save_active_note_id();
+        }
+    }
+
+    pub fn switch_doc_tab(&mut self, new_idx: usize, now: f64) {
+        if self.open_doc_tabs.is_empty() {
+            return;
+        }
+        let new_idx = new_idx.min(self.open_doc_tabs.len() - 1);
+        self.active_doc_tab = new_idx;
+        let doc_idx = self.open_doc_tabs[self.active_doc_tab];
+        self.load_doc_by_index(doc_idx, now);
+    }
+
+    pub fn close_doc_tab(&mut self, idx: usize, now: f64) {
+        if self.open_doc_tabs.len() <= 1 || idx >= self.open_doc_tabs.len() {
+            return;
+        }
+        self.open_doc_tabs.remove(idx);
+        if self.active_doc_tab >= self.open_doc_tabs.len() {
+            self.active_doc_tab = self.open_doc_tabs.len() - 1;
+        } else if idx < self.active_doc_tab {
+            self.active_doc_tab = self.active_doc_tab.saturating_sub(1);
+        }
+        let doc_idx = self.open_doc_tabs[self.active_doc_tab];
+        self.load_doc_by_index(doc_idx, now);
+    }
+
+    /// Loads a note by id into the editor, switching tab if open or adding a new tab.
+    pub fn load_note(&mut self, id: i64, topic: String, body: String, now: f64) {
+        if let Some(idx) = self.open_notes.iter().position(|n| n.id == id) {
+            self.switch_tab(idx, now);
+            return;
+        }
+
+        // Save current active tab before switching
+        if let Some(cur) = self.open_notes.get_mut(self.active_tab) {
+            cur.editor = self.ed.clone();
+            cur.title = self.active_note_title.clone();
+            cur.scroll_y = self.scroll_y;
+            cur.is_dirty = self.is_dirty;
+            if let Some(cur_id) = self.active_note_id {
+                cur.id = cur_id;
+                if let Some(ref db) = self.db {
+                    let _ = db.set_setting(&format!("note_caret_{}", cur_id), &self.ed.cur.to_string());
+                    let _ = db.set_setting(&format!("note_scroll_{}", cur_id), &self.scroll_y.to_string());
+                }
+            }
+        }
+
+        let clean = body.replace("\r\n", "\n").replace('\r', "\n");
+        self.active_note_id = Some(id);
+        self.save_active_note_id();
+        self.active_note_title = topic.clone();
+        self.ed.set_text(&clean);
+        let saved_cur = self.db.as_ref()
+            .and_then(|db| db.get_setting(&format!("note_caret_{}", id)).ok().flatten())
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(0);
+        self.ed.cur = saved_cur.min(self.ed.buf.len());
+        let saved_scroll = self.db.as_ref()
+            .and_then(|db| db.get_setting(&format!("note_scroll_{}", id)).ok().flatten())
+            .and_then(|s| s.parse::<f32>().ok())
+            .unwrap_or(0.0);
+        self.scroll_y = saved_scroll;
+        self.mode = Mode::Normal;
+        self.vim.set_mode(crate::vim::VimSubMode::Normal, &mut self.ed);
+        self.is_dirty = false;
+
+        // If existing single tab was an untouched empty Untitled Note, replace it
+        if self.open_notes.len() == 1 && self.open_notes[0].id == 0 && !self.open_notes[0].is_dirty {
+            self.open_notes[0] = OpenNote {
+                id,
+                title: topic,
+                editor: self.ed.clone(),
+                scroll_y: saved_scroll,
+                is_dirty: false,
+            };
+            self.active_tab = 0;
+        } else {
+            self.open_notes.push(OpenNote {
+                id,
+                title: topic,
+                editor: self.ed.clone(),
+                scroll_y: saved_scroll,
+                is_dirty: false,
+            });
+            self.active_tab = self.open_notes.len() - 1;
+        }
+        self.set_status("Opened note", now);
     }
 
     pub fn reload_db_state(&mut self) {
@@ -465,6 +719,9 @@ impl App {
 
     pub fn open_docs_mode(&mut self, now: f64) {
         self.mode = Mode::Doc;
+        self.sidebar_open = true;
+        self.doc_sidebar_focused = true;
+        self.doc_selected_idx = self.active_doc_idx;
         let docs = crate::docs::get_docs();
         let idx = self.active_doc_idx.min(docs.len().saturating_sub(1));
         if let Some(doc) = docs.get(idx) {
@@ -479,6 +736,13 @@ impl App {
 
     pub fn load_doc_by_index(&mut self, idx: usize, now: f64) {
         self.active_doc_idx = idx;
+        self.doc_selected_idx = idx;
+        if !self.open_doc_tabs.contains(&idx) {
+            self.open_doc_tabs.push(idx);
+            self.active_doc_tab = self.open_doc_tabs.len() - 1;
+        } else {
+            self.active_doc_tab = self.open_doc_tabs.iter().position(|&d| d == idx).unwrap_or(0);
+        }
         self.open_docs_mode(now);
     }
 
@@ -553,87 +817,260 @@ impl App {
             egui::StrokeKind::Inside,
         );
 
-        // Bottom dock rectangle
-        let cmd_bar_height = 36.0;
-        let cmd_bar_rect = Rect::from_min_max(
-            pos2(bounds.min.x, bounds.max.y - cmd_bar_height),
-            bounds.max,
-        );
+        let layout = crate::layout::compute_app_layout(bounds, self.sidebar_open, self.sidebar_width);
+        let titlebar_rect = layout.titlebar_rect;
+        let cmd_bar_rect = layout.cmd_bar_rect;
+        let editor_panel_rect = layout.editor_panel_rect;
 
-        let sidebar_w = 230.0;
-        let sidebar_gap_x = 10.0;
-        let sidebar_top = bounds.min.y + 12.0;
-        let sidebar_bottom = cmd_bar_rect.min.y - 8.0;
-
-        let is_preview_active = self.preview_open && self.mode == Mode::Normal;
-
-        // Snug 8px padding: consistent between sidebar and line numbers, and window edge and line numbers
-        let left_padding = 8.0;
-        let (content_left_margin, doc_sidebar_rect) = if self.mode == Mode::Doc {
-            let sb_rect = Rect::from_min_max(
-                pos2(bounds.min.x + sidebar_gap_x, sidebar_top),
-                pos2(bounds.min.x + sidebar_gap_x + sidebar_w, sidebar_bottom),
-            );
-            (sidebar_gap_x + sidebar_w + left_padding, Some(sb_rect))
-        } else if self.sidebar_open {
-            (sidebar_gap_x + sidebar_w + left_padding, None)
-        } else {
-            (left_padding, None)
+        // Full-width modern Titlebar spanning entire top
+        let (header_title, header_dirty) = match self.mode {
+            Mode::Doc => {
+                let doc_title = crate::docs::get_docs()
+                    .get(self.active_doc_idx)
+                    .map(|d| d.title)
+                    .unwrap_or("Documentation");
+                (format!("📖 {}", doc_title), false)
+            }
+            Mode::Normal => (self.active_note_title.clone(), self.is_dirty),
+            Mode::Stats => ("📊 Daily Story & Statistics".to_string(), false),
+            Mode::ScanReport | Mode::ScanHistory => ("🌐 Security Scanner".to_string(), false),
         };
-        let content_right_margin = 10.0;
 
-        let editor_top = bounds.min.y + 44.0;
-        let editor_bottom = cmd_bar_rect.min.y - 8.0;
-        let editor_rect = Rect::from_min_max(
-            pos2(bounds.min.x + content_left_margin, editor_top),
-            pos2(bounds.max.x - content_right_margin, editor_bottom),
+        crate::view_editor::render_full_titlebar(
+            ui,
+            &painter,
+            titlebar_rect,
+            &header_title,
+            header_dirty,
+            &self.theme,
         );
+
+        // Sidebar Splitter Divider & Knob (when sidebar is open in Notes or Docs)
+        if let (Some(hit_rect), Some(center_x)) = (layout.splitter_hit_rect, layout.splitter_center_x) {
+            let is_splitter_hovered = ui.rect_contains_pointer(hit_rect);
+            let primary_down = ui.input(|i| i.pointer.primary_down());
+            let primary_pressed = ui.input(|i| i.pointer.primary_clicked() || i.pointer.button_pressed(egui::PointerButton::Primary));
+
+            if is_splitter_hovered && primary_pressed {
+                self.is_dragging_sidebar_splitter = true;
+            }
+
+            if self.is_dragging_sidebar_splitter {
+                if primary_down {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
+                    if let Some(pos) = ui.input(|i| i.pointer.interact_pos().or_else(|| i.pointer.hover_pos())) {
+                        let new_w = (pos.x - bounds.min.x - crate::layout::GAP).clamp(crate::layout::MIN_SIDEBAR_W, crate::layout::MAX_SIDEBAR_W);
+                        self.sidebar_width = new_w;
+                    }
+                } else {
+                    self.is_dragging_sidebar_splitter = false;
+                    let _ = self.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+                        key: "sidebar_w".into(),
+                        val: self.sidebar_width.to_string(),
+                    });
+                }
+            } else if is_splitter_hovered {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
+            }
+
+            // Draw vertical divider bar and tactile knob
+            let is_active = is_splitter_hovered || self.is_dragging_sidebar_splitter;
+            let divider_color = if is_active {
+                self.theme.accent
+            } else {
+                Color32::from_rgba_unmultiplied(self.theme.muted.r(), self.theme.muted.g(), self.theme.muted.b(), 65)
+            };
+            let panel_top = editor_panel_rect.min.y;
+            let panel_bottom = editor_panel_rect.max.y;
+            painter.line_segment(
+                [pos2(center_x, panel_top), pos2(center_x, panel_bottom)],
+                Stroke::new(1.0, divider_color),
+            );
+            let knob_w = if is_active { 7.0 } else { 5.0 };
+            let knob_h = 42.0;
+            let knob_rect = Rect::from_center_size(
+                pos2(center_x, (panel_top + panel_bottom) * 0.5),
+                vec2(knob_w, knob_h),
+            );
+            painter.rect_filled(knob_rect, 3.0, divider_color);
+
+            let knob_mid = knob_rect.center();
+            let grip_color = self.theme.bg;
+            for dy in [-6.0, 0.0, 6.0] {
+                painter.line_segment(
+                    [pos2(knob_mid.x - 1.5, knob_mid.y + dy), pos2(knob_mid.x + 1.5, knob_mid.y + dy)],
+                    Stroke::new(1.0, grip_color),
+                );
+            }
+        } else {
+            self.is_dragging_sidebar_splitter = false;
+        }
 
         // Render Dedicated Documentation Sidebar on the left (inside Doc mode)
-        if let Some(sb_rect) = doc_sidebar_rect {
-            if let Some(action) = crate::docs::render_doc_sidebar(
-                ui,
-                &painter,
-                sb_rect,
-                self.active_doc_idx,
-                self.theme.accent,
-                self.theme.text,
-                self.theme.muted,
-            ) {
-                match action {
-                    crate::docs::DocSidebarAction::SelectDoc(idx) => {
-                        self.load_doc_by_index(idx, now);
+        if self.mode == Mode::Doc && self.sidebar_open {
+            if let Some(sb_rect) = layout.sidebar_rect {
+                if ui.input(|i| i.pointer.primary_clicked()) {
+                    if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+                        if sb_rect.contains(pos) {
+                            self.doc_sidebar_focused = true;
+                        } else if editor_panel_rect.contains(pos) {
+                            self.doc_sidebar_focused = false;
+                        }
                     }
-                    crate::docs::DocSidebarAction::BackToEditor => {
-                        self.mode = Mode::Normal;
-                        self.set_status("Switched to Notes Editor", now);
+                }
+
+                if let Some(action) = crate::docs::render_doc_sidebar(
+                    ui,
+                    &painter,
+                    sb_rect,
+                    self.active_doc_idx,
+                    self.doc_selected_idx,
+                    self.doc_sidebar_focused,
+                    self.theme.accent,
+                    self.theme.text,
+                    self.theme.muted,
+                ) {
+                    match action {
+                        crate::docs::DocSidebarAction::SelectDoc(idx) => {
+                            self.load_doc_by_index(idx, now);
+                            self.doc_sidebar_focused = true;
+                        }
+                        crate::docs::DocSidebarAction::ToggleSidebar => {
+                            self.sidebar_open = !self.sidebar_open;
+                            self.doc_sidebar_focused = self.sidebar_open;
+                            let msg = if self.sidebar_open {
+                                "Documentation sidebar opened"
+                            } else {
+                                "Documentation sidebar collapsed into full-width reader (Ctrl+B to reopen)"
+                            };
+                            self.set_status(msg, now);
+                        }
+                        crate::docs::DocSidebarAction::BackToEditor => {
+                            self.mode = Mode::Normal;
+                            self.set_status("Switched to Notes Editor", now);
+                        }
+                        crate::docs::DocSidebarAction::OpenSettings => {
+                            self.settings_open = true;
+                            self.settings_just_opened = true;
+                        }
                     }
                 }
             }
         }
 
-        // Split Editor & Preview panes setup
+        // Detached Editor & Preview Panel Surface (subtle card background & border)
+        painter.rect(
+            editor_panel_rect,
+            5.0,
+            Color32::from_rgb(13, 14, 18),
+            Stroke::new(1.0, Color32::from_rgb(32, 34, 40)),
+            egui::StrokeKind::Inside,
+        );
+
+        // Tab strip at the top of the editor panel (inside the panel card)
+        let tab_bar_rect = Rect::from_min_max(
+            editor_panel_rect.min,
+            pos2(editor_panel_rect.max.x, editor_panel_rect.min.y + crate::view_editor::TAB_ROW_H),
+        );
+
+        if self.mode == Mode::Normal {
+            self.sync_active_tab();
+            let tab_items: Vec<crate::view_editor::TabItem> = self
+                .open_notes
+                .iter()
+                .enumerate()
+                .map(|(idx, note)| crate::view_editor::TabItem {
+                    title: &note.title,
+                    is_dirty: note.is_dirty,
+                    is_active: idx == self.active_tab,
+                })
+                .collect();
+
+            if let Some(action) = crate::view_editor::render_tab_bar(
+                ui,
+                &painter,
+                tab_bar_rect,
+                &tab_items,
+                &self.theme,
+                &mut self.tab_scroll_offset,
+            ) {
+                match action {
+                    crate::view_editor::TabAction::Select(idx) => {
+                        self.switch_tab(idx, now);
+                    }
+                    crate::view_editor::TabAction::Close(idx) => {
+                        self.close_tab(idx, now);
+                    }
+                }
+            }
+        } else if self.mode == Mode::Doc {
+            let docs = crate::docs::get_docs();
+            let tab_items: Vec<crate::view_editor::TabItem> = self
+                .open_doc_tabs
+                .iter()
+                .enumerate()
+                .map(|(idx, &doc_idx)| {
+                    let title = docs.get(doc_idx).map(|d| d.title).unwrap_or("Guide");
+                    crate::view_editor::TabItem {
+                        title,
+                        is_dirty: false,
+                        is_active: idx == self.active_doc_tab,
+                    }
+                })
+                .collect();
+
+            if let Some(action) = crate::view_editor::render_tab_bar(
+                ui,
+                &painter,
+                tab_bar_rect,
+                &tab_items,
+                &self.theme,
+                &mut self.doc_tab_scroll_offset,
+            ) {
+                match action {
+                    crate::view_editor::TabAction::Select(idx) => {
+                        self.switch_doc_tab(idx, now);
+                    }
+                    crate::view_editor::TabAction::Close(idx) => {
+                        self.close_doc_tab(idx, now);
+                    }
+                }
+            }
+        }
+
+        // Body area below tab strip (for editor, gutter, preview)
+        let body_rect = if self.mode == Mode::Normal || self.mode == Mode::Doc {
+            Rect::from_min_max(
+                pos2(editor_panel_rect.min.x, tab_bar_rect.max.y),
+                editor_panel_rect.max,
+            )
+        } else {
+            editor_panel_rect
+        };
+
+        // Split Editor & Preview panes setup inside body_rect
+        let is_preview_active = self.preview_open && self.mode == Mode::Normal;
         let divider_w = 12.0;
         let (actual_editor_rect, preview_rect_opt, divider_rect_opt) = if is_preview_active {
-            let total_w = editor_rect.width();
+            let total_w = body_rect.width();
             let available_w = (total_w - divider_w).max(200.0);
             let left_w = (available_w * self.split_ratio).clamp(120.0, available_w - 120.0);
 
             let left_rect = Rect::from_min_max(
-                editor_rect.min,
-                pos2(editor_rect.min.x + left_w, editor_rect.max.y),
+                body_rect.min,
+                pos2(body_rect.min.x + left_w, body_rect.max.y),
             );
             let divider_rect = Rect::from_min_max(
-                pos2(left_rect.max.x, bounds.min.y + 12.0),
-                pos2(left_rect.max.x + divider_w, editor_rect.max.y),
+                pos2(left_rect.max.x, body_rect.min.y),
+                pos2(left_rect.max.x + divider_w, body_rect.max.y),
             );
             let right_rect = Rect::from_min_max(
-                pos2(divider_rect.max.x, editor_rect.min.y),
-                editor_rect.max,
+                pos2(divider_rect.max.x, body_rect.min.y),
+                body_rect.max,
             );
             (left_rect, Some(right_rect), Some(divider_rect))
         } else {
-            (editor_rect, None, None)
+            (body_rect, None, None)
         };
 
         // Keep visual lines updated to exact editor width (accounting for preview split and line numbers)
@@ -647,46 +1084,11 @@ impl App {
         };
 
         let effective_editor_w = actual_editor_rect.width();
-        let text_area_w = (effective_editor_w - gutter_space - 8.0).max(100.0);
+        let text_area_w = (effective_editor_w - gutter_space - 10.0).max(100.0);
         let max_cols = (text_area_w / cw).floor().max(15.0) as usize;
         self.visual_lines = target_ed.compute_visual_lines(max_cols);
 
-        // Clean Header (Zero Clunky Buttons! Purely keyboard shortcut driven with top-right drag gripper)
-        if self.mode == Mode::Normal || self.mode == Mode::Doc {
-            let (header_title, header_dirty) = if self.mode == Mode::Doc {
-                let doc_title = crate::docs::get_docs()
-                    .get(self.active_doc_idx)
-                    .map(|d| d.title)
-                    .unwrap_or("Documentation");
-                (format!("📖 {}  [DOCS]", doc_title), false)
-            } else {
-                (self.active_note_title.clone(), self.is_dirty)
-            };
 
-            if let Some(p_rect) = preview_rect_opt {
-                crate::view_editor::render_split_editor_header(
-                    ui,
-                    &painter,
-                    bounds,
-                    actual_editor_rect,
-                    p_rect,
-                    &header_title,
-                    header_dirty,
-                    &self.theme,
-                );
-            } else {
-                render_editor_header(
-                    ui,
-                    &painter,
-                    bounds,
-                    content_left_margin,
-                    content_right_margin,
-                    &header_title,
-                    header_dirty,
-                    &self.theme,
-                );
-            }
-        }
 
         // Active View rendering delegated to dedicated view modules
         match self.mode {
@@ -727,7 +1129,7 @@ impl App {
                 };
 
                 if let (Some(_), Some(divider_rect)) = (preview_rect_opt, divider_rect_opt) {
-                    let total_w = editor_rect.width();
+                    let total_w = editor_panel_rect.width();
                     let available_w = (total_w - divider_w).max(200.0);
 
                     // Generous hit box for dragging so mouse never slips off (prevents drag dropping)
@@ -745,7 +1147,7 @@ impl App {
                         if primary_down {
                             ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
                             if let Some(pos) = ui.input(|i| i.pointer.interact_pos().or_else(|| i.pointer.hover_pos())) {
-                                let new_ratio = ((pos.x - editor_rect.min.x - divider_w * 0.5) / available_w).clamp(0.15, 0.85);
+                                let new_ratio = ((pos.x - body_rect.min.x - divider_w * 0.5) / available_w).clamp(0.15, 0.85);
                                 self.split_ratio = new_ratio;
                             }
                         } else {
@@ -800,7 +1202,13 @@ impl App {
                     dt,
                     now,
                     typed,
-                    self.settings_open || self.search_open || self.is_dragging_splitter,
+                    self.settings_open
+                        || self.search_open
+                        || self.help_open
+                        || self.rename_open
+                        || self.delete_confirm_open
+                        || self.is_dragging_splitter
+                        || self.is_dragging_sidebar_splitter,
                     search_matches,
                     self.show_line_numbers,
                     active_vim_mode,
@@ -834,7 +1242,7 @@ impl App {
                     .to_string();
                 render_stats(
                     ui,
-                    editor_rect,
+                    editor_panel_rect,
                     &self.today_activity,
                     &self.activity_history,
                     self.lifetime_activity,
@@ -848,7 +1256,7 @@ impl App {
                 crate::scan_view::render_scan_view(
                     ui,
                     &painter,
-                    editor_rect,
+                    editor_panel_rect,
                     self.active_scan_result.as_ref(),
                     self.active_scan_error.as_ref().map(|(u, e)| (u.as_str(), e.as_str())),
                     &mut self.scan_report_scroll_y,
@@ -860,7 +1268,7 @@ impl App {
                 let opened_idx = crate::scan_history_view::render_scan_history(
                     ui,
                     &painter,
-                    editor_rect,
+                    editor_panel_rect,
                     &self.past_scans,
                     &mut self.scan_history_selected,
                     &mut self.scan_history_scroll_y,
@@ -927,7 +1335,7 @@ impl App {
             ui,
             &painter,
             cmd_bar_rect,
-            content_left_margin,
+            0.0,
             self.in_command,
             &self.cmd_ed.text(),
             self.cmd_ed.cur,
@@ -946,25 +1354,40 @@ impl App {
 
         // Sleek Sidebar (Ctrl+B)
         if self.sidebar_open && self.mode != Mode::Doc {
-            let active_mode_idx = match self.mode {
-                Mode::Normal => 0,
-                Mode::Stats => 1,
-                Mode::Doc | Mode::ScanReport | Mode::ScanHistory => 0,
-            };
-            let action = render_sidebar(
-                ui,
-                &painter,
-                bounds,
-                active_mode_idx,
-                self.active_note_id,
-                &self.notes_list,
-                self.sidebar_notes_limit,
-                self.total_notes_count,
-                self.is_dirty,
-                self.theme.accent,
-                self.theme.text,
-                self.theme.muted,
-            );
+            if let Some(sb_rect) = layout.sidebar_rect {
+                let active_mode_idx = match self.mode {
+                    Mode::Normal => 0,
+                    Mode::Stats => 1,
+                    Mode::Doc | Mode::ScanReport | Mode::ScanHistory => 0,
+                };
+                let action = render_sidebar(
+                    ui,
+                    &painter,
+                    sb_rect,
+                    active_mode_idx,
+                    self.active_note_id,
+                    &self.notes_list,
+                    self.sidebar_notes_limit,
+                    self.total_notes_count,
+                    self.is_dirty,
+                    self.theme.accent,
+                    self.theme.text,
+                    self.theme.muted,
+                    self.sidebar_selected_idx,
+                    self.sidebar_focused,
+                );
+
+                // Click outside sidebar releases sidebar keyboard focus
+                if ui.input(|i| i.pointer.primary_clicked()) {
+                    if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+                        if sb_rect.contains(pos) {
+                            self.sidebar_focused = true;
+                        } else if editor_panel_rect.contains(pos) {
+                            self.sidebar_focused = false;
+                        }
+                    }
+                }
+
             if let Some(act) = action {
                 match act {
                     SidebarAction::SwitchMode(idx) => {
@@ -977,34 +1400,19 @@ impl App {
                             _ => {}
                         }
                     }
-                    SidebarAction::LoadNote { id, topic, body } => {
-                        if let Some(cur_id) = self.active_note_id {
-                            if let Some(ref db) = self.db {
-                                let _ = db.set_setting(&format!("note_caret_{}", cur_id), &self.ed.cur.to_string());
-                                let _ = db.set_setting(&format!("note_scroll_{}", cur_id), &self.scroll_y.to_string());
-                            }
-                        }
-                        let clean = body.replace("\r\n", "\n").replace('\r', "\n");
-                        self.active_note_id = Some(id);
-                        self.save_active_note_id();
-                        self.active_note_title = topic.clone();
-                        self.ed.set_text(&clean);
-                        let saved_cur = self.db.as_ref()
-                            .and_then(|db| db.get_setting(&format!("note_caret_{}", id)).ok().flatten())
-                            .and_then(|s| s.parse::<usize>().ok())
-                            .unwrap_or(0);
-                        self.ed.cur = saved_cur.min(self.ed.buf.len());
-                        let saved_scroll = self.db.as_ref()
-                            .and_then(|db| db.get_setting(&format!("note_scroll_{}", id)).ok().flatten())
-                            .and_then(|s| s.parse::<f32>().ok())
-                            .unwrap_or(0.0);
-                        self.scroll_y = saved_scroll;
-                        self.mode = Mode::Normal;
-                        self.vim.set_mode(crate::vim::VimSubMode::Normal, &mut self.ed);
-                        self.is_dirty = false;
-                        self.set_status("Opened note", now);
+                    SidebarAction::LoadNote { id, topic, body, index } => {
+                        self.load_note(id, topic, body, now);
+                        self.sidebar_selected_idx = index;
+                        // Keep focus on the sidebar and on the loaded note
+                        self.sidebar_focused = true;
                     }
                     SidebarAction::NewNote => {
+                        if let Some(cur) = self.open_notes.get_mut(self.active_tab) {
+                            cur.editor = self.ed.clone();
+                            cur.title = self.active_note_title.clone();
+                            cur.scroll_y = self.scroll_y;
+                            cur.is_dirty = self.is_dirty;
+                        }
                         self.active_note_id = None;
                         self.save_active_note_id();
                         self.active_note_title = "Untitled Note".to_string();
@@ -1013,11 +1421,21 @@ impl App {
                         self.vim.set_mode(crate::vim::VimSubMode::Normal, &mut self.ed);
                         self.is_dirty = false;
                         self.scroll_y = 0.0;
+                        self.open_notes.push(OpenNote {
+                            id: 0,
+                            title: "Untitled Note".to_string(),
+                            editor: self.ed.clone(),
+                            scroll_y: 0.0,
+                            is_dirty: false,
+                        });
+                        self.active_tab = self.open_notes.len() - 1;
                         self.set_status("Created new note", now);
                     }
                     SidebarAction::DeleteNote(id) => {
                         let _ = self.db_tx.send(DbMsg::DeleteNote { id });
-                        if self.active_note_id == Some(id) {
+                        if let Some(pos) = self.open_notes.iter().position(|n| n.id == id) {
+                            self.close_tab(pos, now);
+                        } else if self.active_note_id == Some(id) {
                             self.active_note_id = None;
                             self.save_active_note_id();
                             self.active_note_title = "Untitled Note".to_string();
@@ -1033,32 +1451,58 @@ impl App {
                     }
                     SidebarAction::OpenSettings => {
                         self.settings_open = true;
-                        self.sidebar_open = false;
+                        self.settings_just_opened = true;
                     }
                 }
             }
         }
+    }
 
         // Preferences Modal (Ctrl+,)
         if self.settings_open {
-            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
-                self.settings_open = false;
-            }
             painter.rect_filled(bounds, 0.0, Color32::from_black_alpha(175));
 
-            let modal_w = 640.0;
-            let modal_h = 490.0;
+            let modal_w = 780.0f32.min(bounds.width() - 40.0);
+            let modal_h = 560.0f32.min(bounds.height() - 40.0);
             let modal_rect = Rect::from_center_size(bounds.center(), eframe::egui::vec2(modal_w, modal_h));
+
+            // Dismiss modal if clicking backdrop outside dialog (skip on frame opened to prevent immediate close)
+            if !self.settings_just_opened && ui.input(|i| i.pointer.primary_clicked()) {
+                if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+                    if !modal_rect.contains(pos) && bounds.contains(pos) {
+                        self.settings_open = false;
+                    }
+                }
+            }
 
             painter.rect(
                 modal_rect,
-                5.0,
+                6.0,
                 Color32::from_rgb(14, 15, 18),
-                eframe::egui::Stroke::new(1.0, Color32::from_rgb(32, 34, 40)),
+                eframe::egui::Stroke::new(1.0, Color32::from_rgb(44, 48, 62)),
                 eframe::egui::StrokeKind::Inside,
             );
 
-            let tab_w = 170.0;
+            // Close icon button (✕) on the right side of the settings modal
+            let close_size = 26.0;
+            let close_rect = Rect::from_min_size(
+                pos2(modal_rect.max.x - close_size - 10.0, modal_rect.min.y + 10.0),
+                vec2(close_size, close_size),
+            );
+            let close_hover = ui.rect_contains_pointer(close_rect);
+            if close_hover {
+                painter.rect_filled(close_rect, 4.0, Color32::from_rgb(220, 50, 50));
+            }
+            let close_color = if close_hover { Color32::WHITE } else { Color32::from_gray(140) };
+            let c = close_rect.center();
+            let d = 4.5;
+            painter.line_segment([pos2(c.x - d, c.y - d), pos2(c.x + d, c.y + d)], Stroke::new(1.5, close_color));
+            painter.line_segment([pos2(c.x + d, c.y - d), pos2(c.x - d, c.y + d)], Stroke::new(1.5, close_color));
+            if close_hover && ui.input(|i| i.pointer.primary_clicked()) {
+                self.settings_open = false;
+            }
+
+            let tab_w = 175.0;
             let tabs_rect = Rect::from_min_max(modal_rect.min, pos2(modal_rect.min.x + tab_w, modal_rect.max.y));
             let panel_rect = Rect::from_min_max(pos2(modal_rect.min.x + tab_w, modal_rect.min.y), modal_rect.max);
 
@@ -1105,7 +1549,7 @@ impl App {
                 }
                 None => {}
             }
-
+            self.settings_just_opened = false;
         }
 
         // Fuzzy Search Modal (Ctrl+P)
@@ -1123,18 +1567,8 @@ impl App {
             self.search_just_opened = false;
 
             if let Some(item) = action.selected_item {
-                if let Some(note) = self.notes_list.iter().find(|n| n.id == item.id) {
-                    let clean = note.body.replace("\r\n", "\n").replace('\r', "\n");
-                    self.active_note_id = Some(note.id);
-                    self.save_active_note_id();
-                    self.active_note_title = note.topic.clone();
-                    self.ed.set_text(&clean);
-                    self.ed.cur = 0;
-                    self.mode = Mode::Normal;
-                    self.vim.set_mode(crate::vim::VimSubMode::Normal, &mut self.ed);
-                    self.is_dirty = false;
-                    self.scroll_y = 0.0;
-                    self.set_status("Opened note", now);
+                if let Some(note) = self.notes_list.iter().find(|n| n.id == item.id).cloned() {
+                    self.load_note(note.id, note.topic, note.body, now);
                 }
             }
             if action.should_close {

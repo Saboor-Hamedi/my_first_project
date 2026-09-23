@@ -327,7 +327,16 @@ pub fn render_rename_modal(
             .frame(false),
     );
 
-    if just_opened || !response.has_focus() && !ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+    if just_opened {
+        response.request_focus();
+        let mut state = egui::text_edit::TextEditState::load(ui.ctx(), response.id).unwrap_or_default();
+        let char_count = input_text.chars().count();
+        state.cursor.set_char_range(Some(egui::text::CCursorRange::two(
+            egui::text::CCursor::new(0),
+            egui::text::CCursor::new(char_count),
+        )));
+        state.store(ui.ctx(), response.id);
+    } else if !response.has_focus() && !ui.input(|i| i.key_pressed(egui::Key::Escape)) {
         response.request_focus();
     }
 

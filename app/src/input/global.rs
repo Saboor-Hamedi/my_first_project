@@ -13,6 +13,88 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
         return None;
     }
 
+    // Modal Dialog Input Isolation: Help Center has complete input priority over editor
+    if app.help_open {
+        let (help_esc, tab_next, tab_prev, scroll_up, scroll_down, num_1, num_2, num_3, num_4) = ctx.input(|i| (
+            i.key_pressed(egui::Key::Escape) || (i.modifiers.ctrl && i.key_pressed(egui::Key::H)) || i.key_pressed(egui::Key::F1),
+            (!i.modifiers.ctrl && !i.modifiers.shift && (i.key_pressed(egui::Key::Tab) || i.key_pressed(egui::Key::L) || i.key_pressed(egui::Key::ArrowRight))),
+            (!i.modifiers.ctrl && ((i.modifiers.shift && i.key_pressed(egui::Key::Tab)) || i.key_pressed(egui::Key::H) || i.key_pressed(egui::Key::ArrowLeft))),
+            (!i.modifiers.ctrl && (i.key_pressed(egui::Key::K) || i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::PageUp))),
+            (!i.modifiers.ctrl && (i.key_pressed(egui::Key::J) || i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::PageDown))),
+            i.key_pressed(egui::Key::Num1),
+            i.key_pressed(egui::Key::Num2),
+            i.key_pressed(egui::Key::Num3),
+            i.key_pressed(egui::Key::Num4),
+        ));
+
+        if help_esc {
+            app.help_open = false;
+            return Some(false);
+        }
+
+        if tab_next {
+            app.help_tab = (app.help_tab + 1) % 4;
+            app.help_scroll_y = 0.0;
+            app.sound.play();
+            return Some(false);
+        }
+        if tab_prev {
+            app.help_tab = if app.help_tab == 0 { 3 } else { app.help_tab - 1 };
+            app.help_scroll_y = 0.0;
+            app.sound.play();
+            return Some(false);
+        }
+
+        if num_1 { app.help_tab = 0; app.help_scroll_y = 0.0; app.sound.play(); return Some(false); }
+        if num_2 { app.help_tab = 1; app.help_scroll_y = 0.0; app.sound.play(); return Some(false); }
+        if num_3 { app.help_tab = 2; app.help_scroll_y = 0.0; app.sound.play(); return Some(false); }
+        if num_4 { app.help_tab = 3; app.help_scroll_y = 0.0; app.sound.play(); return Some(false); }
+
+        if scroll_down {
+            app.help_scroll_y = (app.help_scroll_y + 45.0).clamp(0.0, 600.0);
+            return Some(false);
+        }
+        if scroll_up {
+            app.help_scroll_y = (app.help_scroll_y - 45.0).clamp(0.0, 600.0);
+            return Some(false);
+        }
+
+        // Absorbs all keys while help modal is active — zero keystrokes leak to editor
+        return Some(false);
+    }
+
+    // Settings Modal input priority
+    if app.settings_open {
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            app.settings_open = false;
+        }
+        return Some(false);
+    }
+
+    // Rename Modal input priority: absorbs all shortcuts so TextEdit retains full focus and handles Ctrl+A, typing, etc.
+    if app.rename_open {
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            app.rename_open = false;
+        }
+        return Some(false);
+    }
+
+    // Search Modal input priority
+    if app.search_open {
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            app.search_open = false;
+        }
+        return Some(false);
+    }
+
+    // Delete Confirmation Modal input priority
+    if app.delete_confirm_open {
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            app.delete_confirm_open = false;
+        }
+        return Some(false);
+    }
+
     // Global Keyboard Shortcuts
     let (ctrl_s, ctrl_n, ctrl_r, ctrl_p, ctrl_comma, ctrl_b, escape, ctrl_backslash) = ctx.input(|i| (
         i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::S),
@@ -100,30 +182,57 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
         let tab = !i.modifiers.ctrl && !i.modifiers.alt && i.key_pressed(egui::Key::Tab);
         (tab && !i.modifiers.shift, tab && i.modifiers.shift)
     });
-    if (tab_pressed || shift_tab_pressed) && !app.in_command && (app.mode == Mode::Normal || app.mode == Mode::Doc) {
-        use crate::app::EditorInputMode;
-        let modifiers = if shift_tab_pressed {
-            let mut m = egui::Modifiers::default();
-            m.shift = true;
-            m
-        } else {
-            egui::Modifiers::default()
-        };
-        if app.editor_input_mode == EditorInputMode::Vim {
-            app.vim.handle_key(&mut app.ed, &app.visual_lines, egui::Key::Tab, modifiers);
-        } else if app.editor_input_mode == EditorInputMode::Hybrid {
-            app.hybrid.handle_key(&mut app.ed, egui::Key::Tab, modifiers);
-        } else if shift_tab_pressed {
-            app.ed.dedent();
-        } else {
-            app.ed.indent();
+    if (tab_pressed || shift_tab_pressed) && !app.in_command {
+        if app.mode == Mode::Doc {
+            if !app.sidebar_open {
+                app.sidebar_open = true;
+                app.doc_sidebar_focused = true;
+            } else {
+                app.doc_sidebar_focused = !app.doc_sidebar_focused;
+            }
+            let status = if app.doc_sidebar_focused {
+                "Doc Sidebar active (j/k: move • Enter: read • Tab: reader)"
+            } else {
+                "Doc Reader active (Tab / Ctrl+B to return to Doc List)"
+            };
+            app.set_status(status, now);
+            app.sound.play();
+            return Some(false);
         }
         if app.mode == Mode::Normal {
+            use crate::app::EditorInputMode;
+            if app.sidebar_open && (app.sidebar_focused || (app.editor_input_mode == EditorInputMode::Vim && app.vim.mode == crate::vim::VimSubMode::Normal)) {
+                app.sidebar_focused = !app.sidebar_focused;
+                let status = if app.sidebar_focused {
+                    "Notes Sidebar active (j/k: move • Enter: load • Tab/l: editor)"
+                } else {
+                    "Editor active (Tab / Ctrl+B to return to Sidebar)"
+                };
+                app.set_status(status, now);
+                app.sound.play();
+                return Some(false);
+            }
+            let modifiers = if shift_tab_pressed {
+                let mut m = egui::Modifiers::default();
+                m.shift = true;
+                m
+            } else {
+                egui::Modifiers::default()
+            };
+            if app.editor_input_mode == EditorInputMode::Vim {
+                app.vim.handle_key(&mut app.ed, &app.visual_lines, egui::Key::Tab, modifiers);
+            } else if app.editor_input_mode == EditorInputMode::Hybrid {
+                app.hybrid.handle_key(&mut app.ed, egui::Key::Tab, modifiers);
+            } else if shift_tab_pressed {
+                app.ed.dedent();
+            } else {
+                app.ed.indent();
+            }
             app.is_dirty = true;
+            app.sound.play();
+            app.last_char_time = now;
+            return Some(true);
         }
-        app.sound.play();
-        app.last_char_time = now;
-        return Some(true);
     }
 
     // Select All (Ctrl+A)
@@ -227,6 +336,12 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
         if app.is_dirty && app.mode == Mode::Normal {
             app.quick_save_active_note(now);
         }
+        if let Some(cur) = app.open_notes.get_mut(app.active_tab) {
+            cur.editor = app.ed.clone();
+            cur.title = app.active_note_title.clone();
+            cur.scroll_y = app.scroll_y;
+            cur.is_dirty = app.is_dirty;
+        }
         app.active_note_id = None;
         app.active_note_title = "Untitled Note".to_string();
         app.ed.clear();
@@ -234,7 +349,25 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
         app.vim.set_mode(crate::vim::VimSubMode::Normal, &mut app.ed);
         app.is_dirty = false;
         app.scroll_y = 0.0;
+        app.open_notes.push(crate::app::OpenNote {
+            id: 0,
+            title: "Untitled Note".to_string(),
+            editor: app.ed.clone(),
+            scroll_y: 0.0,
+            is_dirty: false,
+        });
+        app.active_tab = app.open_notes.len() - 1;
         app.set_status("Created new note", now);
+        return Some(false);
+    }
+
+    let ctrl_w = ctx.input(|i| i.modifiers.ctrl && !i.modifiers.alt && i.key_pressed(egui::Key::W));
+    if ctrl_w {
+        if app.mode == Mode::Doc {
+            app.close_doc_tab(app.active_doc_tab, now);
+        } else {
+            app.close_tab(app.active_tab, now);
+        }
         return Some(false);
     }
 
@@ -270,11 +403,163 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
 
     if ctrl_comma {
         app.settings_open = !app.settings_open;
+        app.settings_just_opened = app.settings_open;
         return Some(false);
     }
 
+
     if ctrl_b {
-        app.sidebar_open = !app.sidebar_open;
+        if app.mode == Mode::Doc {
+            if !app.sidebar_open {
+                app.sidebar_open = true;
+                app.doc_sidebar_focused = true;
+                app.set_status("Documentation sidebar opened (j/k: navigate • Enter: read)", now);
+            } else if !app.doc_sidebar_focused {
+                app.doc_sidebar_focused = true;
+                app.set_status("Doc sidebar active (j/k: navigate • Enter: read • Ctrl+B: collapse)", now);
+            } else {
+                app.sidebar_open = false;
+                app.doc_sidebar_focused = false;
+                app.set_status("Doc sidebar collapsed into full-width reader (Ctrl+B to reopen)", now);
+            }
+            app.sound.play();
+            return Some(false);
+        }
+        if !app.sidebar_open {
+            app.sidebar_open = true;
+            app.sidebar_focused = true;
+            if let Some(cur_id) = app.active_note_id {
+                app.sidebar_selected_idx = app.notes_list.iter().position(|n| n.id == cur_id).unwrap_or(0);
+            } else {
+                app.sidebar_selected_idx = 0;
+            }
+            app.set_status("Sidebar opened (j/k: move • Enter: load • Tab/l: editor)", now);
+        } else if !app.sidebar_focused {
+            app.sidebar_focused = true;
+            if let Some(cur_id) = app.active_note_id {
+                app.sidebar_selected_idx = app.notes_list.iter().position(|n| n.id == cur_id).unwrap_or(0);
+            }
+        } else {
+            app.sidebar_open = false;
+            app.sidebar_focused = false;
+            app.set_status("Sidebar closed", now);
+        }
+        let sb_val = if app.sidebar_open { "true" } else { "false" };
+        let _ = app.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+            key: "sidebar".into(),
+            val: sb_val.into(),
+        });
+        app.sound.play();
+        return Some(false);
+    }
+
+    // Sidebar keyboard navigation (j/k to select, Enter to open, Esc/l/→/Tab to return to editor, i to edit)
+    if app.sidebar_open && app.sidebar_focused {
+        let (sb_up, sb_down, sb_enter, sb_esc, sb_edit, sb_to_editor, sb_tab) = ctx.input(|i| (
+            (!i.modifiers.ctrl && !i.modifiers.alt && i.key_pressed(egui::Key::K)) || i.key_pressed(egui::Key::ArrowUp),
+            (!i.modifiers.ctrl && !i.modifiers.alt && i.key_pressed(egui::Key::J)) || i.key_pressed(egui::Key::ArrowDown),
+            i.key_pressed(egui::Key::Enter),
+            i.key_pressed(egui::Key::Escape),
+            !i.modifiers.ctrl && !i.modifiers.alt && i.key_pressed(egui::Key::I),
+            (!i.modifiers.ctrl && !i.modifiers.alt && (i.key_pressed(egui::Key::L) || i.key_pressed(egui::Key::ArrowRight))),
+            !i.modifiers.ctrl && !i.modifiers.alt && i.key_pressed(egui::Key::Tab),
+        ));
+
+        if sb_esc || sb_to_editor || sb_tab {
+            app.sidebar_focused = false;
+            app.set_status("Editor active (Tab / Ctrl+B to return to Sidebar)", now);
+            return Some(false);
+        }
+
+        if sb_edit {
+            app.sidebar_focused = false;
+            if app.editor_input_mode == crate::app::EditorInputMode::Vim {
+                app.vim.set_mode(crate::vim::VimSubMode::Insert, &mut app.ed);
+                app.set_status("-- INSERT --", now);
+            }
+            return Some(false);
+        }
+
+        if sb_down {
+            if !app.notes_list.is_empty() && app.sidebar_selected_idx + 1 < app.notes_list.len() {
+                app.sidebar_selected_idx += 1;
+                app.sound.play();
+            }
+            return Some(false);
+        }
+
+        if sb_up {
+            if app.sidebar_selected_idx > 0 {
+                app.sidebar_selected_idx -= 1;
+                app.sound.play();
+            }
+            return Some(false);
+        }
+
+        if sb_enter {
+            if let Some(note) = app.notes_list.get(app.sidebar_selected_idx).cloned() {
+                app.load_note(note.id, note.topic, note.body, now);
+                // Keep focus on the sidebar and on the loaded note as requested!
+                app.sidebar_focused = true;
+                app.sound.play();
+                app.set_status("Loaded note (sidebar active — use j/k to move)", now);
+            }
+            return Some(false);
+        }
+
+        // When sidebar is focused, consume any text/keys so they do not type into editor
+        return Some(false);
+    }
+
+    // Dedicated Documentation Sidebar keyboard navigation (j/k to select, Enter to open, Esc to exit)
+    if app.mode == Mode::Doc && app.doc_sidebar_focused && !app.in_command {
+        let (doc_up, doc_down, doc_enter, doc_esc, doc_to_reader) = ctx.input(|i| (
+            (!i.modifiers.ctrl && !i.modifiers.alt && i.key_pressed(egui::Key::K)) || i.key_pressed(egui::Key::ArrowUp),
+            (!i.modifiers.ctrl && !i.modifiers.alt && i.key_pressed(egui::Key::J)) || i.key_pressed(egui::Key::ArrowDown),
+            i.key_pressed(egui::Key::Enter),
+            i.key_pressed(egui::Key::Escape),
+            (!i.modifiers.ctrl && !i.modifiers.alt && (i.key_pressed(egui::Key::L) || i.key_pressed(egui::Key::ArrowRight))),
+        ));
+
+        if doc_esc {
+            // Unfocus doc sidebar into reader without closing the documentation!
+            app.doc_sidebar_focused = false;
+            app.set_status("Doc reader active (Tab/Ctrl+B: sidebar • Esc: exit docs)", now);
+            return Some(false);
+        }
+
+        if doc_to_reader {
+            app.doc_sidebar_focused = false;
+            app.set_status("Doc Reader active (Tab or Ctrl+B to return to Doc List)", now);
+            return Some(false);
+        }
+
+        if doc_down {
+            let total_docs = crate::docs::BRAIN_DOCS.len();
+            if total_docs > 0 && app.doc_selected_idx + 1 < total_docs {
+                app.doc_selected_idx += 1;
+                app.sound.play();
+            }
+            return Some(false);
+        }
+
+        if doc_up {
+            if app.doc_selected_idx > 0 {
+                app.doc_selected_idx -= 1;
+                app.sound.play();
+            }
+            return Some(false);
+        }
+
+        if doc_enter {
+            app.load_doc_by_index(app.doc_selected_idx, now);
+            // Keep focus on the doc sidebar as requested!
+            app.doc_sidebar_focused = true;
+            app.sound.play();
+            return Some(false);
+        }
+
+        // When doc sidebar is focused, consume any text/keys so they do not leak into doc reader
         return Some(false);
     }
 
@@ -291,41 +576,6 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
             "Markdown Live Preview OFF (Ctrl + \\)"
         };
         app.set_status(msg, now);
-        return Some(false);
-    }
-
-    if app.delete_confirm_open {
-        if escape {
-            app.delete_confirm_open = false;
-        }
-        return Some(false);
-    }
-
-    if app.search_open {
-        if escape {
-            app.search_open = false;
-        }
-        return Some(false);
-    }
-
-    if app.rename_open {
-        if escape {
-            app.rename_open = false;
-        }
-        return Some(false);
-    }
-
-    if app.settings_open {
-        if escape {
-            app.settings_open = false;
-        }
-        return Some(false);
-    }
-
-    if app.help_open {
-        if escape {
-            app.help_open = false;
-        }
         return Some(false);
     }
 
@@ -355,6 +605,7 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
         }
         if app.sidebar_open {
             app.sidebar_open = false;
+            app.sidebar_focused = false;
             return Some(false);
         }
         if app.in_command {

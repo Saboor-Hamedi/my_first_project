@@ -73,11 +73,11 @@ impl Default for VimEngine {
 }
 
 impl VimEngine {
-    /// Constructs a new VimEngine in Normal mode with default keymaps.
+    /// Constructs a new VimEngine in Normal mode with loaded or default keymaps.
     pub fn new() -> Self {
         Self {
             mode: VimSubMode::Normal,
-            keymap: VimKeymap::new_standard(),
+            keymap: VimKeymap::load_or_init(),
             search: VimSearchState::new(),
             pending_op: None,
             pending_text_object_scope: None,
