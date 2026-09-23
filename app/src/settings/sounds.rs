@@ -112,14 +112,22 @@ pub fn render_sounds_tab(
         let s_hovered = ui.rect_contains_pointer(s_rect);
 
         let bg = if is_sel {
-            Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 26)
+            if theme.is_light() {
+                Color32::from_rgb(
+                    ((theme.surface().r() as f32) * 0.78 + (theme.accent.r() as f32) * 0.22) as u8,
+                    ((theme.surface().g() as f32) * 0.78 + (theme.accent.g() as f32) * 0.22) as u8,
+                    ((theme.surface().b() as f32) * 0.78 + (theme.accent.b() as f32) * 0.22) as u8,
+                )
+            } else {
+                Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 32)
+            }
         } else if s_hovered {
             theme.surface().lerp_to_gamma(theme.accent, 0.08)
         } else {
             theme.surface()
         };
         let border_stroke = if is_sel {
-            Stroke::new(1.5, theme.accent)
+            Stroke::NONE
         } else if s_hovered {
             Stroke::new(1.0, theme.border().lerp_to_gamma(theme.accent, 0.4))
         } else {
@@ -152,7 +160,19 @@ pub fn render_sounds_tab(
             Align2::CENTER_CENTER,
             profile.name(),
             FontId::proportional(12.5),
-            if is_sel { theme.accent } else { theme.text },
+            if is_sel {
+                if theme.is_light() {
+                    Color32::from_rgb(
+                        (theme.accent.r() as f32 * 0.75) as u8,
+                        (theme.accent.g() as f32 * 0.75) as u8,
+                        (theme.accent.b() as f32 * 0.75) as u8,
+                    )
+                } else {
+                    theme.accent
+                }
+            } else {
+                theme.text
+            },
         );
 
         if s_hovered && ui.input(|inp| inp.pointer.primary_clicked()) {

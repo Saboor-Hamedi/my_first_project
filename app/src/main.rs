@@ -30,6 +30,7 @@ mod scan_history_view;
 mod scan_view;
 pub mod terminal_pane;
 pub mod ui_components;
+pub mod zoom;
 
 pub use types::{snapshot, visual_line};
 

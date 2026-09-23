@@ -4,7 +4,7 @@ use super::ligatures::render_line_with_ligatures;
 use crate::caret::Caret;
 use crate::editor::{Editor, VisualLine};
 use crate::theme::Theme;
-use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect};
+use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, Stroke};
 
 /// Renders the editor body with soft-wrapped visual lines, smooth scrolling, caret animation, and interactive scrollbar.
 pub fn render_editor_body(
@@ -66,10 +66,10 @@ pub fn render_editor_body(
         0.0
     };
 
-    let pad_x = 5.0;
-    let pad_y = 8.0;
+    let pad_x = if show_line_numbers { 14.0 } else { 22.0 };
+    let pad_y = 10.0;
     let safe_w = editor_rect.width();
-    let effective_gutter_w = if safe_w > gutter_w + 24.0 { gutter_w } else { 0.0 };
+    let effective_gutter_w = if safe_w > gutter_w + 32.0 { gutter_w } else { 0.0 };
     let text_left = (editor_rect.min.x + effective_gutter_w + pad_x).min(editor_rect.max.x);
     let ed_origin = pos2(text_left, editor_rect.min.y - *scroll_y + pad_y);
 
@@ -116,12 +116,21 @@ pub fn render_editor_body(
     let editor_painter = painter.with_clip_rect(editor_rect);
 
     let sel_range = ed.selected_range();
-    let sel_color = Color32::from_rgba_unmultiplied(
-        theme.accent.r(),
-        theme.accent.g(),
-        theme.accent.b(),
-        65,
-    );
+    let sel_color = if theme.is_light() {
+        Color32::from_rgba_unmultiplied(
+            theme.accent.r(),
+            theme.accent.g(),
+            theme.accent.b(),
+            95,
+        )
+    } else {
+        Color32::from_rgba_unmultiplied(
+            theme.accent.r(),
+            theme.accent.g(),
+            theme.accent.b(),
+            65,
+        )
+    };
 
     // Caret placement and animation (allow living caret embers/flames to extend into the 5px top gap without clipping)
     let caret_clip = Rect::from_min_max(
@@ -254,11 +263,18 @@ pub fn render_editor_body(
                     let num_str = physical_line.to_string();
                     let color = if is_current {
                         theme.accent
+                    } else if theme.is_light() {
+                        theme.muted
                     } else {
-                        Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 100)
+                        Color32::from_rgba_unmultiplied(
+                            theme.muted.r(),
+                            theme.muted.g(),
+                            theme.muted.b(),
+                            100,
+                        )
                     };
                     gutter_painter.text(
-                        pos2(gutter_rect.max.x - 5.0, line_y + y_pad),
+                        pos2(gutter_rect.max.x - 4.0, line_y + y_pad),
                         Align2::RIGHT_TOP,
                         num_str,
                         num_font.clone(),
@@ -267,12 +283,17 @@ pub fn render_editor_body(
                 } else {
                     // Wrapped continuation line indicator
                     let wrap_color = if is_current {
-                        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 110)
+                        theme.accent
                     } else {
-                        Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 50)
+                        Color32::from_rgba_unmultiplied(
+                            theme.muted.r(),
+                            theme.muted.g(),
+                            theme.muted.b(),
+                            if theme.is_light() { 130 } else { 40 },
+                        )
                     };
                     gutter_painter.text(
-                        pos2(gutter_rect.max.x - 5.0, line_y + y_pad),
+                        pos2(gutter_rect.max.x - 4.0, line_y + y_pad),
                         Align2::RIGHT_TOP,
                         "·",
                         num_font.clone(),
@@ -281,6 +302,18 @@ pub fn render_editor_body(
                 }
             }
         }
+
+        // Ultra-subtle, elegant vertical hairline separating gutter from text canvas
+        let sep_color = Color32::from_rgba_unmultiplied(
+            theme.border().r(),
+            theme.border().g(),
+            theme.border().b(),
+            if theme.is_light() { 55 } else { 40 },
+        );
+        painter.line_segment(
+            [pos2(gutter_rect.max.x + 3.0, editor_rect.min.y), pos2(gutter_rect.max.x + 3.0, editor_rect.max.y)],
+            Stroke::new(1.0, sep_color),
+        );
     }
 
     // Interactive scrollbar indicator in the right margin gutter

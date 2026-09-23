@@ -1,7 +1,7 @@
 //! Keyboard shortcuts reference table tab.
 
 use crate::theme::Theme;
-use eframe::egui::{self, pos2, vec2, Align2, FontId, Pos2, Rect, Stroke};
+use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Pos2, Rect, Stroke};
 
 pub fn render_shortcuts_tab(
     ui: &egui::Ui,
@@ -53,11 +53,10 @@ pub fn render_shortcuts_tab(
     ];
 
     let row_w = panel_rect.width() - 56.0;
-    let row_h = 24.0;
-    let badge_w = 110.0;
-    let group_gap = 6.0;
-    let header_h = 14.0;
-    let item_gap = 3.0;
+    let row_h = 28.0;
+    let group_gap = 8.0;
+    let header_h = 16.0;
+    let item_gap = 4.0;
 
     let mut cur_y = p_origin.y + 44.0;
 
@@ -97,21 +96,43 @@ pub fn render_shortcuts_tab(
             );
             painter.rect(
                 row_rect,
-                5.0,
+                6.0,
                 row_bg,
                 row_stroke,
                 egui::StrokeKind::Inside,
             );
 
-            // Keycap badge — crisp rounded tag
-            let badge_rect = Rect::from_min_size(
-                pos2(row_rect.min.x + 5.0, row_rect.min.y + 3.0),
-                vec2(badge_w, row_h - 6.0),
+            // Explanation on the Left
+            painter.text(
+                pos2(row_rect.min.x + 16.0, row_rect.center().y),
+                Align2::LEFT_CENTER,
+                *desc,
+                FontId::proportional(13.0),
+                if hovered { theme.text } else { theme.muted },
             );
+
+            // Keycap badge on the Right
+            let font_key = FontId::monospace(11.0);
+            let text_layout = painter.layout_no_wrap(key.to_string(), font_key.clone(), theme.accent);
+            let badge_w = (text_layout.size().x + 20.0).max(75.0);
+            let badge_h = 22.0;
+            let badge_rect = Rect::from_min_size(
+                pos2(row_rect.max.x - badge_w - 8.0, row_rect.center().y - badge_h * 0.5),
+                vec2(badge_w, badge_h),
+            );
+
             let badge_bg = if hovered {
-                theme.surface().lerp_to_gamma(theme.accent, 0.16)
+                if theme.is_light() {
+                    Color32::from_rgb(255, 255, 255)
+                } else {
+                    theme.surface().lerp_to_gamma(theme.accent, 0.16)
+                }
             } else {
-                theme.bg
+                if theme.is_light() {
+                    Color32::from_rgb(255, 255, 255)
+                } else {
+                    theme.bg
+                }
             };
             painter.rect(
                 badge_rect,
@@ -124,17 +145,8 @@ pub fn render_shortcuts_tab(
                 badge_rect.center() - vec2(0.0, 0.5),
                 Align2::CENTER_CENTER,
                 *key,
-                FontId::monospace(10.5),
+                font_key,
                 theme.accent,
-            );
-
-            // Description
-            painter.text(
-                pos2(row_rect.min.x + badge_w + 14.0, row_rect.center().y),
-                Align2::LEFT_CENTER,
-                *desc,
-                FontId::proportional(12.5),
-                if hovered { theme.text } else { theme.muted },
             );
 
             cur_y += row_h + item_gap;

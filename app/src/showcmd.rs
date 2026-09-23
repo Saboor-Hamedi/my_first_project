@@ -221,32 +221,31 @@ impl ShowCmdState {
             anchor_bottom_right,
         );
 
-        // 1. Soft drop-shadow (5px rounded)
-        let shadow_alpha = if is_light { (alpha as f32 * 0.16) as u8 } else { (alpha as f32 * 0.40) as u8 };
+        // 1. Soft ambient drop-shadow (matching zoom HUD)
+        let shadow_alpha = if is_light {
+            (alpha as f32 * 0.11) as u8
+        } else {
+            (alpha as f32 * 0.28) as u8
+        };
         painter.rect(
             card_rect.expand(3.0),
-            5.0,
+            10.0,
             Color32::from_rgba_unmultiplied(0, 0, 0, shadow_alpha),
             Stroke::NONE,
             egui::StrokeKind::Outside,
         );
 
-        // 2. Elevated card body — adapts to theme
+        // 2. Borderless frosted capsule body — exactly matching zoom HUD
         let body_bg = if is_light {
-            Color32::from_rgba_unmultiplied(theme.surface().r(), theme.surface().g(), theme.surface().b(), (alpha as f32 * 0.98) as u8)
+            Color32::from_rgba_unmultiplied(255, 255, 255, (alpha as f32 * 0.90) as u8)
         } else {
-            Color32::from_rgba_unmultiplied(16, 18, 24, (alpha as f32 * 0.96) as u8)
-        };
-        let body_stroke = if is_light {
-            Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.border().r(), theme.border().g(), theme.border().b(), alpha))
-        } else {
-            Stroke::NONE
+            Color32::from_rgba_unmultiplied(20, 22, 28, (alpha as f32 * 0.90) as u8)
         };
         painter.rect(
             card_rect,
-            5.0,
+            8.0,
             body_bg,
-            body_stroke,
+            Stroke::NONE,
             egui::StrokeKind::Inside,
         );
 

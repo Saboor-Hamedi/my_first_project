@@ -78,7 +78,15 @@ pub fn render_carets_tab(
         }
 
         let bg = if is_selected {
-            Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 26)
+            if theme.is_light() {
+                Color32::from_rgb(
+                    ((theme.surface().r() as f32) * 0.78 + (theme.accent.r() as f32) * 0.22) as u8,
+                    ((theme.surface().g() as f32) * 0.78 + (theme.accent.g() as f32) * 0.22) as u8,
+                    ((theme.surface().b() as f32) * 0.78 + (theme.accent.b() as f32) * 0.22) as u8,
+                )
+            } else {
+                Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 32)
+            }
         } else if hovered {
             theme.surface().lerp_to_gamma(theme.accent, 0.08)
         } else {
@@ -86,7 +94,7 @@ pub fn render_carets_tab(
         };
 
         let stroke = if is_selected {
-            Stroke::new(1.5, theme.accent)
+            Stroke::NONE
         } else if hovered {
             Stroke::new(1.0, theme.accent)
         } else {
@@ -94,14 +102,6 @@ pub fn render_carets_tab(
         };
 
         painter.rect(chip_rect, 6.0, bg, stroke, egui::StrokeKind::Inside);
-
-        if is_selected {
-            let stripe = Rect::from_min_size(
-                chip_rect.min,
-                vec2(chip_rect.width(), 2.5),
-            );
-            painter.rect_filled(stripe, egui::CornerRadius { nw: 6, ne: 6, sw: 0, se: 0 }, theme.accent);
-        }
 
         // Color indicator dot
         painter.circle_filled(
@@ -116,7 +116,19 @@ pub fn render_carets_tab(
             Align2::LEFT_CENTER,
             kind.name(),
             FontId::proportional(12.5),
-            if is_selected { theme.accent } else { theme.text },
+            if is_selected {
+                if theme.is_light() {
+                    Color32::from_rgb(
+                        (theme.accent.r() as f32 * 0.75) as u8,
+                        (theme.accent.g() as f32 * 0.75) as u8,
+                        (theme.accent.b() as f32 * 0.75) as u8,
+                    )
+                } else {
+                    theme.accent
+                }
+            } else {
+                theme.text
+            },
         );
 
         if hovered && ui.input(|i| i.pointer.primary_clicked()) {
@@ -147,71 +159,25 @@ pub fn render_carets_tab(
         theme.text,
     );
 
-    // ── Animations pill toggle ───────────────────────────────────────
-    let toggle_y = desc_y + 48.0;
-    let pill_w = 44.0;
-    let pill_h = 24.0;
-    let pill_rect = Rect::from_min_size(pos2(p_origin.x, toggle_y), vec2(pill_w, pill_h));
-    let pill_hover = ui.rect_contains_pointer(pill_rect);
-    let anim_on = caret.animations_enabled;
+    // ── Controls row: Slider on Left, Toggle on Right ─────────────────
+    let controls_y = desc_y + 48.0;
+    let controls_h = 32.0;
 
-    if pill_hover {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-        if ui.input(|i| i.pointer.primary_clicked()) {
-            caret.animations_enabled = !caret.animations_enabled;
-            on_save_setting("caret_animations", if caret.animations_enabled { "on" } else { "off" });
-        }
-    }
-
-    // Pill track
-    let track_bg = if anim_on {
-        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 40)
-    } else {
-        theme.surface()
-    };
-    painter.rect(
-        pill_rect,
-        pill_h * 0.5,
-        track_bg,
-        Stroke::new(1.0, if anim_on { theme.accent } else { theme.border() }),
-        egui::StrokeKind::Inside,
-    );
-
-    // Sliding knob
-    let knob_r = (pill_h * 0.5) - 3.0;
-    let knob_x = if anim_on {
-        pill_rect.max.x - knob_r - 4.0
-    } else {
-        pill_rect.min.x + knob_r + 4.0
-    };
-    painter.circle_filled(
-        pos2(knob_x, pill_rect.center().y),
-        knob_r,
-        if anim_on { theme.accent } else { theme.muted },
-    );
-    // "Animations" label to the right
+    // LEFT: Width Slider with label
     painter.text(
-        pos2(pill_rect.max.x + 12.0, pill_rect.center().y),
-        Align2::LEFT_CENTER,
-        "Living Caret Animations",
-        FontId::monospace(12.0),
-        theme.text,
-    );
-
-    // ── Width Slider ──────────────────────────────────────────────────
-    let slider_y = toggle_y + 44.0;
-    painter.text(
-        pos2(p_origin.x, slider_y + 10.0),
+        pos2(p_origin.x, controls_y + controls_h * 0.5),
         Align2::LEFT_CENTER,
         "Width",
         FontId::monospace(12.0),
         theme.muted,
     );
 
-    let slider_x = p_origin.x + 64.0;
-    let slider_w = 220.0;
-    let slider_h = 20.0;
-    let slider_rect = Rect::from_min_size(pos2(slider_x, slider_y), vec2(slider_w, slider_h));
+    let slider_x = p_origin.x + 56.0;
+    let slider_w = 200.0;
+    let slider_rect = Rect::from_min_size(
+        pos2(slider_x, controls_y + (controls_h - 20.0) * 0.5),
+        vec2(slider_w, 20.0),
+    );
 
     let slider_hover = ui.rect_contains_pointer(slider_rect);
     let is_down = ui.input(|i| i.pointer.primary_down() || i.pointer.primary_clicked());
@@ -226,7 +192,6 @@ pub fn render_carets_tab(
         }
     }
 
-    // Track
     let track_y = slider_rect.center().y;
     let track_h = 5.0;
     let track_rect = Rect::from_min_size(
@@ -245,7 +210,6 @@ pub fn render_carets_tab(
         painter.rect_filled(active_rect, 3.0, theme.accent);
     }
 
-    // Thumb knob
     let thumb_x = slider_rect.min.x + active_w;
     painter.circle_filled(
         pos2(thumb_x, track_y),
@@ -258,12 +222,63 @@ pub fn render_carets_tab(
         Stroke::new(1.5, theme.border()),
     );
 
-    // Live numeric label next to thumb
     painter.text(
-        pos2(slider_rect.max.x + 14.0, track_y),
+        pos2(slider_rect.max.x + 12.0, track_y),
         Align2::LEFT_CENTER,
         format!("{:.0}px", caret.width),
         FontId::monospace(12.0),
         theme.accent,
+    );
+
+    // RIGHT: Living Caret Animations Toggle
+    let pill_w = 44.0;
+    let pill_h = 24.0;
+    let pill_x = p_origin.x + available_w - pill_w;
+    let pill_rect = Rect::from_min_size(
+        pos2(pill_x, controls_y + (controls_h - pill_h) * 0.5),
+        vec2(pill_w, pill_h),
+    );
+    let pill_hover = ui.rect_contains_pointer(pill_rect);
+    let anim_on = caret.animations_enabled;
+
+    if pill_hover {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        if ui.input(|i| i.pointer.primary_clicked()) {
+            caret.animations_enabled = !caret.animations_enabled;
+            on_save_setting("caret_animations", if caret.animations_enabled { "on" } else { "off" });
+        }
+    }
+
+    let track_bg = if anim_on {
+        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), if theme.is_light() { 60 } else { 40 })
+    } else {
+        theme.surface()
+    };
+    painter.rect(
+        pill_rect,
+        pill_h * 0.5,
+        track_bg,
+        Stroke::new(1.0, if anim_on { theme.accent } else { theme.border() }),
+        egui::StrokeKind::Inside,
+    );
+
+    let knob_r = (pill_h * 0.5) - 3.0;
+    let knob_x = if anim_on {
+        pill_rect.max.x - knob_r - 4.0
+    } else {
+        pill_rect.min.x + knob_r + 4.0
+    };
+    painter.circle_filled(
+        pos2(knob_x, pill_rect.center().y),
+        knob_r,
+        if anim_on { theme.accent } else { theme.muted },
+    );
+
+    painter.text(
+        pos2(pill_rect.min.x - 12.0, pill_rect.center().y),
+        Align2::RIGHT_CENTER,
+        "Living Caret Animations",
+        FontId::proportional(12.5),
+        theme.text,
     );
 }
