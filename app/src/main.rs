@@ -31,6 +31,7 @@ mod scan_view;
 pub mod terminal_pane;
 pub mod ui_components;
 pub mod zoom;
+pub mod agent;
 
 pub use types::{snapshot, visual_line};
 
@@ -74,15 +75,30 @@ fn setup_fonts(ctx: &egui::Context) {
         "mono".into(),
         FontData::from_static(include_bytes!("../assets/JetBrainsMono-Regular.ttf")).into(),
     );
-    fonts
-        .families
-        .get_mut(&FontFamily::Monospace)
-        .unwrap()
-        .insert(0, "mono".into());
-    fonts
-        .families
-        .get_mut(&FontFamily::Proportional)
-        .unwrap()
-        .insert(0, "mono".into());
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(emoji_bytes) = std::fs::read(r"C:\Windows\Fonts\seguiemj.ttf") {
+            fonts.font_data.insert(
+                "win_emoji".into(),
+                FontData::from_owned(emoji_bytes).into(),
+            );
+        }
+    }
+
+    let mono = fonts.families.get_mut(&FontFamily::Monospace).unwrap();
+    mono.insert(0, "mono".into());
+    #[cfg(target_os = "windows")]
+    if fonts.font_data.contains_key("win_emoji") {
+        mono.push("win_emoji".into());
+    }
+
+    let prop = fonts.families.get_mut(&FontFamily::Proportional).unwrap();
+    prop.insert(0, "mono".into());
+    #[cfg(target_os = "windows")]
+    if fonts.font_data.contains_key("win_emoji") {
+        prop.push("win_emoji".into());
+    }
+
     ctx.set_fonts(fonts);
 }

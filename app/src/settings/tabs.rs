@@ -11,10 +11,11 @@ pub enum SettingTab {
     Shortcuts,
     Backup,
     Updates,
+    Ai,
 }
 
 impl SettingTab {
-    pub const ALL: [SettingTab; 7] = [
+    pub const ALL: [SettingTab; 8] = [
         SettingTab::Carets,
         SettingTab::EditorMode,
         SettingTab::Sounds,
@@ -22,6 +23,7 @@ impl SettingTab {
         SettingTab::Shortcuts,
         SettingTab::Backup,
         SettingTab::Updates,
+        SettingTab::Ai,
     ];
 
     pub fn title(&self) -> &'static str {
@@ -33,6 +35,7 @@ impl SettingTab {
             SettingTab::Shortcuts => "Shortcuts",
             SettingTab::Backup => "Backup",
             SettingTab::Updates => "Updates",
+            SettingTab::Ai => "AI Agent",
         }
     }
 
@@ -45,6 +48,7 @@ impl SettingTab {
             SettingTab::Shortcuts => "⌨",
             SettingTab::Backup => "💾",
             SettingTab::Updates => "🔄",
+            SettingTab::Ai => "◈",
         }
     }
 }
@@ -133,13 +137,34 @@ pub fn render_setting_tabs(
         };
 
         // Icon — larger, in accent color when selected
-        painter.text(
-            pos2(item_rect.min.x + 16.0, item_rect.center().y - 1.0),
-            Align2::LEFT_CENTER,
-            tab.icon(),
-            FontId::proportional(15.0),
-            icon_color,
-        );
+        if tab == SettingTab::Ai {
+            let badge_rect = Rect::from_center_size(
+                pos2(item_rect.min.x + 23.0, item_rect.center().y),
+                vec2(21.0, 15.0),
+            );
+            painter.rect(
+                badge_rect,
+                3.0,
+                Color32::from_rgba_unmultiplied(icon_color.r(), icon_color.g(), icon_color.b(), 32),
+                Stroke::new(1.0, icon_color),
+                egui::StrokeKind::Inside,
+            );
+            painter.text(
+                badge_rect.center(),
+                Align2::CENTER_CENTER,
+                "AI",
+                FontId::monospace(9.5),
+                icon_color,
+            );
+        } else {
+            painter.text(
+                pos2(item_rect.min.x + 16.0, item_rect.center().y - 1.0),
+                Align2::LEFT_CENTER,
+                tab.icon(),
+                FontId::proportional(15.0),
+                icon_color,
+            );
+        }
 
         // Label — slightly right of icon
         painter.text(

@@ -189,13 +189,20 @@ pub fn parse_markdown(text: &str) -> Vec<MdBlock> {
         let mut p_text = line.to_string();
         while let Some(next_line) = lines.peek() {
             let next_trimmed = next_line.trim();
+            let is_numbered = next_trimmed.find(". ").map_or(false, |dot_idx| {
+                let prefix = &next_trimmed[..dot_idx];
+                prefix.chars().all(|c| c.is_ascii_digit()) && !prefix.is_empty()
+            });
+
             if next_trimmed.is_empty()
                 || next_trimmed.starts_with('#')
                 || next_trimmed.starts_with("```")
                 || next_trimmed.starts_with("> ")
                 || next_trimmed.starts_with("- ")
                 || next_trimmed.starts_with("* ")
+                || next_trimmed.starts_with("+ ")
                 || next_trimmed.starts_with("---")
+                || is_numbered
                 || (next_trimmed.starts_with('|') && next_trimmed.ends_with('|'))
             {
                 break;
@@ -212,7 +219,7 @@ pub fn parse_markdown(text: &str) -> Vec<MdBlock> {
 
 /// Builds an egui LayoutJob supporting inline bold (**text**), italic (*text*),
 /// inline code (`text`), strikethrough (~~text~~), and markdown links ([text](url)).
-fn build_inline_job(
+pub fn build_inline_job(
     text: &str,
     base_font_size: f32,
     default_color: Color32,
@@ -319,7 +326,7 @@ fn build_inline_job(
 }
 
 /// Tokenizes a code line into rich multi-color syntax highlighting.
-fn highlight_code_line(
+pub fn highlight_code_line(
     line: &str,
     lang: &str,
     font_size: f32,

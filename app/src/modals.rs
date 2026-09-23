@@ -167,11 +167,15 @@ pub fn render_search_modal(
 
                 if is_selected || is_hovered {
                     let sel_bg = if is_selected {
-                        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), if theme.is_light() { 24 } else { 38 })
+                        if theme.is_light() {
+                            Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 14)
+                        } else {
+                            Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 20)
+                        }
                     } else if theme.is_light() {
-                        Color32::from_rgba_unmultiplied(0, 0, 0, 10)
+                        Color32::from_rgba_unmultiplied(0, 0, 0, 8)
                     } else {
-                        Color32::from_rgba_unmultiplied(255, 255, 255, 12)
+                        Color32::from_rgba_unmultiplied(255, 255, 255, 8)
                     };
                     painter.rect_filled(item_rect, 6.0, sel_bg);
 
@@ -190,12 +194,22 @@ pub fn render_search_modal(
                     action.should_close = true;
                 }
 
-                // Type badge pill
+                // Type badge pill: subtle background, crisp accent text
                 let badge_text = "NOTE";
                 let badge_w = 46.0;
-                let badge_bg = Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), if theme.is_light() { 24 } else { 35 });
+                let badge_bg = if is_selected {
+                    Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), if theme.is_light() { 20 } else { 26 })
+                } else {
+                    theme.bg
+                };
                 let badge_rect = Rect::from_min_size(item_rect.min + vec2(10.0, 8.0), vec2(badge_w, 20.0));
-                painter.rect_filled(badge_rect, 4.0, badge_bg);
+                painter.rect(
+                    badge_rect,
+                    4.0,
+                    badge_bg,
+                    Stroke::new(1.0, if is_selected { Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 60) } else { theme.border() }),
+                    egui::StrokeKind::Inside,
+                );
                 painter.text(
                     badge_rect.center(),
                     Align2::CENTER_CENTER,
@@ -204,7 +218,7 @@ pub fn render_search_modal(
                     theme.accent,
                 );
 
-                // Note Title
+                // Note Title: high contrast against background
                 let title_display = if item.title.len() > 38 {
                     format!("{}...", &item.title[..38])
                 } else {
@@ -215,17 +229,18 @@ pub fn render_search_modal(
                     Align2::LEFT_TOP,
                     title_display,
                     FontId::monospace(13.0),
-                    if is_selected { theme.highlight } else { theme.text },
+                    if is_selected { theme.text } else { theme.text.lerp_to_gamma(theme.muted, 0.25) },
                 );
 
                 // Right side: "↵ Open" if selected, snippet if not
                 if is_selected {
                     let open_pill = Rect::from_min_size(pos2(item_rect.max.x - 64.0, item_rect.min.y + 8.0), vec2(54.0, 20.0));
+                    let pill_bg = Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), if theme.is_light() { 16 } else { 24 });
                     painter.rect(
                         open_pill,
                         3.0,
-                        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 25),
-                        Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 80)),
+                        pill_bg,
+                        Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 50)),
                         egui::StrokeKind::Inside,
                     );
                     painter.text(

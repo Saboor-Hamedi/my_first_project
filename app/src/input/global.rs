@@ -24,6 +24,29 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
         return Some(false);
     }
 
+    // Global AI Agent dropdown toggle: Ctrl+Shift+I
+    let toggle_ai = ctx.input(|i| {
+        i.modifiers.ctrl && i.modifiers.shift && !i.modifiers.alt && i.key_pressed(egui::Key::I)
+    });
+    if toggle_ai {
+        app.agent_state.is_open = !app.agent_state.is_open;
+        if app.agent_state.is_open {
+            app.set_status("AI Assistant opened (Ctrl+Shift+I to toggle)", now);
+        } else {
+            app.set_status("AI Agent closed", now);
+        }
+        return Some(false);
+    }
+
+    // AI Agent Dropdown input priority: absorbs all shortcuts, text, and keys so typing goes only into the AI prompt
+    if app.agent_state.is_open {
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            app.agent_state.is_open = false;
+            app.set_status("AI Agent closed", now);
+        }
+        return Some(false);
+    }
+
     // When Vim search is active, bypass ALL global shortcuts so every keystroke
     // flows through as a Text event into the search buffer (fixes missing chars).
     if app.editor_input_mode == crate::app::EditorInputMode::Vim && app.vim.is_searching() {

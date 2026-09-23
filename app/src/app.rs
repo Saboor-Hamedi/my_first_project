@@ -183,6 +183,9 @@ pub struct App {
 
     // Editor-only smooth zoom & HUD state
     pub zoom: crate::zoom::ZoomState,
+
+    // DeepSeek Pro AI Agent state
+    pub agent_state: crate::agent::AgentState,
 }
 
 impl App {
@@ -293,6 +296,7 @@ impl App {
             terminal_focused: false,
             term_pane: None,
             prev_mode_before_term: Mode::Normal,
+            agent_state: crate::agent::AgentState::new(),
         };
 
         app.load_settings();
@@ -449,6 +453,42 @@ impl App {
             }
             if let Ok(Some(sb)) = db.get_setting("sidebar") {
                 self.sidebar_open = sb == "on" || sb == "true";
+            }
+            if let Ok(Some(k)) = db.get_setting("deepseek_api_key_enc") {
+                self.agent_state.deepseek_api_key_enc = k;
+            }
+            if let Ok(Some(m)) = db.get_setting("deepseek_model") {
+                self.agent_state.deepseek_model = m;
+            }
+        }
+
+        // Check settings.json fallback and ensure settings.json file is populated
+        if let Ok(path) = core::Database::get_db_path() {
+            if let Some(parent) = path.parent() {
+                let json_path = parent.join("settings.json");
+                let mut map: std::collections::BTreeMap<String, String> = std::fs::read_to_string(&json_path)
+                    .ok()
+                    .and_then(|s| serde_json::from_str(&s).ok())
+                    .unwrap_or_default();
+
+                if self.agent_state.deepseek_api_key_enc.is_empty() {
+                    if let Some(key) = map.get("deepseek_api_key_enc") {
+                        self.agent_state.deepseek_api_key_enc = key.clone();
+                    }
+                }
+                if let Some(model) = map.get("deepseek_model") {
+                    if self.agent_state.deepseek_model.is_empty() {
+                        self.agent_state.deepseek_model = model.clone();
+                    }
+                }
+
+                if !self.agent_state.deepseek_api_key_enc.is_empty() {
+                    map.insert("deepseek_api_key_enc".into(), self.agent_state.deepseek_api_key_enc.clone());
+                }
+                map.insert("deepseek_model".into(), self.agent_state.deepseek_model.clone());
+                if let Ok(s) = serde_json::to_string_pretty(&map) {
+                    let _ = std::fs::write(json_path, s);
+                }
             }
         }
     }
@@ -979,8 +1019,16 @@ impl App {
         }
 
         // Sidebar Splitter Divider & Knob (when sidebar is open in Notes or Docs)
+        let any_modal_open = self.settings_open
+            || self.search_open
+            || self.help_open
+            || self.rename_open
+            || self.delete_confirm_open
+            || self.accent_dropdown_open
+            || self.agent_state.is_open;
+
         if let (Some(hit_rect), Some(center_x)) = (layout.splitter_hit_rect, layout.splitter_center_x) {
-            let is_splitter_hovered = ui.rect_contains_pointer(hit_rect);
+            let is_splitter_hovered = !any_modal_open && ui.rect_contains_pointer(hit_rect);
             let primary_down = ui.input(|i| i.pointer.primary_down());
             let primary_pressed = ui.input(|i| i.pointer.primary_clicked() || i.pointer.button_pressed(egui::PointerButton::Primary));
 
@@ -1386,7 +1434,7 @@ impl App {
 
                     // Generous hit box for dragging so mouse never slips off (prevents drag dropping)
                     let divider_hit_rect = divider_rect.expand2(vec2(8.0, 0.0));
-                    let is_divider_hovered = ui.rect_contains_pointer(divider_hit_rect);
+                    let is_divider_hovered = !any_modal_open && ui.rect_contains_pointer(divider_hit_rect);
 
                     let primary_down = ui.input(|i| i.pointer.primary_down());
                     let primary_pressed = ui.input(|i| i.pointer.primary_clicked() || i.pointer.button_pressed(egui::PointerButton::Primary));
@@ -1755,7 +1803,7 @@ impl App {
             None
         };
 
-        render_bottom_dock(
+        let toggle_ai = render_bottom_dock(
             ui,
             &painter,
             cmd_bar_rect,
@@ -1773,7 +1821,11 @@ impl App {
             Some(mode_badge_str.as_str()),
             search_prompt,
             &self.theme,
+            self.agent_state.is_open,
         );
+        if toggle_ai {
+            self.agent_state.is_open = !self.agent_state.is_open;
+        }
 
         // Sleek Sidebar (Ctrl+B)
         if self.sidebar_open && self.mode != Mode::Doc {
@@ -1944,6 +1996,8 @@ impl App {
                 &mut self.backup_dir,
                 self.last_backup_status.as_deref(),
                 &self.updater,
+                &mut self.agent_state.deepseek_api_key_enc,
+                &mut self.agent_state.deepseek_model,
                 &mut on_save,
             );
 
@@ -1958,7 +2012,10 @@ impl App {
                     self.updater.start_download();
                 }
                 Some(SettingPanelAction::RestartToApply) => {
-                    let _ = self.updater.restart_and_apply();
+                    if let Err(e) = self.updater.restart_and_apply() {
+                        self.updater.set_error(e.clone());
+                        self.set_status(&format!("Update restart failed: {e}"), now);
+                    }
                 }
                 None => {}
             }
@@ -2089,6 +2146,26 @@ impl App {
                 }
             }
         }
+
+        // Poll DeepSeek background worker for any completed responses
+        self.agent_state.poll_response();
+
+        // Render floating resizable DeepSeek AI Agent dropdown (Ctrl+Shift+I or bottom statusbar button)
+        let cur_text = self.ed.text();
+        let active_note_info = if let Some(n) = self.notes_list.iter().find(|n| Some(n.id) == self.active_note_id) {
+            Some((n.topic.as_str(), cur_text.as_str()))
+        } else {
+            None
+        };
+        crate::agent::deepseek_ui::render_ai_dropdown(
+            ui,
+            &painter,
+            bounds,
+            &mut self.agent_state,
+            &self.notes_list,
+            active_note_info,
+            &self.theme,
+        );
     }
 }
 

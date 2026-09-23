@@ -6,7 +6,7 @@ use crate::updater::{UpdateManager, UpdateStatus};
 use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Pos2, Rect, Stroke};
 
 pub fn render_updates_tab(
-    ui: &egui::Ui,
+    ui: &mut egui::Ui,
     painter: &egui::Painter,
     panel_rect: Rect,
     p_origin: Pos2,
@@ -192,7 +192,8 @@ pub fn render_updates_tab(
         pos2(p_origin.x, p_origin.y + 270.0),
         vec2(card_w, 42.0),
     );
-    let btn_hov = can_click && ui.rect_contains_pointer(btn_rect);
+    let btn_resp = ui.allocate_rect(btn_rect, egui::Sense::click());
+    let btn_hov = can_click && (btn_resp.hovered() || ui.rect_contains_pointer(btn_rect));
     if btn_hov {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
@@ -216,7 +217,7 @@ pub fn render_updates_tab(
         if can_click { theme.accent } else { theme.muted },
     );
 
-    if btn_hov && ui.input(|i| i.pointer.primary_clicked()) {
+    if can_click && (btn_resp.clicked() || (btn_hov && ui.input(|i| i.pointer.primary_clicked()))) {
         let act = match &status {
             UpdateStatus::Idle | UpdateStatus::UpToDate { .. } | UpdateStatus::Error(_) => {
                 Some(SettingPanelAction::CheckUpdates)

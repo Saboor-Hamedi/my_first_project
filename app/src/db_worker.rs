@@ -108,6 +108,7 @@ pub fn spawn_db_worker() -> Sender<DbMsg> {
                     }
                     DbMsg::SaveSetting { key, val } => {
                         let _ = db.set_setting(&key, &val);
+                        sync_setting_json(&key, &val);
                     }
                     DbMsg::SaveFocus { t1, t2 } => {
                         let _ = db.set_focus(&t1, &t2);
@@ -174,3 +175,20 @@ pub fn spawn_db_worker() -> Sender<DbMsg> {
     });
     tx
 }
+
+fn sync_setting_json(key: &str, val: &str) {
+    if let Ok(path) = core::Database::get_db_path() {
+        if let Some(parent) = path.parent() {
+            let json_path = parent.join("settings.json");
+            let mut map: std::collections::BTreeMap<String, String> = std::fs::read_to_string(&json_path)
+                .ok()
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default();
+            map.insert(key.to_string(), val.to_string());
+            if let Ok(serialized) = serde_json::to_string_pretty(&map) {
+                let _ = std::fs::write(json_path, serialized);
+            }
+        }
+    }
+}
+

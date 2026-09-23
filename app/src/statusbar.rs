@@ -21,7 +21,9 @@ pub fn render_bottom_dock(
     mode_badge: Option<&str>,
     search_prompt: Option<(&str, &str, usize)>,
     theme: &Theme,
-) {
+    is_ai_open: bool,
+) -> bool {
+    let mut toggle_ai = false;
     let accent = theme.accent;
     let muted = theme.muted;
 
@@ -41,7 +43,7 @@ pub fn render_bottom_dock(
     let mut text_x = cmd_x;
 
     // Right side stats: Line, Col, word count (padded before resize knob)
-    let stats = if dock_rect.width() > 620.0 {
+    let stats = if dock_rect.width() > 640.0 {
         format!("Ln {}, Col {}  ·  {} words", cursor_row, cursor_col, total_words)
     } else {
         format!("Ln {}, Col {}", cursor_row, cursor_col)
@@ -49,7 +51,45 @@ pub fn render_bottom_dock(
     let stats_galley = painter.layout_no_wrap(stats, FontId::monospace(12.0), theme.muted);
     let stats_pos = pos2(dock_rect.max.x - 34.0, dock_rect.center().y - 7.0);
     let stats_left_x = stats_pos.x - stats_galley.size().x;
-    let max_cmd_x = (stats_left_x - 16.0).max(cmd_x + 120.0);
+
+    // AI Agent Button on right side
+    let ai_btn_w = 76.0;
+    let ai_btn_h = 22.0;
+    let ai_btn_rect = Rect::from_center_size(
+        pos2(stats_left_x - (ai_btn_w * 0.5 + 12.0), dock_rect.center().y),
+        vec2(ai_btn_w, ai_btn_h),
+    );
+    let is_ai_hovered = ui.rect_contains_pointer(ai_btn_rect);
+    if is_ai_hovered {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    if is_ai_hovered && ui.input(|i| i.pointer.primary_clicked()) {
+        toggle_ai = true;
+    }
+
+    let ai_bg = if is_ai_open {
+        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), if theme.is_light() { 32 } else { 48 })
+    } else if is_ai_hovered {
+        theme.surface().lerp_to_gamma(theme.accent, 0.12)
+    } else {
+        theme.bg
+    };
+    painter.rect(
+        ai_btn_rect,
+        4.0,
+        ai_bg,
+        Stroke::new(1.0, if is_ai_open || is_ai_hovered { theme.accent } else { theme.border() }),
+        egui::StrokeKind::Inside,
+    );
+    painter.text(
+        ai_btn_rect.center(),
+        Align2::CENTER_CENTER,
+        "AI Agent",
+        FontId::monospace(11.0),
+        if is_ai_open || is_ai_hovered { theme.accent } else { theme.text },
+    );
+
+    let max_cmd_x = (ai_btn_rect.min.x - 16.0).max(cmd_x + 120.0);
     let cmd_input_left = cmd_x + 58.0;
     let cmd_avail_w = (max_cmd_x - cmd_input_left).max(40.0);
 
@@ -277,4 +317,6 @@ pub fn render_bottom_dock(
         stats_galley,
         theme.muted,
     );
+
+    toggle_ai
 }

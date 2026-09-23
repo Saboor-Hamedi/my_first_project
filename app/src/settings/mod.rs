@@ -1,5 +1,6 @@
 //! Settings modal panels and tabs router.
 
+pub mod ai_engine;
 pub mod backup;
 pub mod carets;
 pub mod editor_mode;
@@ -26,7 +27,7 @@ pub enum SettingPanelAction {
 }
 
 pub fn render_setting_panel(
-    ui: &egui::Ui,
+    ui: &mut egui::Ui,
     painter: &egui::Painter,
     panel_rect: Rect,
     active_tab: SettingTab,
@@ -37,6 +38,8 @@ pub fn render_setting_panel(
     backup_dir: &mut String,
     last_backup_status: Option<&str>,
     updater: &UpdateManager,
+    api_key_enc: &mut String,
+    deepseek_model: &mut String,
     on_save_setting: &mut dyn FnMut(&str, &str),
 ) -> Option<SettingPanelAction> {
     // Clip all painting strictly to the panel rect — nothing bleeds over modal border
@@ -70,6 +73,10 @@ pub fn render_setting_panel(
         }
         SettingTab::Updates => {
             updates::render_updates_tab(ui, painter, panel_rect, p_origin, updater, theme)
+        }
+        SettingTab::Ai => {
+            ai_engine::render_ai_tab(ui, painter, panel_rect, p_origin, api_key_enc, deepseek_model, theme, on_save_setting);
+            None
         }
     }
 }
