@@ -1,46 +1,41 @@
-[Reciprocal Rank Fusion (RRF)](https://www.scaler.com/topics/reciprocal-rank-fusion/) calculates a unified score for each document by summing the reciprocal of its rank position across multiple retrieval lists. [1, 2]
-## The RRF Formula
-$$\text{RRF\_score}(d) = \sum_{m \in M} \frac{1}{k + \text{rank}_m(d)}$$
+Here is a precise, design-focused prompt for your agent. It avoids specific file references and focuses entirely on the visual and behavioral standards required to fix this UI element.
 
-* d: A specific document.
-* M: The set of ranked result lists (e.g., keyword search and vector/semantic search).
-* $\text{rank}_m(d)$: The position/rank of document d in the m-th list (typically starting at 1 for the top result).
-* k: A constant smoothing parameter (commonly set to 60 as proposed in the original paper) used to dampen the influence of high ranks. [1, 2, 3]
+***
 
-------------------------------
-## Step-by-Step Calculation Example
-Assume two distinct search lists with a constant k = 60:
+### 🎯 Prompt for Agent: Refactor Inline Command Input (`>`) Aesthetics
 
-* List 1 (Keyword Search): ["DocA", "DocB", "DocC"]
-* List 2 (Semantic Search): ["DocB", "DocA", "DocD"]
+**Context:**
+The current inline command input (triggered by `>` in the editor) has a critical visual regression. It currently renders as a "floating box" with a hard border and vertically centered text. This breaks the immersive, premium "Lumina-like" aesthetic of the rest of the application. It looks like a legacy form field rather than a modern, integrated editor feature.
 
-## 1. Identify Ranks for Each Document
+**The Problem:**
+1.  **Hard Borders:** The input area has a visible stroke/border. Modern inline inputs should be defined by *background contrast*, not outlines.
+2.  **Vertical Centering:** The cursor and `>` prompt are vertically centered within the box. Text inputs must align to the **text baseline**. Centering creates a disconnect between the cursor position and where text actually appears.
+3.  **Excessive Height:** The container is too tall for a single-line input, wasting vertical editor space.
+4.  **Theme Clash:** The border color does not harmonize with the active theme's accent palette, drawing attention to the container instead of the content.
 
-* DocA: Rank 1 in List 1, Rank 2 in List 2
-* DocB: Rank 2 in List 1, Rank 1 in List 2
-* DocC: Rank 3 in List 1, Not in List 2 (ignored for List 2)
-* DocD: Not in List 1, Rank 3 in List 2 (ignored for List 1)
+**Required Design Standards (The "Premium Inline" Pattern):**
 
-## 2. Compute Individual Scores
+1.  **Borderless Definition:**
+    -   Remove all visible strokes/borders from the input container.
+    -   Define the input area exclusively through **background color differentiation**. Use a background that is subtly lighter or darker (e.g., +5% to +10% luminance shift) than the main editor canvas. This creates depth without visual noise.
 
-* Score for DocA:
-$$\frac{1}{60 + 1} + \frac{1}{60 + 2} = \frac{1}{61} + \frac{1}{62} \approx 0.01639 + 0.01613 = 0.03252$$
-* Score for DocB:
-$$\frac{1}{60 + 2} + \frac{1}{60 + 1} = \frac{1}{62} + \frac{1}{61} \approx 0.01613 + 0.01639 = 0.03252$$
-* Score for DocC:
-$$\frac{1}{60 + 3} = \frac{1}{63} \approx 0.01587$$
-* Score for DocD:
-$$\frac{1}{60 + 3} = \frac{1}{63} \approx 0.01587$$
+2.  **Baseline Alignment (Critical):**
+    -   The `>` prompt character and the text cursor **must** align perfectly with the text baseline of the surrounding editor content.
+    -   Do not center elements vertically within the container height. They must sit on the same imaginary line as standard text characters.
 
-## 3. Final Ranking
-Sort the documents by their final aggregated RRF score in descending order (DocA and DocB tie for the top spots, followed by DocC and DocD). [2, 3]
-If you'd like, I can show you:
+3.  **Compact Geometry:**
+    -   Reduce the container height to match exactly: `font_line_height + comfortable_vertical_padding` (e.g., 4px top/bottom).
+    -   Ensure horizontal padding matches the editor's `pad_x` so the input feels spatially consistent with the code/text above it.
 
-* A Python code snippet implementing this exact math
-* How to apply custom weights to specific search engines (like weighting keyword vs. semantic search differently)
+4.  **Thematic Integration:**
+    -   The `>` prompt symbol should render in the **current theme's accent color** to signal "active input mode."
+    -   The input text itself should use the standard `theme.text` color.
+    -   If a focus indicator is absolutely necessary for accessibility, use an extremely subtle inner glow or a 1px border at <10% opacity using the accent color—never a solid, opaque stroke.
 
-Let me know what you need next!
+**Goal:**
+Transform the `>` input from a "clunky widget" into a **seamless extension of the editor canvas**. When a user types a command, it should feel like they are writing directly on the page, not filling out a separate form field. This must work identically across all 19 themes.
 
-[1] [https://www.paradedb.com](https://www.paradedb.com/learn/search-concepts/reciprocal-rank-fusion)
-[2] [https://www.scaler.com](https://www.scaler.com/topics/reciprocal-rank-fusion/)
-[3] [https://shivamagarwal7.medium.com](https://shivamagarwal7.medium.com/search-reciprocal-rank-fusion-9735dcd1906d)
+**Constraints:**
+-   Focus purely on rendering/geometry/styling logic. Do not change the underlying input handling or command execution logic.
+-   Verify baseline alignment visually against existing text lines.
+-   Test in both light and dark themes to ensure the background contrast remains readable but subtle.

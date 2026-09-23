@@ -1,7 +1,10 @@
 //! Sleek floating sidebar with navigation and user notes library.
 
+#[path = "body.rs"]
 pub mod body;
+#[path = "footer.rs"]
 pub mod footer;
+#[path = "header.rs"]
 pub mod header;
 
 #[allow(unused_imports)]

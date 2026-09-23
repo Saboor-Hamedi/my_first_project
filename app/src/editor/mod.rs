@@ -36,6 +36,11 @@ impl Editor {
         self.selection_inclusive = false;
     }
 
+    pub fn clear_history(&mut self) {
+        self.undo_stack.clear();
+        self.redo_stack.clear();
+    }
+
     pub fn set_text(&mut self, s: &str) {
         self.buf = s.chars().collect();
         self.cur = 0;

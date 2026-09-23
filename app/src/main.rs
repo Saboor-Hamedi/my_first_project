@@ -15,6 +15,7 @@ mod modals;
 mod mode;
 mod notes;
 pub mod settings;
+#[path = "sidebar/sidebar.rs"]
 mod sidebar;
 mod sound;
 mod theme;

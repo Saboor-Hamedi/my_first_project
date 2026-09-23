@@ -517,3 +517,26 @@ fn test_end_visual_reaches_end_of_line() {
     let col = caret_cell(ed.cur, &lines[0], Some(crate::vim::VimSubMode::Normal));
     assert_eq!(col, 5);
 }
+
+#[test]
+fn test_enter_task_list_continuation() {
+    let mut ed = Editor::new();
+    ed.insert_str("- [ ] First item");
+    ed.handle_enter();
+    assert_eq!(ed.text(), "- [ ] First item\n- [ ] ");
+    assert_eq!(ed.cur, 23);
+
+    // Pressing enter on empty task marker clears it
+    ed.handle_enter();
+    assert_eq!(ed.text(), "- [ ] First item\n\n");
+}
+
+#[test]
+fn test_select_word_at() {
+    let mut ed = Editor::new();
+    ed.insert_str("let my_variable = 42;");
+    ed.select_word_at(6); // inside "my_variable"
+    assert_eq!(ed.selected_text(), Some("my_variable".to_string()));
+    assert_eq!(ed.cur, 15);
+    assert_eq!(ed.selection, Some(4));
+}

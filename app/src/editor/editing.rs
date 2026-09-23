@@ -299,6 +299,10 @@ impl Editor {
             }
         };
 
+        let is_task = rest.starts_with("- [ ] ") || rest.starts_with("- [x] ") || rest.starts_with("- [X] ")
+            || rest.starts_with("* [ ] ") || rest.starts_with("* [x] ") || rest.starts_with("* [X] ");
+        let is_empty_task = is_task && rest[6..].trim().is_empty();
+
         let is_empty_bullet = {
             if rest.starts_with('-') || rest.starts_with('*') || rest.starts_with('+') {
                 rest[1..].trim().is_empty()
@@ -307,7 +311,7 @@ impl Editor {
             }
         };
 
-        if is_empty_numbered || is_empty_bullet {
+        if is_empty_numbered || is_empty_task || (!is_task && is_empty_bullet) {
             self.buf.drain(line_start..line_end);
             self.buf.insert(line_start, '\n');
             self.cur = line_start + 1;
@@ -316,7 +320,9 @@ impl Editor {
         }
 
         // 3. Check for list continuation
-        let next_prefix = if let Some(num) = parse_numbered_list(rest) {
+        let next_prefix = if is_task {
+            format!("\n{}- [ ] ", indent)
+        } else if let Some(num) = parse_numbered_list(rest) {
             format!("\n{}{}. ", indent, num.saturating_add(1))
         } else if let Some(bullet) = parse_bullet_list(rest) {
             format!("\n{}{} ", indent, bullet)

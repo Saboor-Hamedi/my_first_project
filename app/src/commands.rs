@@ -295,6 +295,22 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
             });
             app.set_status("Live preview closed", now);
         }
+        "live" | "inline" | "livepreview" => {
+            app.inline_mode = true;
+            let _ = app.db_tx.send(DbMsg::SaveSetting {
+                key: "inline_mode".into(),
+                val: "true".into(),
+            });
+            app.set_status("✨ Inline Live Markdown Mode ENABLED (Ctrl+E to toggle)", now);
+        }
+        "raw" | "source" => {
+            app.inline_mode = false;
+            let _ = app.db_tx.send(DbMsg::SaveSetting {
+                key: "inline_mode".into(),
+                val: "false".into(),
+            });
+            app.set_status("📝 Raw Monospace Mode ENABLED (Ctrl+E to toggle)", now);
+        }
         "noh" | "nohl" | "nohlsearch" => {
             app.vim.search.clear_matches();
             app.set_status("Search highlighting cleared (:noh)", now);

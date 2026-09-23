@@ -49,4 +49,28 @@ impl Editor {
             false
         }
     }
+
+    pub fn select_word_at(&mut self, idx: usize) {
+        if self.buf.is_empty() {
+            return;
+        }
+        let pos = idx.min(self.buf.len().saturating_sub(1));
+        let is_word_char = |c: char| c.is_alphanumeric() || c == '_';
+        if !is_word_char(self.buf[pos]) {
+            self.cur = pos;
+            self.selection = None;
+            return;
+        }
+        let mut start = pos;
+        while start > 0 && is_word_char(self.buf[start - 1]) {
+            start -= 1;
+        }
+        let mut end = pos;
+        while end < self.buf.len() && is_word_char(self.buf[end]) {
+            end += 1;
+        }
+        self.selection = Some(start);
+        self.cur = end;
+        self.selection_inclusive = false;
+    }
 }

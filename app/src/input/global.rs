@@ -464,6 +464,23 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
         return Some(false);
     }
 
+    let ctrl_e = ctx.input(|i| (i.modifiers.ctrl || i.modifiers.command) && !i.modifiers.alt && !i.modifiers.shift && i.key_pressed(egui::Key::E));
+    if ctrl_e {
+        app.inline_mode = !app.inline_mode;
+        let _ = app.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+            key: "inline_mode".into(),
+            val: if app.inline_mode { "true" } else { "false" }.into(),
+        });
+        let msg = if app.inline_mode {
+            "✨ Inline Live Markdown Mode ON (Ctrl+E to toggle)"
+        } else {
+            "📝 Raw Monospace Mode ON (Ctrl+E to toggle)"
+        };
+        app.set_status(msg, now);
+        app.sound.play();
+        return Some(false);
+    }
+
     if ctrl_b {
         if app.mode == Mode::Doc {
             if !app.sidebar_open {
