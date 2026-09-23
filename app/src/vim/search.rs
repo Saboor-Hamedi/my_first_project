@@ -30,6 +30,7 @@ impl VimSearchState {
     }
 
     /// Starts an interactive search session.
+    #[allow(dead_code)]
     pub fn start(&mut self, backward: bool, initial_cur: usize) {
         self.active = true;
         self.backward = backward;

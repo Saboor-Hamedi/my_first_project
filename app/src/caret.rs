@@ -233,21 +233,31 @@ impl Caret {
         if self.glide.is_finite() && self.glide > 0.0 {
             let diff = target - self.pos;
             if diff.length() > 0.0 {
-                let speed = if (diff.y).abs() < 2.0 {
-                    52.0
-                } else {
-                    34.0
-                };
-                let k = 1.0 - (-dt * speed).exp();
-                self.pos += diff * k;
-                if (target - self.pos).length() < 0.15 {
+                if typed {
+                    // While typing, snap caret to target instantly so it
+                    // always sits exactly on the last typed character.
+                    // Glide lag would make it look like the caret is stuck
+                    // behind the cursor after 20-30+ chars of continuous typing.
                     self.pos = target;
+                } else {
+                    // For navigation jumps (j, k, $, etc.) use smooth glide.
+                    let speed = if (diff.y).abs() < 2.0 {
+                        52.0
+                    } else {
+                        34.0
+                    };
+                    let k = 1.0 - (-dt * speed).exp();
+                    self.pos += diff * k;
+                    if (target - self.pos).length() < 0.15 {
+                        self.pos = target;
+                    }
                 }
             }
         } else {
             self.pos = target;
         }
         self.gliding = self.pos != target;
+
 
         if typed {
             self.last_type = now;

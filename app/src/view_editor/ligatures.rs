@@ -322,6 +322,7 @@ pub fn render_line_with_ligatures(
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use std::assert_eq;
 
     #[test]
     pub fn test_detect_ligatures() {

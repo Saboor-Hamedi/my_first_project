@@ -48,6 +48,12 @@ pub const BRAIN_DOCS: &[DocItem] = &[
         filename: "features.md",
         content: include_str!("../../brain/features.md"),
     },
+    DocItem {
+        id: "scan",
+        title: "WebScan",
+        filename: "scan.md",
+        content: include_str!("../../brain/scan.md"),
+    },
 ];
 
 /// Returns all available documentation documents.
@@ -364,7 +370,7 @@ mod tests {
 
     #[test]
     fn test_brain_docs_embedded_and_valid() {
-        assert_eq!(BRAIN_DOCS.len(), 6);
+        assert_eq!(BRAIN_DOCS.len(), 7);
         for doc in BRAIN_DOCS {
             assert!(!doc.id.is_empty());
             assert!(!doc.title.is_empty());

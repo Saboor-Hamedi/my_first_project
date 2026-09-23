@@ -5,4 +5,6 @@ pub enum Mode {
     Normal,
     Stats,
     Doc,
+    ScanReport,
+    ScanHistory,
 }

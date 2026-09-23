@@ -26,6 +26,7 @@ pub fn render_editor_body(
     block_scroll: bool,
     search_matches: Option<(&[usize], usize)>,
     show_line_numbers: bool,
+    vim_mode: Option<crate::vim::VimSubMode>,
 ) {
     let font = FontId::monospace(font_size);
     let font_h = painter.layout_no_wrap("M".to_owned(), font.clone(), Color32::WHITE).size().y;
@@ -39,13 +40,13 @@ pub fn render_editor_body(
     // Mouse wheel scrolling: prioritize smooth scroll delta, fallback to scaled raw delta
     if !block_scroll {
         let scroll_delta = ui.input(|i| {
-            if i.smooth_scroll_delta.y.abs() > 0.001 {
-                i.smooth_scroll_delta.y
+            if i.raw_scroll_delta.y.abs() > 0.0 {
+                i.raw_scroll_delta.y
             } else {
-                i.raw_scroll_delta.y * 0.5
+                i.smooth_scroll_delta.y
             }
         });
-        if scroll_delta != 0.0 && ui.rect_contains_pointer(editor_rect) {
+        if scroll_delta.abs() > 0.0 {
             *scroll_y = (*scroll_y - scroll_delta).clamp(0.0, max_scroll);
         }
     }
@@ -86,7 +87,9 @@ pub fn render_editor_body(
     }
 
     // Caret position in visual lines
-    let (row, col) = ed.visual_row_col(visual_lines);
+    let (row, _) = ed.visual_row_col(visual_lines);
+    let current_line = &visual_lines[row];
+    let col = crate::editor::caret_cell(ed.cur, current_line, vim_mode);
     let caret_y_in_content = row as f32 * lh;
 
     // Auto-scroll / caret follow: ONLY when user is typing or navigating by keyboard!
@@ -190,8 +193,8 @@ pub fn render_editor_body(
         let y_mid = line_y + (lh * 0.5).round();
 
         let line_len = line.char_end.saturating_sub(line.char_start);
-        let block_col = if r == row && is_block && col < line_len {
-            Some(col)
+        let block_col = if r == row && is_block && line_len > 0 {
+            Some(col.min(line_len))
         } else {
             None
         };

@@ -24,6 +24,8 @@ mod showcmd;
 mod updater;
 mod docs;
 mod help_panel;
+mod scan_history_view;
+mod scan_view;
 
 pub use types::{snapshot, visual_line};
 

@@ -7,7 +7,11 @@ use eframe::egui::{Key, Modifiers};
 
 pub fn handle_mode_enter(app: &mut App, _now: f64) {
     if app.mode == Mode::Normal {
-        app.ed.insert('\n');
+        // Auto-indent and auto-continuing lists apply in INSERT mode
+        if app.editor_input_mode == EditorInputMode::Vim && app.vim.mode != VimSubMode::Insert {
+            return;
+        }
+        app.ed.handle_enter();
         app.is_dirty = true;
     }
 }

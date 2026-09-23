@@ -20,6 +20,7 @@ pub enum MdBlock {
         bullet: String,
         text: String,
         checked: Option<bool>,
+        indent_level: usize,
     },
     Table {
         headers: Vec<String>,
@@ -133,12 +134,19 @@ pub fn parse_markdown(text: &str) -> Vec<MdBlock> {
             }
         }
 
+        // Compute indentation level for nested list items
+        let indent_spaces = line.chars().take_while(|&c| c == ' ' || c == '\t').fold(0, |acc, c| {
+            if c == '\t' { acc + 4 } else { acc + 1 }
+        });
+        let indent_level = indent_spaces / 2;
+
         // List item with checkbox: - [ ] or - [x]
         if let Some(rest) = trimmed.strip_prefix("- [ ] ") {
             blocks.push(MdBlock::ListItem {
                 bullet: "".to_string(),
                 text: rest.trim().to_string(),
                 checked: Some(false),
+                indent_level,
             });
             continue;
         }
@@ -147,16 +155,18 @@ pub fn parse_markdown(text: &str) -> Vec<MdBlock> {
                 bullet: "".to_string(),
                 text: rest.trim().to_string(),
                 checked: Some(true),
+                indent_level,
             });
             continue;
         }
 
-        // Unordered List item: - or *
-        if let Some(rest) = trimmed.strip_prefix("- ").or_else(|| trimmed.strip_prefix("* ")) {
+        // Unordered List item: - or * or +
+        if let Some(rest) = trimmed.strip_prefix("- ").or_else(|| trimmed.strip_prefix("* ")).or_else(|| trimmed.strip_prefix("+ ")) {
             blocks.push(MdBlock::ListItem {
                 bullet: "•".to_string(),
                 text: rest.trim().to_string(),
                 checked: None,
+                indent_level,
             });
             continue;
         }
@@ -169,6 +179,7 @@ pub fn parse_markdown(text: &str) -> Vec<MdBlock> {
                     bullet: format!("{}.", prefix),
                     text: trimmed[dot_idx + 2..].trim().to_string(),
                     checked: None,
+                    indent_level,
                 });
                 continue;
             }
@@ -315,7 +326,7 @@ fn highlight_code_line(
     theme: &Theme,
 ) -> LayoutJob {
     let mut job = LayoutJob::default();
-    let mono_font = FontId::monospace(font_size * 0.88);
+    let mono_font = FontId::monospace(font_size);
     let chars: Vec<char> = line.chars().collect();
     let n = chars.len();
     let mut i = 0;
@@ -502,6 +513,7 @@ pub fn render_markdown_preview(
 
     let start_x = rect.min.x + pad_x;
     let mut current_y = rect.min.y + pad_y - *scroll_y;
+    let mut code_block_idx: usize = 0;
 
     for block in &blocks {
         match block {
@@ -513,18 +525,6 @@ pub fn render_markdown_preview(
                 let text_h = galley.size().y;
                 if current_y + text_h >= rect.min.y && current_y <= rect.max.y {
                     content_painter.galley(pos2(start_x, current_y), galley, color);
-                    // Full underline divider line across pane
-                    let line_y = current_y + text_h + 5.0;
-                    content_painter.line_segment(
-                        [pos2(start_x, line_y), pos2(start_x + max_text_w, line_y)],
-                        Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 35)),
-                    );
-                    // Accent marker notch
-                    content_painter.rect_filled(
-                        Rect::from_min_size(pos2(start_x, line_y - 0.5), vec2(38.0, 2.0)),
-                        1.0,
-                        theme.accent,
-                    );
                 }
                 current_y += text_h + 16.0;
             }
@@ -536,11 +536,6 @@ pub fn render_markdown_preview(
                 let text_h = galley.size().y;
                 if current_y + text_h >= rect.min.y && current_y <= rect.max.y {
                     content_painter.galley(pos2(start_x, current_y), galley, color);
-                    let line_y = current_y + text_h + 4.0;
-                    content_painter.line_segment(
-                        [pos2(start_x, line_y), pos2(start_x + max_text_w, line_y)],
-                        Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 25)),
-                    );
                 }
                 current_y += text_h + 12.0;
             }
@@ -602,8 +597,12 @@ pub fn render_markdown_preview(
                 }
                 current_y += box_h + 10.0;
             }
-            MdBlock::ListItem { bullet, text, checked } => {
-                let job = build_inline_job(text, font_size, theme.text, theme, max_text_w - 28.0);
+            MdBlock::ListItem { bullet, text, checked, indent_level } => {
+                let indent_offset = (*indent_level as f32) * 20.0;
+                let item_start_x = start_x + indent_offset;
+                let available_w = (max_text_w - indent_offset).max(40.0);
+
+                let job = build_inline_job(text, font_size, theme.text, theme, available_w - 28.0);
                 let galley = painter.layout_job(job);
                 let text_h = galley.size().y;
                 let row_h = text_h.max(20.0);
@@ -613,7 +612,7 @@ pub fn render_markdown_preview(
                         // Custom vector checkbox widget
                         let cb_size = 15.0;
                         let cb_y = current_y + 1.5;
-                        let cb_rect = Rect::from_min_size(pos2(start_x, cb_y), vec2(cb_size, cb_size));
+                        let cb_rect = Rect::from_min_size(pos2(item_start_x, cb_y), vec2(cb_size, cb_size));
 
                         if *is_checked {
                             // Checked: Filled accent box with crisp checkmark
@@ -626,11 +625,11 @@ pub fn render_markdown_preview(
                             content_painter.line_segment([p2, p3], Stroke::new(1.8, theme.bg));
 
                             // Text: dimmed with strike-through
-                            let text_start = pos2(start_x + 24.0, current_y);
+                            let text_start = pos2(item_start_x + 24.0, current_y);
                             content_painter.galley(text_start, galley, Color32::from_rgba_unmultiplied(255, 255, 255, 140));
                             let strike_y = current_y + text_h * 0.52;
                             content_painter.line_segment(
-                                [pos2(text_start.x, strike_y), pos2(text_start.x + max_text_w - 28.0, strike_y)],
+                                [pos2(text_start.x, strike_y), pos2(text_start.x + available_w - 28.0, strike_y)],
                                 Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 120)),
                             );
                         } else {
@@ -646,40 +645,45 @@ pub fn render_markdown_preview(
                                 Stroke::new(1.5, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 140)),
                                 egui::StrokeKind::Inside,
                             );
-                            content_painter.galley(pos2(start_x + 24.0, current_y), galley, Color32::WHITE);
+                            content_painter.galley(pos2(item_start_x + 24.0, current_y), galley, Color32::WHITE);
                         }
                     } else {
                         // Standard bullet or numbered list
                         let bullet_font = FontId::monospace(font_size * 0.92);
                         let b_color = theme.accent;
-                        content_painter.text(pos2(start_x, current_y), Align2::LEFT_TOP, bullet, bullet_font, b_color);
-                        content_painter.galley(pos2(start_x + 22.0, current_y), galley, Color32::WHITE);
+                        let bullet_w = if bullet.ends_with('.') {
+                            (bullet.len() as f32 * font_size * 0.58).max(18.0)
+                        } else {
+                            16.0
+                        };
+                        content_painter.text(pos2(item_start_x, current_y), Align2::LEFT_TOP, bullet, bullet_font, b_color);
+                        content_painter.galley(pos2(item_start_x + bullet_w + 6.0, current_y), galley, Color32::WHITE);
                     }
                 }
                 current_y += row_h + 6.0;
             }
             MdBlock::CodeBlock { lang, code } => {
+                code_block_idx += 1;
                 current_y += 6.0;
                 let lines: Vec<&str> = code.lines().collect();
                 let line_count = lines.len().max(1);
-                let line_h = (font_size * 1.35).round();
-                let gutter_w = (line_count.to_string().len() as f32 * (font_size * 0.55) + 16.0).max(28.0);
-                let block_pad_y = 8.0;
-                let top_strip_h = 24.0;
+                let line_h = (font_size * 1.50).round();
+                let gutter_w = (line_count.to_string().len() as f32 * (font_size * 0.60) + 20.0).max(36.0);
+                let block_pad_y = 12.0;
+                let top_strip_h = 30.0;
                 let block_h = top_strip_h + (line_count as f32 * line_h) + block_pad_y * 2.0;
 
                 if current_y + block_h >= rect.min.y && current_y <= rect.max.y {
                     let code_rect = Rect::from_min_size(pos2(start_x, current_y), vec2(max_text_w, block_h));
 
-                    // Dark contrasting container box
-                    let box_color = Color32::from_rgb(11, 13, 17);
-                    content_painter.rect_filled(code_rect, 6.0, box_color);
-                    content_painter.rect_stroke(
-                        code_rect,
-                        6.0,
-                        Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 35)),
-                        egui::StrokeKind::Inside,
+                    // Subtle background fill using theme's muted/surface color - NO border / NO hard outline
+                    let bg_color = Color32::from_rgba_unmultiplied(
+                        theme.muted.r(),
+                        theme.muted.g(),
+                        theme.muted.b(),
+                        26,
                     );
+                    content_painter.rect_filled(code_rect, 6.0, bg_color);
 
                     // Top Bar Header inside Code Block
                     let code_top_bar = Rect::from_min_size(code_rect.min, vec2(code_rect.width(), top_strip_h));
@@ -690,7 +694,7 @@ pub fn render_markdown_preview(
                     );
                     content_painter.line_segment(
                         [code_top_bar.left_bottom(), code_top_bar.right_bottom()],
-                        Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 30)),
+                        Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 26)),
                     );
 
                     // Left: Glowing dot + language label
@@ -700,17 +704,76 @@ pub fn render_markdown_preview(
                         pos2(code_top_bar.min.x + 22.0, code_top_bar.center().y),
                         Align2::LEFT_CENTER,
                         lang_label,
-                        FontId::monospace(10.0),
+                        FontId::monospace(10.5),
                         theme.accent,
                     );
 
-                    // Right: line count
+                    // Copy button logic & state
+                    let copy_id = ui.id().with(("code_block_copy", code_block_idx));
+                    let current_time = ui.input(|i| i.time);
+                    let last_copied: Option<f64> = ui.data(|d| d.get_temp(copy_id));
+                    let is_copied = last_copied.map_or(false, |t| current_time - t < 1.0);
+
+                    let btn_w = 72.0;
+                    let btn_h = 20.0;
+                    let btn_rect = Rect::from_min_size(
+                        pos2(code_top_bar.max.x - btn_w - 8.0, code_top_bar.center().y - btn_h * 0.5),
+                        vec2(btn_w, btn_h),
+                    );
+
+                    let is_btn_hovered = ui.rect_contains_pointer(btn_rect);
+                    if is_btn_hovered {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                    }
+                    if is_btn_hovered && ui.input(|i| i.pointer.primary_clicked()) {
+                        ui.ctx().copy_text(code.clone());
+                        ui.data_mut(|d| d.insert_temp(copy_id, current_time));
+                        ui.ctx().request_repaint();
+                    }
+                    if is_copied {
+                        let elapsed = current_time - last_copied.unwrap();
+                        let remaining = 1.0 - elapsed;
+                        if remaining > 0.0 {
+                            ui.ctx().request_repaint_after(std::time::Duration::from_millis((remaining * 1000.0) as u64 + 20));
+                        }
+                    }
+
+                    // Render Copy button
+                    let (btn_bg, btn_text, btn_color) = if is_copied {
+                        (
+                            Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 45),
+                            "✓ Copied",
+                            theme.accent,
+                        )
+                    } else if is_btn_hovered {
+                        (
+                            Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 55),
+                            "📋 Copy",
+                            theme.text,
+                        )
+                    } else {
+                        (
+                            Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 26),
+                            "📋 Copy",
+                            Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 200),
+                        )
+                    };
+                    content_painter.rect_filled(btn_rect, 4.0, btn_bg);
                     content_painter.text(
-                        pos2(code_top_bar.max.x - 12.0, code_top_bar.center().y),
+                        btn_rect.center(),
+                        Align2::CENTER_CENTER,
+                        btn_text,
+                        FontId::monospace(10.5),
+                        btn_color,
+                    );
+
+                    // Right (to the left of copy button): line count
+                    content_painter.text(
+                        pos2(btn_rect.min.x - 10.0, code_top_bar.center().y),
                         Align2::RIGHT_CENTER,
                         format!("{} lines", line_count),
-                        FontId::monospace(9.5),
-                        Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 120),
+                        FontId::monospace(10.0),
+                        Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 130),
                     );
 
                     // Line numbers gutter divider line
@@ -722,13 +785,13 @@ pub fn render_markdown_preview(
 
                     // Render lines with line numbers & syntax highlighting
                     let mut line_y = code_top_bar.max.y + block_pad_y;
-                    let num_font = FontId::monospace(font_size * 0.78);
+                    let num_font = FontId::monospace(font_size * 0.88);
                     let num_color = Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 90);
 
                     for (idx, line_str) in lines.iter().enumerate() {
                         // Line number
                         content_painter.text(
-                            pos2(gutter_x - 6.0, line_y + 1.0),
+                            pos2(gutter_x - 8.0, line_y + 1.0),
                             Align2::RIGHT_TOP,
                             (idx + 1).to_string(),
                             num_font.clone(),
@@ -738,12 +801,12 @@ pub fn render_markdown_preview(
                         // Highlighted code line
                         let job = highlight_code_line(line_str, lang, font_size, theme);
                         let galley = painter.layout_job(job);
-                        content_painter.galley(pos2(gutter_x + 10.0, line_y), galley, Color32::WHITE);
+                        content_painter.galley(pos2(gutter_x + 12.0, line_y), galley, Color32::WHITE);
 
                         line_y += line_h;
                     }
                 }
-                current_y += block_h + 12.0;
+                current_y += block_h + 14.0;
             }
             MdBlock::Table { headers, rows } => {
                 current_y += 8.0;
@@ -896,5 +959,16 @@ Paragraph text
         // Rule & Paragraph
         assert!(matches!(blocks[11], MdBlock::Rule));
         assert!(matches!(blocks[12], MdBlock::Paragraph(ref p) if p == "Paragraph text"));
+    }
+
+    #[test]
+    fn test_nested_list_indent_levels() {
+        let md = "- Level 0\n  - Level 1\n    - Level 2\n  1. Nested numbered\n";
+        let blocks = parse_markdown(md);
+        assert_eq!(blocks.len(), 4);
+        assert!(matches!(blocks[0], MdBlock::ListItem { indent_level: 0, ref text, .. } if text == "Level 0"));
+        assert!(matches!(blocks[1], MdBlock::ListItem { indent_level: 1, ref text, .. } if text == "Level 1"));
+        assert!(matches!(blocks[2], MdBlock::ListItem { indent_level: 2, ref text, .. } if text == "Level 2"));
+        assert!(matches!(blocks[3], MdBlock::ListItem { indent_level: 1, ref text, .. } if text == "Nested numbered"));
     }
 }

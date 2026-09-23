@@ -251,6 +251,7 @@ pub fn select_text_object(ed: &mut Editor, inner: bool, kind: TextObjectKind) ->
     if let Some((start, end)) = find_text_object_range(&ed.buf, ed.cur, inner, kind) {
         ed.selection = Some(start);
         ed.cur = end;
+        ed.selection_inclusive = false;
         true
     } else {
         false

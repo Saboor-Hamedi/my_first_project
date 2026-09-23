@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 default-run = "app"
 
@@ -15,6 +15,7 @@ path = "src/bin/publish.rs"
 
 [dependencies]
 core = { path = "../core" }
+webscan = { path = "../webscan" }
 eframe = { version = "0.31", default-features = true }
 fastrand = "2"
 chrono = "0.4"
@@ -27,4 +28,3 @@ ureq = { version = "2.10", features = ["json"] }
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"
-

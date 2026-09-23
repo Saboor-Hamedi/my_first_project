@@ -132,6 +132,18 @@ pub struct App {
     // In-app auto-updater
     pub updater: UpdateManager,
     pub active_doc_idx: usize,
+
+    // Webscan (:scan & :scans) state
+    pub prev_mode_before_scan: Mode,
+    pub scan_in_progress: Option<String>,
+    pub scan_rx: Option<std::sync::mpsc::Receiver<Result<webscan::ScanResult, String>>>,
+    pub active_scan_result: Option<webscan::ScanResult>,
+    pub active_scan_error: Option<(String, String)>,
+    pub scan_report_scroll_y: f32,
+    pub past_scans: Vec<core::ScanRecord>,
+    pub scan_history_selected: usize,
+    pub scan_history_scroll_y: f32,
+    pub clipboard_text: Option<String>,
 }
 
 impl App {
@@ -207,6 +219,16 @@ impl App {
             lifetime_activity: (0, 0, 0, 0),
             updater: UpdateManager::new(),
             active_doc_idx: 0,
+            prev_mode_before_scan: Mode::Normal,
+            scan_in_progress: None,
+            scan_rx: None,
+            active_scan_result: None,
+            active_scan_error: None,
+            scan_report_scroll_y: 0.0,
+            past_scans: Vec::new(),
+            scan_history_selected: 0,
+            scan_history_scroll_y: 0.0,
+            clipboard_text: None,
         };
 
         app.load_settings();
@@ -247,6 +269,7 @@ impl App {
             if let Ok(Some(f)) = db.get_setting("font") {
                 if let Ok(val) = f.parse::<f32>() {
                     self.font_size = val.clamp(12.0, 48.0);
+                    self.cell = None;
                 }
             }
             if let Ok(Some(b)) = db.get_setting("backup_dir") {
@@ -277,6 +300,44 @@ impl App {
             key: "last_active_note_id".to_string(),
             val,
         });
+        self.save_caret_position();
+    }
+
+    pub fn save_caret_position(&self) {
+        let _ = self.db_tx.send(DbMsg::SaveSetting {
+            key: "last_caret_pos".to_string(),
+            val: self.ed.cur.to_string(),
+        });
+        let _ = self.db_tx.send(DbMsg::SaveSetting {
+            key: "last_scroll_y".to_string(),
+            val: self.scroll_y.to_string(),
+        });
+        if let Some(id) = self.active_note_id {
+            let _ = self.db_tx.send(DbMsg::SaveSetting {
+                key: format!("note_caret_{}", id),
+                val: self.ed.cur.to_string(),
+            });
+            let _ = self.db_tx.send(DbMsg::SaveSetting {
+                key: format!("note_scroll_{}", id),
+                val: self.scroll_y.to_string(),
+            });
+        }
+    }
+
+    pub fn sync_save_session(&mut self) {
+        if let Some(ref db) = self.db {
+            let _ = db.set_setting("last_caret_pos", &self.ed.cur.to_string());
+            let _ = db.set_setting("last_scroll_y", &self.scroll_y.to_string());
+            if let Some(id) = self.active_note_id {
+                let _ = db.set_setting("last_active_note_id", &id.to_string());
+                let _ = db.set_setting(&format!("note_caret_{}", id), &self.ed.cur.to_string());
+                let _ = db.set_setting(&format!("note_scroll_{}", id), &self.scroll_y.to_string());
+                if self.is_dirty {
+                    let _ = db.update_note(id, &self.ed.text());
+                    self.is_dirty = false;
+                }
+            }
+        }
     }
 
     pub fn reload_db_state(&mut self) {
@@ -309,9 +370,26 @@ impl App {
                         self.active_note_id = Some(target.id);
                         self.active_note_title = target.topic.clone();
                         self.ed.set_text(&clean);
-                        self.ed.cur = 0;
+
+                        let note_caret_key = format!("note_caret_{}", target.id);
+                        let saved_cur = db
+                            .get_setting(&note_caret_key)
+                            .ok()
+                            .flatten()
+                            .or_else(|| db.get_setting("last_caret_pos").ok().flatten())
+                            .and_then(|s| s.parse::<usize>().ok())
+                            .unwrap_or(0);
+                        self.ed.cur = saved_cur.min(self.ed.buf.len());
                         self.is_dirty = false;
-                        self.scroll_y = 0.0;
+
+                        let saved_scroll = db
+                            .get_setting(&format!("note_scroll_{}", target.id))
+                            .ok()
+                            .flatten()
+                            .or_else(|| db.get_setting("last_scroll_y").ok().flatten())
+                            .and_then(|s| s.parse::<f32>().ok())
+                            .unwrap_or(0.0);
+                        self.scroll_y = saved_scroll;
                     }
                 }
             }
@@ -439,14 +517,24 @@ impl App {
         }
     }
 
-    pub fn draw(&mut self, ui: &mut egui::Ui, dt: f32, now: f64, typed: bool) {
-        let painter = ui.painter().clone();
-        let font = FontId::monospace(self.font_size);
+    /// Computes the exact monospace character advance width and line height.
+    /// Measuring 100 characters eliminates single-glyph bounding box ink discrepancies,
+    /// guaranteeing that caret placement at `col * cw` aligns with rendered text at any line length.
+    pub fn cell_size(&mut self, ctx: &egui::Context) -> (f32, f32) {
+        *self.cell.get_or_insert_with(|| {
+            let font = FontId::monospace(self.font_size);
+            let sample_100 = "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM";
+            let g100 = ctx.fonts(|f| f.layout_no_wrap(sample_100.to_owned(), font.clone(), Color32::WHITE));
+            let g1 = ctx.fonts(|f| f.layout_no_wrap("M".to_owned(), font, Color32::WHITE));
+            let cw = (g100.size().x - g1.size().x) / 99.0;
+            let lh = (g1.size().y * 1.30).round();
+            (cw, lh)
+        })
+    }
 
-        let (cw, lh) = *self.cell.get_or_insert_with(|| {
-            let g = painter.layout_no_wrap("M".to_owned(), font.clone(), Color32::WHITE);
-            (g.size().x, (g.size().y * 1.30).round())
-        });
+    pub fn draw(&mut self, ui: &mut egui::Ui, dt: f32, now: f64, typed: bool) {
+        let (cw, lh) = self.cell_size(ui.ctx());
+        let painter = ui.painter().clone();
 
         let bounds = ui.max_rect();
 
@@ -715,6 +803,7 @@ impl App {
                     self.settings_open || self.search_open || self.is_dragging_splitter,
                     search_matches,
                     self.show_line_numbers,
+                    active_vim_mode,
                 );
                 self.caret.kind = original_caret_kind;
 
@@ -754,6 +843,49 @@ impl App {
                     &today_str,
                     &yest_str,
                 );
+            }
+            Mode::ScanReport => {
+                crate::scan_view::render_scan_view(
+                    ui,
+                    &painter,
+                    editor_rect,
+                    self.active_scan_result.as_ref(),
+                    self.active_scan_error.as_ref().map(|(u, e)| (u.as_str(), e.as_str())),
+                    &mut self.scan_report_scroll_y,
+                    &self.theme,
+                    self.font_size,
+                );
+            }
+            Mode::ScanHistory => {
+                let opened_idx = crate::scan_history_view::render_scan_history(
+                    ui,
+                    &painter,
+                    editor_rect,
+                    &self.past_scans,
+                    &mut self.scan_history_selected,
+                    &mut self.scan_history_scroll_y,
+                    &self.theme,
+                    self.font_size,
+                );
+                if let Some(idx) = opened_idx {
+                    if let Some(record) = self.past_scans.get(idx) {
+                        let findings: Vec<webscan::Finding> = serde_json::from_str(&record.findings_json).unwrap_or_default();
+                        let result = webscan::ScanResult {
+                            url: record.url.clone(),
+                            status_code: 200,
+                            response_time_ms: 0,
+                            tls: None,
+                            server_header: None,
+                            page_size_bytes: 0,
+                            note: record.note.clone(),
+                            findings,
+                        };
+                        self.active_scan_result = Some(result);
+                        self.active_scan_error = None;
+                        self.scan_report_scroll_y = 0.0;
+                        self.mode = Mode::ScanReport;
+                    }
+                }
             }
         }
 
@@ -798,6 +930,8 @@ impl App {
             content_left_margin,
             self.in_command,
             &self.cmd_ed.text(),
+            self.cmd_ed.cur,
+            self.cmd_ed.selected_range(),
             &self.status_msg,
             self.status_time,
             now,
@@ -815,7 +949,7 @@ impl App {
             let active_mode_idx = match self.mode {
                 Mode::Normal => 0,
                 Mode::Stats => 1,
-                Mode::Doc => 0,
+                Mode::Doc | Mode::ScanReport | Mode::ScanHistory => 0,
             };
             let action = render_sidebar(
                 ui,
@@ -844,16 +978,30 @@ impl App {
                         }
                     }
                     SidebarAction::LoadNote { id, topic, body } => {
+                        if let Some(cur_id) = self.active_note_id {
+                            if let Some(ref db) = self.db {
+                                let _ = db.set_setting(&format!("note_caret_{}", cur_id), &self.ed.cur.to_string());
+                                let _ = db.set_setting(&format!("note_scroll_{}", cur_id), &self.scroll_y.to_string());
+                            }
+                        }
                         let clean = body.replace("\r\n", "\n").replace('\r', "\n");
                         self.active_note_id = Some(id);
                         self.save_active_note_id();
                         self.active_note_title = topic.clone();
                         self.ed.set_text(&clean);
-                        self.ed.cur = 0;
+                        let saved_cur = self.db.as_ref()
+                            .and_then(|db| db.get_setting(&format!("note_caret_{}", id)).ok().flatten())
+                            .and_then(|s| s.parse::<usize>().ok())
+                            .unwrap_or(0);
+                        self.ed.cur = saved_cur.min(self.ed.buf.len());
+                        let saved_scroll = self.db.as_ref()
+                            .and_then(|db| db.get_setting(&format!("note_scroll_{}", id)).ok().flatten())
+                            .and_then(|s| s.parse::<f32>().ok())
+                            .unwrap_or(0.0);
+                        self.scroll_y = saved_scroll;
                         self.mode = Mode::Normal;
                         self.vim.set_mode(crate::vim::VimSubMode::Normal, &mut self.ed);
                         self.is_dirty = false;
-                        self.scroll_y = 0.0;
                         self.set_status("Opened note", now);
                     }
                     SidebarAction::NewNote => {
@@ -1078,11 +1226,7 @@ impl eframe::App for App {
         let dt = ctx.input(|i| i.unstable_dt).clamp(0.0, 0.05);
 
         // Precompute visual lines so keyboard navigation (ArrowUp, ArrowDown, PageUp, PageDown) uses accurate visual layout
-        let (cw, _) = *self.cell.get_or_insert_with(|| {
-            let font = FontId::monospace(self.font_size);
-            let g = ctx.fonts(|f| f.layout_no_wrap("M".to_owned(), font, Color32::WHITE));
-            (g.size().x, (g.size().y * 1.30).round())
-        });
+        let (cw, _) = self.cell_size(ctx);
         let screen_w = ctx.screen_rect().width();
         let left_margin = if self.mode == Mode::Doc || self.sidebar_open {
             14.0 + 230.0 + 24.0
@@ -1123,16 +1267,53 @@ impl eframe::App for App {
         // Periodic auto-flush of activity stats to database every 10 seconds
         if (now - self.last_flush_time) > 10.0 {
             self.flush_activity(now);
+            self.save_caret_position();
         }
 
         // Auto-save when idle for 1.2s in Normal mode
         if self.is_dirty && (now - self.last_char_time) > 1.2 && self.mode == Mode::Normal {
             self.quick_save_active_note(now);
+            self.save_caret_position();
+        }
+
+        // Save session state immediately if window close is requested
+        if ctx.input(|i| i.viewport().close_requested()) {
+            self.sync_save_session();
         }
 
         // Live fuzzy search filter update
         if self.search_open {
             self.update_search_results();
+        }
+
+        // Check Webscan background worker channel
+        if let Some(ref rx) = self.scan_rx {
+            if let Ok(msg) = rx.try_recv() {
+                let target_url = self.scan_in_progress.take().unwrap_or_default();
+                self.scan_rx = None;
+                match msg {
+                    Ok(scan_res) => {
+                        // Persist scan result to SQLite
+                        if let Some(ref db) = self.db {
+                            if let Ok(json_str) = serde_json::to_string(&scan_res.findings) {
+                                let _ = db.save_scan(&scan_res.url, scan_res.note.as_deref(), &json_str);
+                            }
+                        }
+                        self.active_scan_result = Some(scan_res);
+                        self.active_scan_error = None;
+                        self.scan_report_scroll_y = 0.0;
+                        self.mode = Mode::ScanReport;
+                        self.set_status("Scan completed successfully", now);
+                    }
+                    Err(err_msg) => {
+                        self.active_scan_result = None;
+                        self.active_scan_error = Some((target_url, err_msg));
+                        self.scan_report_scroll_y = 0.0;
+                        self.mode = Mode::ScanReport;
+                        self.set_status("Scan failed (see report for details)", now);
+                    }
+                }
+            }
         }
 
         window_shortcuts(ctx);
@@ -1158,5 +1339,9 @@ impl eframe::App for App {
         } else {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
+    }
+
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.sync_save_session();
     }
 }

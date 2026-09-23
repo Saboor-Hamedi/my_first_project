@@ -9,6 +9,8 @@ pub fn render_bottom_dock(
     _content_left_margin: f32,
     in_command: bool,
     cmd_text: &str,
+    cmd_cur: usize,
+    cmd_selection: Option<(usize, usize)>,
     status_msg: &str,
     status_time: f64,
     now: f64,
@@ -42,6 +44,19 @@ pub fn render_bottom_dock(
     let cmd_x = dock_rect.min.x + 24.0;
     let mut text_x = cmd_x;
 
+    // Right side stats: Line, Col, word count (padded before resize knob)
+    let stats = if dock_rect.width() > 620.0 {
+        format!("Ln {}, Col {}  ·  {} words", cursor_row, cursor_col, total_words)
+    } else {
+        format!("Ln {}, Col {}", cursor_row, cursor_col)
+    };
+    let stats_galley = painter.layout_no_wrap(stats, FontId::monospace(12.0), Color32::from_gray(120));
+    let stats_pos = pos2(dock_rect.max.x - 34.0, cmd_y);
+    let stats_left_x = stats_pos.x - stats_galley.size().x;
+    let max_cmd_x = (stats_left_x - 16.0).max(cmd_x + 120.0);
+    let cmd_input_left = cmd_x + 52.0;
+    let cmd_avail_w = (max_cmd_x - cmd_input_left).max(40.0);
+
     if in_command {
         // [:CMD] badge
         let badge_rect = Rect::from_min_size(pos2(cmd_x, cmd_y - 2.0), vec2(44.0, 20.0));
@@ -54,13 +69,68 @@ pub fn render_bottom_dock(
             Color32::BLACK,
         );
 
-        painter.text(
-            pos2(cmd_x + 52.0, cmd_y),
-            Align2::LEFT_TOP,
-            format!("{}_", cmd_text),
-            FontId::monospace(14.0),
-            Color32::WHITE,
+        let font = FontId::monospace(14.0);
+        let cur_clamped = cmd_cur.min(cmd_text.len());
+        let mut valid_cur = cur_clamped;
+        while !cmd_text.is_char_boundary(valid_cur) && valid_cur > 0 {
+            valid_cur -= 1;
+        }
+        let before_cur = &cmd_text[..valid_cur];
+        let cursor_offset_x = painter.layout_no_wrap(before_cur.to_string(), font.clone(), Color32::WHITE).size().x;
+        let total_text_w = painter.layout_no_wrap(cmd_text.to_string(), font.clone(), Color32::WHITE).size().x;
+
+        // Auto-scroll offset so cursor is always within view and long commands push left
+        let scroll_x = if total_text_w > cmd_avail_w {
+            let max_scroll = (total_text_w - cmd_avail_w + 24.0).max(0.0);
+            (cursor_offset_x - (cmd_avail_w - 24.0)).clamp(0.0, max_scroll)
+        } else {
+            0.0
+        };
+
+        let cmd_clip_rect = Rect::from_min_max(
+            pos2(cmd_input_left, dock_rect.min.y),
+            pos2(max_cmd_x, dock_rect.max.y),
         );
+        let cmd_painter = painter.with_clip_rect(cmd_clip_rect);
+        let text_origin = pos2(cmd_input_left - scroll_x, cmd_y);
+
+        // Draw selection background if text is selected
+        if let Some((start, end)) = cmd_selection {
+            let s_min = start.min(end).min(cmd_text.len());
+            let s_max = start.max(end).min(cmd_text.len());
+            let mut valid_min = s_min;
+            while !cmd_text.is_char_boundary(valid_min) && valid_min > 0 {
+                valid_min -= 1;
+            }
+            let mut valid_max = s_max;
+            while !cmd_text.is_char_boundary(valid_max) && valid_max > 0 {
+                valid_max -= 1;
+            }
+            let prefix = &cmd_text[..valid_min];
+            let selected_part = &cmd_text[valid_min..valid_max];
+            let x_off = cmd_painter.layout_no_wrap(prefix.to_string(), font.clone(), Color32::WHITE).size().x;
+            let sel_w = cmd_painter.layout_no_wrap(selected_part.to_string(), font.clone(), Color32::WHITE).size().x;
+            cmd_painter.rect_filled(
+                Rect::from_min_size(pos2(text_origin.x + x_off, text_origin.y), vec2(sel_w, 18.0)),
+                2.0,
+                Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 90),
+            );
+        }
+
+        // Draw command line text
+        let galley = cmd_painter.layout_no_wrap(cmd_text.to_string(), font.clone(), Color32::WHITE);
+        cmd_painter.galley(text_origin, galley, Color32::WHITE);
+
+        // Draw cursor beam at the exact cmd_cur position
+        let cursor_x = text_origin.x + cursor_offset_x;
+        let blink = ((now * 2.5).sin() > -0.2) as i32 != 0;
+        if blink {
+            cmd_painter.rect_filled(
+                Rect::from_min_size(pos2(cursor_x, text_origin.y), vec2(2.0, 16.0)),
+                1.0,
+                accent,
+            );
+        }
     } else if let Some((symbol, query, match_count)) = search_prompt {
         // [SEARCH] badge
         let badge_label = if symbol == "?" { "? SEARCH" } else { "/ SEARCH" };
@@ -74,8 +144,13 @@ pub fn render_bottom_dock(
             Color32::BLACK,
         );
 
+        let search_clip_rect = Rect::from_min_max(
+            pos2(cmd_x + 72.0, dock_rect.min.y),
+            pos2(max_cmd_x, dock_rect.max.y),
+        );
+        let search_painter = painter.with_clip_rect(search_clip_rect);
         let query_display = format!("{}_", query);
-        painter.text(
+        search_painter.text(
             pos2(cmd_x + 72.0, cmd_y),
             Align2::LEFT_TOP,
             query_display,
@@ -90,7 +165,7 @@ pub fn render_bottom_dock(
                 format!("({} matches)", match_count)
             };
             let query_w = (query.len() + 2) as f32 * 8.5;
-            painter.text(
+            search_painter.text(
                 pos2(cmd_x + 75.0 + query_w, cmd_y + 2.0),
                 Align2::LEFT_TOP,
                 count_info,
@@ -122,7 +197,12 @@ pub fn render_bottom_dock(
         }
 
         if !status_msg.is_empty() && (now - status_time) < 3.0 {
-            painter.text(
+            let status_clip = Rect::from_min_max(
+                pos2(text_x, dock_rect.min.y),
+                pos2(max_cmd_x, dock_rect.max.y),
+            );
+            let status_painter = painter.with_clip_rect(status_clip);
+            status_painter.text(
                 pos2(text_x, cmd_y),
                 Align2::LEFT_TOP,
                 status_msg,
@@ -165,17 +245,9 @@ pub fn render_bottom_dock(
         );
     }
 
-    // Right side stats: Line, Col, word count (padded before resize knob)
-    let stats = if dock_rect.width() > 620.0 {
-        format!("Ln {}, Col {}  ·  {} words", cursor_row + 1, cursor_col + 1, total_words)
-    } else {
-        format!("Ln {}, Col {}", cursor_row + 1, cursor_col + 1)
-    };
-
-    let stats_galley = painter.layout_no_wrap(stats, FontId::monospace(12.0), Color32::from_gray(120));
-    let stats_pos = pos2(dock_rect.max.x - 34.0, cmd_y);
+    // Draw right side stats
     painter.galley(
-        pos2(stats_pos.x - stats_galley.size().x, stats_pos.y),
+        pos2(stats_left_x, stats_pos.y),
         stats_galley,
         Color32::from_gray(120),
     );

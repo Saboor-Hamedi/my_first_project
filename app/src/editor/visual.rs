@@ -190,16 +190,18 @@ impl Editor {
 
     pub fn end_visual(&mut self, lines: &[VisualLine]) {
         self.selection = None;
+        self.selection_inclusive = false;
         let (row, _) = self.visual_row_col(lines);
         if let Some(line) = lines.get(row) {
-            if line.char_end > line.char_start {
+            let is_soft_wrapped = line.char_end < self.buf.len() && self.buf[line.char_end] != '\n';
+            if is_soft_wrapped && line.char_end > line.char_start {
                 let mut target = line.char_end - 1;
                 while target > line.char_start && self.buf[target].is_whitespace() {
                     target -= 1;
                 }
                 self.cur = target;
             } else {
-                self.cur = line.char_start;
+                self.cur = line.char_end;
             }
         }
     }
@@ -257,4 +259,19 @@ impl Editor {
             self.cur = target_line.char_start + col.min(line_len);
         }
     }
+}
+
+/// Mode-aware caret cell index within `line`.
+///
+/// - Normal / Visual / VisualLine: block sits ON the character. At end-of-line,
+///   clamps to the last character so it never floats past it.
+/// - Insert / Search / None: bar sits BETWEEN characters. At end-of-line it's
+///   one cell past the last character.
+/// - Empty line: 0 in every mode.
+pub fn caret_cell(cur: usize, line: &VisualLine, _vim_mode: Option<crate::vim::VimSubMode>) -> usize {
+    let line_len = line.char_end.saturating_sub(line.char_start);
+    if line_len == 0 {
+        return 0;
+    }
+    cur.saturating_sub(line.char_start).min(line_len)
 }

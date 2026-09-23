@@ -128,6 +128,14 @@ impl Database {
                 notes_created INTEGER NOT NULL DEFAULT 0,
                 notes_edited INTEGER NOT NULL DEFAULT 0
             );
+
+            CREATE TABLE IF NOT EXISTS scans (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT NOT NULL,
+                note TEXT,
+                findings_json TEXT NOT NULL,
+                scanned_at TEXT NOT NULL
+            );
             ",
         )?;
         Ok(())

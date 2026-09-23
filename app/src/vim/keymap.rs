@@ -32,6 +32,8 @@ pub struct VimKeymap {
     pub visual: HashMap<KeyStroke, VimAction>,
     /// Operator-pending actions (e.g. `(Delete, 'd') -> OperatorLine(Delete)`).
     pub operator_combinations: HashMap<(VimOperator, char), VimAction>,
+    /// Two-character combination motions (e.g. `('g', 'g') -> Motion(BufferStart)`).
+    pub combinations: HashMap<(char, char), VimAction>,
 }
 
 impl Default for VimKeymap {
@@ -46,6 +48,7 @@ impl VimKeymap {
         let mut normal = HashMap::new();
         let mut visual = HashMap::new();
         let mut operator_combinations = HashMap::new();
+        let mut combinations = HashMap::new();
 
         // ── Normal Mode Motions ──────────────────────────────────────────────
         normal.insert('h'.into(), VimAction::Motion(VimMotion::Left));
@@ -57,8 +60,9 @@ impl VimKeymap {
         normal.insert('0'.into(), VimAction::Motion(VimMotion::LineStart));
         normal.insert('$'.into(), VimAction::Motion(VimMotion::LineEnd));
         normal.insert('G'.into(), VimAction::Motion(VimMotion::BufferEnd));
+        normal.insert(' '.into(), VimAction::Motion(VimMotion::Right));
 
-        // Arrow keys in Normal mode
+        // Arrow and control keys in Normal mode
         normal.insert(KeyStroke::Key { key: Key::ArrowLeft, ctrl: false }, VimAction::Motion(VimMotion::Left));
         normal.insert(KeyStroke::Key { key: Key::ArrowRight, ctrl: false }, VimAction::Motion(VimMotion::Right));
         normal.insert(KeyStroke::Key { key: Key::ArrowUp, ctrl: false }, VimAction::Motion(VimMotion::UpVisual));
@@ -67,6 +71,10 @@ impl VimKeymap {
         normal.insert(KeyStroke::Key { key: Key::End, ctrl: false }, VimAction::Motion(VimMotion::LineEnd));
         normal.insert(KeyStroke::Key { key: Key::ArrowLeft, ctrl: true }, VimAction::Motion(VimMotion::WordBackward));
         normal.insert(KeyStroke::Key { key: Key::ArrowRight, ctrl: true }, VimAction::Motion(VimMotion::WordForward));
+        normal.insert(KeyStroke::Key { key: Key::Enter, ctrl: false }, VimAction::Motion(VimMotion::DownVisual));
+        normal.insert(KeyStroke::Key { key: Key::Backspace, ctrl: false }, VimAction::Motion(VimMotion::Left));
+        normal.insert(KeyStroke::Key { key: Key::Delete, ctrl: false }, VimAction::DeleteChar);
+        normal.insert(KeyStroke::Key { key: Key::Space, ctrl: false }, VimAction::Motion(VimMotion::Right));
 
         // ── Normal Mode Verbs & Editing ──────────────────────────────────────
         normal.insert('x'.into(), VimAction::DeleteChar);
@@ -89,6 +97,7 @@ impl VimKeymap {
         // ── Operators (Prefixes) ─────────────────────────────────────────────
         normal.insert('d'.into(), VimAction::Operator(VimOperator::Delete));
         normal.insert('y'.into(), VimAction::Operator(VimOperator::Yank));
+        normal.insert('Y'.into(), VimAction::OperatorLine(VimOperator::Yank));
         normal.insert('c'.into(), VimAction::Operator(VimOperator::Change));
 
         // ── In-Buffer Search ─────────────────────────────────────────────────
@@ -116,22 +125,31 @@ impl VimKeymap {
         visual.insert('0'.into(), VimAction::Motion(VimMotion::LineStart));
         visual.insert('$'.into(), VimAction::Motion(VimMotion::LineEnd));
         visual.insert('G'.into(), VimAction::Motion(VimMotion::BufferEnd));
+        visual.insert(' '.into(), VimAction::Motion(VimMotion::Right));
 
         visual.insert(KeyStroke::Key { key: Key::ArrowLeft, ctrl: false }, VimAction::Motion(VimMotion::Left));
         visual.insert(KeyStroke::Key { key: Key::ArrowRight, ctrl: false }, VimAction::Motion(VimMotion::Right));
         visual.insert(KeyStroke::Key { key: Key::ArrowUp, ctrl: false }, VimAction::Motion(VimMotion::UpVisual));
         visual.insert(KeyStroke::Key { key: Key::ArrowDown, ctrl: false }, VimAction::Motion(VimMotion::DownVisual));
+        visual.insert(KeyStroke::Key { key: Key::Enter, ctrl: false }, VimAction::Motion(VimMotion::DownVisual));
+        visual.insert(KeyStroke::Key { key: Key::Backspace, ctrl: false }, VimAction::Motion(VimMotion::Left));
+        visual.insert(KeyStroke::Key { key: Key::Delete, ctrl: false }, VimAction::Operator(VimOperator::Delete));
+        visual.insert(KeyStroke::Key { key: Key::Space, ctrl: false }, VimAction::Motion(VimMotion::Right));
 
         visual.insert('y'.into(), VimAction::Operator(VimOperator::Yank));
+        visual.insert('Y'.into(), VimAction::Operator(VimOperator::Yank));
         visual.insert('d'.into(), VimAction::Operator(VimOperator::Delete));
         visual.insert('x'.into(), VimAction::Operator(VimOperator::Delete));
         visual.insert('c'.into(), VimAction::Operator(VimOperator::Change));
         visual.insert(KeyStroke::Key { key: Key::C, ctrl: true }, VimAction::Operator(VimOperator::Yank));
 
+        combinations.insert(('g', 'g'), VimAction::Motion(VimMotion::BufferStart));
+
         Self {
             normal,
             visual,
             operator_combinations,
+            combinations,
         }
     }
 
@@ -148,6 +166,16 @@ impl VimKeymap {
     /// Resolves a pending operator with a second key stroke (e.g. `d` + `d`).
     pub fn lookup_operator(&self, op: VimOperator, c: char) -> Option<VimAction> {
         self.operator_combinations.get(&(op, c)).cloned()
+    }
+
+    /// Maps a two-character prefix sequence (e.g. `('g', 'g')`) to an action.
+    pub fn lookup_combination(&self, prefix: char, second: char) -> Option<VimAction> {
+        self.combinations.get(&(prefix, second)).cloned()
+    }
+
+    /// Returns true if `c` is the first character of any registered combination.
+    pub fn is_combination_prefix(&self, c: char) -> bool {
+        self.combinations.keys().any(|(p, _)| *p == c)
     }
 
     /// Customizes or remaps a key binding in Normal mode.

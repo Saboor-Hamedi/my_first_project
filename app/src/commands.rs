@@ -387,6 +387,54 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
             app.delete_just_opened = true;
         }
         "export" => {
+            if app.mode == Mode::ScanReport {
+                if let Some(ref res) = app.active_scan_result {
+                    let md = crate::scan_view::export_scan_to_markdown(res);
+                    let safe_url = res
+                        .url
+                        .replace("https://", "")
+                        .replace("http://", "")
+                        .replace('/', "_")
+                        .replace(':', "_")
+                        .replace('?', "_");
+                    let default_name = format!("scan_{}.md", safe_url.trim_matches('_'));
+                    let clean_arg = args.trim_matches(|c| c == '"' || c == '\'').trim();
+                    let chosen_path = if clean_arg.is_empty() {
+                        rfd::FileDialog::new()
+                            .set_file_name(&default_name)
+                            .add_filter("Markdown Document (*.md)", &["md"])
+                            .add_filter("Plain Text Document (*.txt)", &["txt"])
+                            .save_file()
+                    } else {
+                        let p = std::path::PathBuf::from(clean_arg);
+                        if p.is_dir() {
+                            Some(p.join(&default_name))
+                        } else if p.extension().is_none() {
+                            Some(p.with_extension("md"))
+                        } else {
+                            Some(p)
+                        }
+                    };
+
+                    if let Some(out_path) = chosen_path {
+                        match std::fs::write(&out_path, md) {
+                            Ok(_) => {
+                                app.set_status(format!("Exported scan report: {}", out_path.display()), now);
+                            }
+                            Err(e) => {
+                                app.set_status(format!("Export failed: {}", e), now);
+                            }
+                        }
+                    } else {
+                        app.set_status("Export cancelled", now);
+                    }
+                    return;
+                } else {
+                    app.set_status("No scan report available to export", now);
+                    return;
+                }
+            }
+
             let clean_arg = args.trim_matches(|c| c == '"' || c == '\'').trim();
             let title = if app.active_note_title.trim().is_empty() {
                 "Untitled"
@@ -563,6 +611,49 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
             app.mode = Mode::Normal;
             app.set_status("Switched to Notes Editor", now);
         }
+        "scan" => {
+            if app.scan_in_progress.is_some() {
+                app.set_status("A scan is already in progress...", now);
+                return;
+            }
+            match parse_scan_args(args) {
+                Ok((url, opts)) => {
+                    let (tx, rx) = std::sync::mpsc::channel();
+                    app.scan_rx = Some(rx);
+                    app.scan_in_progress = Some(url.clone());
+                    app.prev_mode_before_scan = app.mode;
+                    app.set_status(format!("Scanning {}...", url), now);
+
+                    let url_clone = url.clone();
+                    std::thread::spawn(move || {
+                        let result = webscan::scan(&url_clone, &opts);
+                        match result {
+                            Ok(res) => {
+                                let _ = tx.send(Ok(res));
+                            }
+                            Err(err) => {
+                                let _ = tx.send(Err(format!("{}: {:#}", url_clone, err)));
+                            }
+                        }
+                    });
+                }
+                Err(usage) => {
+                    app.set_status(usage, now);
+                }
+            }
+        }
+        "scans" | "scanhistory" => {
+            if let Some(ref db) = app.db {
+                if let Ok(scans) = db.list_scans() {
+                    app.past_scans = scans;
+                }
+            }
+            app.prev_mode_before_scan = app.mode;
+            app.scan_history_selected = 0;
+            app.scan_history_scroll_y = 0.0;
+            app.mode = Mode::ScanHistory;
+            app.set_status("Webscan History (↑/↓ to navigate, Enter to view report, Esc to exit)", now);
+        }
         "quit" | "q" => {
             std::process::exit(0);
         }
@@ -570,4 +661,83 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
             app.set_status(format!("Unknown command: :{}. Type :help", cmd), now);
         }
     }
+}
+
+fn parse_scan_args(raw_args: &str) -> Result<(String, webscan::ScanOptions), String> {
+    let mut url = String::new();
+    let mut full = false;
+    let mut probe_forms = false;
+    let mut delay_ms = 200;
+    let mut timeout_secs = 10;
+    let mut note = None;
+
+    let mut tokens = Vec::new();
+    let mut cur_token = String::new();
+    let mut in_quotes = false;
+    for ch in raw_args.chars() {
+        if ch == '"' || ch == '\'' {
+            in_quotes = !in_quotes;
+        } else if ch.is_whitespace() && !in_quotes {
+            if !cur_token.is_empty() {
+                tokens.push(cur_token);
+                cur_token = String::new();
+            }
+        } else {
+            cur_token.push(ch);
+        }
+    }
+    if !cur_token.is_empty() {
+        tokens.push(cur_token);
+    }
+
+    let mut i = 0;
+    while i < tokens.len() {
+        let tok = &tokens[i];
+        if tok == "--full" {
+            full = true;
+        } else if tok == "--forms" || tok == "--probe-forms" {
+            probe_forms = true;
+        } else if tok == "--delay" {
+            i += 1;
+            if i < tokens.len() {
+                if let Ok(d) = tokens[i].parse::<u64>() {
+                    delay_ms = d;
+                }
+            }
+        } else if tok == "--timeout" {
+            i += 1;
+            if i < tokens.len() {
+                if let Ok(t) = tokens[i].parse::<u64>() {
+                    timeout_secs = t;
+                }
+            }
+        } else if tok == "--note" {
+            i += 1;
+            if i < tokens.len() {
+                note = Some(tokens[i].clone());
+            }
+        } else if !tok.starts_with("--") && url.is_empty() {
+            url = tok.clone();
+        }
+        i += 1;
+    }
+
+    if url.is_empty() {
+        return Err("Usage: :scan <url> [--full] [--forms] [--note \"...\"]".to_string());
+    }
+
+    // Prepend https:// if protocol missing
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        url = format!("https://{}", url);
+    }
+
+    let opts = webscan::ScanOptions {
+        full,
+        probe_forms,
+        delay_ms,
+        timeout_secs,
+        note,
+    };
+
+    Ok((url, opts))
 }

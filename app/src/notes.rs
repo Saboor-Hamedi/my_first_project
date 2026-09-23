@@ -74,7 +74,11 @@ pub fn delete_active_note(app: &mut App, now: f64) {
             app.save_active_note_id();
             app.active_note_title = topic;
             app.ed.set_text(&clean);
-            app.ed.cur = 0;
+            let saved_cur = app.db.as_ref()
+                .and_then(|db| db.get_setting(&format!("note_caret_{}", first_id)).ok().flatten())
+                .and_then(|s| s.parse::<usize>().ok())
+                .unwrap_or(0);
+            app.ed.cur = saved_cur.min(app.ed.buf.len());
             app.is_dirty = false;
         }
     } else {

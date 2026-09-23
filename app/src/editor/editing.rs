@@ -242,4 +242,130 @@ impl Editor {
             self.selection = None;
         }
     }
+
+    /// Handles Enter key in insert mode:
+    /// - If there is an active selection, replaces it with a simple newline without auto-indent.
+    /// - Preserves exact leading whitespace (spaces and tabs) of current line.
+    /// - Auto-continues numbered lists (`1. Hello` -> `2. `) and bullet lists (`- Hello`, `* Hello`, `+ Hello`).
+    /// - If current line is only a marker with no content (`1. `, `- `), clears the marker and inserts a plain newline.
+    /// - Composes indentation with lists (`  - Hello` -> `  - `, `  1. Hello` -> `  2. `).
+    /// - Whole Enter action is recorded as a single atomic undo step.
+    pub fn handle_enter(&mut self) {
+        if self.has_selection() {
+            self.insert('\n');
+            return;
+        }
+
+        self.save_undo_snapshot();
+
+        let mut line_start = self.cur;
+        while line_start > 0 && self.buf[line_start - 1] != '\n' {
+            line_start -= 1;
+        }
+        let mut line_end = self.cur;
+        while line_end < self.buf.len() && self.buf[line_end] != '\n' {
+            line_end += 1;
+        }
+
+        let line_str: String = self.buf[line_start..line_end].iter().collect();
+
+        // 1. Extract leading whitespace (spaces and tabs)
+        let indent_len = line_str.chars().take_while(|&c| c == ' ' || c == '\t').count();
+        let indent = &line_str[..indent_len];
+        let rest = &line_str[indent_len..];
+
+        // If line contains only whitespace, clear it on Enter and insert plain newline at col 0
+        if line_str.trim().is_empty() && !line_str.is_empty() {
+            self.buf.drain(line_start..line_end);
+            self.buf.insert(line_start, '\n');
+            self.cur = line_start + 1;
+            self.selection = None;
+            return;
+        }
+
+        // 2. Check if current line is only a list marker with no content
+        let is_empty_numbered = {
+            let digits_len = rest.chars().take_while(|c| c.is_ascii_digit()).count();
+            if digits_len > 0 && digits_len < rest.len() {
+                let after_digits = &rest[digits_len..];
+                if after_digits.starts_with('.') {
+                    let after_dot = &after_digits[1..];
+                    after_dot.trim().is_empty()
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        };
+
+        let is_empty_bullet = {
+            if rest.starts_with('-') || rest.starts_with('*') || rest.starts_with('+') {
+                rest[1..].trim().is_empty()
+            } else {
+                false
+            }
+        };
+
+        if is_empty_numbered || is_empty_bullet {
+            self.buf.drain(line_start..line_end);
+            self.buf.insert(line_start, '\n');
+            self.cur = line_start + 1;
+            self.selection = None;
+            return;
+        }
+
+        // 3. Check for list continuation
+        let next_prefix = if let Some(num) = parse_numbered_list(rest) {
+            format!("\n{}{}. ", indent, num.saturating_add(1))
+        } else if let Some(bullet) = parse_bullet_list(rest) {
+            format!("\n{}{} ", indent, bullet)
+        } else {
+            // Task 3: preserve exact leading whitespace
+            format!("\n{}", indent)
+        };
+
+        for (idx, ch) in next_prefix.chars().enumerate() {
+            self.buf.insert(self.cur + idx, ch);
+        }
+        self.cur += next_prefix.chars().count();
+        self.selection = None;
+    }
+}
+
+fn parse_numbered_list(rest: &str) -> Option<u64> {
+    let digits_len = rest.chars().take_while(|c| c.is_ascii_digit()).count();
+    if digits_len == 0 || digits_len >= rest.len() {
+        return None;
+    }
+    let after_digits = &rest[digits_len..];
+    if !after_digits.starts_with('.') {
+        return None;
+    }
+    let after_dot = &after_digits[1..];
+    if !after_dot.starts_with(' ') && !after_dot.starts_with('\t') {
+        return None;
+    }
+    let content = after_dot.trim_start_matches(|c| c == ' ' || c == '\t');
+    if content.is_empty() {
+        return None;
+    }
+    rest[..digits_len].parse::<u64>().ok()
+}
+
+fn parse_bullet_list(rest: &str) -> Option<char> {
+    let mut chars = rest.chars();
+    let bullet = chars.next()?;
+    if bullet != '-' && bullet != '*' && bullet != '+' {
+        return None;
+    }
+    let after_bullet = &rest[bullet.len_utf8()..];
+    if !after_bullet.starts_with(' ') && !after_bullet.starts_with('\t') {
+        return None;
+    }
+    let content = after_bullet.trim_start_matches(|c| c == ' ' || c == '\t');
+    if content.is_empty() {
+        return None;
+    }
+    Some(bullet)
 }

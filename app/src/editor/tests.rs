@@ -302,3 +302,219 @@ fn test_caret_kinds_parsing_and_properties() {
         assert_eq!(crate::caret::CaretKind::parse(kind.name()), Some(kind));
     }
 }
+
+#[test]
+fn test_enter_preserves_indentation() {
+    let mut ed = Editor::new();
+    ed.insert_str("    let x = 42;");
+    ed.cur = ed.buf.len();
+    ed.handle_enter();
+    assert_eq!(ed.text(), "    let x = 42;\n    ");
+    assert_eq!(ed.cur, "    let x = 42;\n    ".len());
+
+    // Single undo step reverts both the newline and indentation
+    assert!(ed.undo());
+    assert_eq!(ed.text(), "    let x = 42;");
+
+    // Preserves tabs as well
+    let mut ed_tab = Editor::new();
+    ed_tab.insert_str("\t\tlet y = 1;");
+    ed_tab.cur = ed_tab.buf.len();
+    ed_tab.handle_enter();
+    assert_eq!(ed_tab.text(), "\t\tlet y = 1;\n\t\t");
+}
+
+#[test]
+fn test_enter_numbered_list_continuation() {
+    let mut ed = Editor::new();
+    ed.insert_str("1. Hello");
+    ed.cur = ed.buf.len();
+    ed.handle_enter();
+    assert_eq!(ed.text(), "1. Hello\n2. ");
+    assert_eq!(ed.cur, "1. Hello\n2. ".len());
+
+    // With leading indentation
+    let mut ed_indented = Editor::new();
+    ed_indented.insert_str("  1. Hello");
+    ed_indented.cur = ed_indented.buf.len();
+    ed_indented.handle_enter();
+    assert_eq!(ed_indented.text(), "  1. Hello\n  2. ");
+
+    // Higher numbers
+    let mut ed_high = Editor::new();
+    ed_high.insert_str("9. Step nine");
+    ed_high.cur = ed_high.buf.len();
+    ed_high.handle_enter();
+    assert_eq!(ed_high.text(), "9. Step nine\n10. ");
+}
+
+#[test]
+fn test_enter_bullet_list_continuation() {
+    // Dash bullet
+    let mut ed_dash = Editor::new();
+    ed_dash.insert_str("- Hello");
+    ed_dash.cur = ed_dash.buf.len();
+    ed_dash.handle_enter();
+    assert_eq!(ed_dash.text(), "- Hello\n- ");
+
+    // Asterisk bullet
+    let mut ed_ast = Editor::new();
+    ed_ast.insert_str("* Hello");
+    ed_ast.cur = ed_ast.buf.len();
+    ed_ast.handle_enter();
+    assert_eq!(ed_ast.text(), "* Hello\n* ");
+
+    // Plus bullet
+    let mut ed_plus = Editor::new();
+    ed_plus.insert_str("+ Hello");
+    ed_plus.cur = ed_plus.buf.len();
+    ed_plus.handle_enter();
+    assert_eq!(ed_plus.text(), "+ Hello\n+ ");
+
+    // Indented bullet
+    let mut ed_indented = Editor::new();
+    ed_indented.insert_str("  - Hello");
+    ed_indented.cur = ed_indented.buf.len();
+    ed_indented.handle_enter();
+    assert_eq!(ed_indented.text(), "  - Hello\n  - ");
+}
+
+#[test]
+fn test_enter_clears_empty_marker() {
+    // Numbered empty marker: "1. " -> cleared and plain newline inserted
+    let mut ed_num = Editor::new();
+    ed_num.insert_str("1. ");
+    ed_num.cur = ed_num.buf.len();
+    ed_num.handle_enter();
+    assert_eq!(ed_num.text(), "\n");
+    assert_eq!(ed_num.cur, 1);
+
+    // Bullet empty marker: "- " -> cleared and plain newline inserted
+    let mut ed_bullet = Editor::new();
+    ed_bullet.insert_str("- ");
+    ed_bullet.cur = ed_bullet.buf.len();
+    ed_bullet.handle_enter();
+    assert_eq!(ed_bullet.text(), "\n");
+    assert_eq!(ed_bullet.cur, 1);
+
+    // Indented empty marker: "  - "
+    let mut ed_ind = Editor::new();
+    ed_ind.insert_str("  - ");
+    ed_ind.cur = ed_ind.buf.len();
+    ed_ind.handle_enter();
+    assert_eq!(ed_ind.text(), "\n");
+    assert_eq!(ed_ind.cur, 1);
+
+    // Consecutive workflow: "1. Hello" -> Enter ("2. ") -> Enter (clears marker)
+    let mut ed_flow = Editor::new();
+    ed_flow.insert_str("1. Hello");
+    ed_flow.cur = ed_flow.buf.len();
+    ed_flow.handle_enter();
+    assert_eq!(ed_flow.text(), "1. Hello\n2. ");
+
+    ed_flow.handle_enter();
+    assert_eq!(ed_flow.text(), "1. Hello\n\n");
+}
+
+#[test]
+fn test_enter_with_selection_replaces_without_continuation() {
+    let mut ed = Editor::new();
+    ed.insert_str("1. Hello world");
+    ed.selection = Some(3); // select "Hello"
+    ed.cur = 8;
+    ed.handle_enter();
+    assert_eq!(ed.text(), "1. \n world");
+
+    // Single undo reverts selection replacement
+    assert!(ed.undo());
+    assert_eq!(ed.text(), "1. Hello world");
+}
+
+#[test]
+fn test_caret_cell_does_not_ignore_letters() {
+    let line = VisualLine { char_start: 0, char_end: 5 }; // "hello"
+    // At column 0: sits at 0
+    assert_eq!(caret_cell(0, &line, None), 0);
+    // Mid line: sits at character offset
+    assert_eq!(caret_cell(2, &line, None), 2);
+    // On last character (index 4): sits at 4
+    assert_eq!(caret_cell(4, &line, None), 4);
+    // At end of line (index 5): sits after last char at 5, does not ignore any letters
+    assert_eq!(caret_cell(5, &line, None), 5);
+    // Clamps to line_len if beyond
+    assert_eq!(caret_cell(10, &line, None), 5);
+}
+
+#[test]
+fn test_caret_cell_empty_line() {
+    let line = VisualLine { char_start: 3, char_end: 3 };
+    assert_eq!(caret_cell(3, &line, None), 0);
+}
+
+#[test]
+fn test_caret_cell_normal_on_last_char() {
+    let line = VisualLine { char_start: 0, char_end: 3 };
+    assert_eq!(caret_cell(2, &line, Some(crate::vim::VimSubMode::Normal)), 2);
+}
+
+#[test]
+fn test_caret_cell_normal_at_end() {
+    let line = VisualLine { char_start: 0, char_end: 3 };
+    assert_eq!(caret_cell(3, &line, Some(crate::vim::VimSubMode::Normal)), 3);
+}
+
+#[test]
+fn test_caret_cell_insert_at_end_sits_past_last_char() {
+    let line = VisualLine { char_start: 0, char_end: 3 };
+    assert_eq!(caret_cell(3, &line, Some(crate::vim::VimSubMode::Insert)), 3);
+}
+
+#[test]
+fn test_caret_cell_insert_mid_line() {
+    let line = VisualLine { char_start: 0, char_end: 3 };
+    assert_eq!(caret_cell(2, &line, Some(crate::vim::VimSubMode::Insert)), 2);
+}
+
+#[test]
+fn test_caret_cell_visual_modes() {
+    let line = VisualLine { char_start: 0, char_end: 3 };
+    assert_eq!(caret_cell(3, &line, Some(crate::vim::VimSubMode::Visual)), 3);
+    assert_eq!(caret_cell(3, &line, Some(crate::vim::VimSubMode::VisualLine)), 3);
+}
+
+#[test]
+fn test_caret_cell_empty_line_all_modes() {
+    let line = VisualLine { char_start: 5, char_end: 5 };
+    assert_eq!(caret_cell(5, &line, Some(crate::vim::VimSubMode::Normal)), 0);
+    assert_eq!(caret_cell(5, &line, Some(crate::vim::VimSubMode::Insert)), 0);
+    assert_eq!(caret_cell(5, &line, None), 0);
+}
+
+#[test]
+fn test_caret_cell_no_vim_mode_behaves_like_insert() {
+    let line = VisualLine { char_start: 0, char_end: 3 };
+    assert_eq!(caret_cell(3, &line, None), 3);
+}
+
+#[test]
+fn test_end_visual_reaches_last_char() {
+    let mut ed = Editor::new();
+    ed.insert_str("hello");
+    let lines = ed.compute_visual_lines(80);
+    ed.cur = 0;
+    ed.end_visual(&lines);
+    assert_eq!(ed.cur, 5);
+}
+
+#[test]
+#[test]
+fn test_end_visual_reaches_end_of_line() {
+    let mut ed = Editor::new();
+    ed.insert_str("hello");
+    let lines = ed.compute_visual_lines(80);
+    ed.cur = 0;
+    ed.end_visual(&lines);
+    assert_eq!(ed.cur, 5);
+    let col = caret_cell(ed.cur, &lines[0], Some(crate::vim::VimSubMode::Normal));
+    assert_eq!(col, 5);
+}

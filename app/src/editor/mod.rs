@@ -9,12 +9,14 @@ mod visual;
 mod tests;
 
 pub use crate::types::{EditorSnapshot, VisualLine};
+pub use visual::caret_cell;
 
 #[derive(Default, Clone)]
 pub struct Editor {
     pub buf: Vec<char>,
     pub cur: usize,
     pub selection: Option<usize>,
+    pub selection_inclusive: bool,
     pub undo_stack: Vec<EditorSnapshot>,
     pub redo_stack: Vec<EditorSnapshot>,
 }
@@ -31,12 +33,14 @@ impl Editor {
         self.buf.clear();
         self.cur = 0;
         self.selection = None;
+        self.selection_inclusive = false;
     }
 
     pub fn set_text(&mut self, s: &str) {
         self.buf = s.chars().collect();
         self.cur = 0;
         self.selection = None;
+        self.selection_inclusive = false;
     }
 
     pub fn text(&self) -> String {

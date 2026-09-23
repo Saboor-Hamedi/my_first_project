@@ -4,6 +4,7 @@ pub mod activity;
 pub mod cards;
 pub mod connection;
 pub mod notes;
+pub mod scans;
 
 use rusqlite::Connection;
 
