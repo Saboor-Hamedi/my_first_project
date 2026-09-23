@@ -3,13 +3,14 @@
 use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, Stroke};
 use crate::sidebar::SidebarAction;
 
+use crate::theme::Theme;
+
 /// Renders the bottom footer of the sidebar: round settings icon button with hover tooltip.
 pub fn render_sidebar_footer(
     ui: &mut egui::Ui,
     painter: &egui::Painter,
     sb_rect: Rect,
-    accent: Color32,
-    muted_color: Color32,
+    theme: &Theme,
 ) -> Option<SidebarAction> {
     let mut action = None;
 
@@ -23,29 +24,29 @@ pub fn render_sidebar_footer(
     let center = btn_rect.center();
     let is_hovered = resp.hovered() || ui.rect_contains_pointer(btn_rect);
 
-    if is_hovered {
-        painter.circle_filled(center, btn_size * 0.5, Color32::from_rgb(28, 30, 38));
-        painter.circle_stroke(
-            center,
-            btn_size * 0.5,
-            Stroke::new(1.0, Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 100)),
-        );
+    let bg_color = if is_hovered {
+        if theme.is_light() {
+            Color32::from_rgba_unmultiplied(0, 0, 0, 14)
+        } else {
+            Color32::from_rgba_unmultiplied(255, 255, 255, 16)
+        }
     } else {
-        painter.circle_filled(center, btn_size * 0.5, Color32::from_rgb(18, 19, 24));
-        painter.circle_stroke(
-            center,
-            btn_size * 0.5,
-            Stroke::new(1.0, Color32::from_rgb(34, 36, 44)),
-        );
-    }
+        Color32::TRANSPARENT
+    };
+    let stroke = if is_hovered {
+        Stroke::new(1.0, theme.border())
+    } else {
+        Stroke::NONE
+    };
+    painter.rect(btn_rect, 6.0, bg_color, stroke, egui::StrokeKind::Inside);
 
-    // Large gear icon centered without text label
+    // Integrated gear icon centered with secondary text color
     painter.text(
         center,
         Align2::CENTER_CENTER,
         "⚙",
-        FontId::monospace(15.5),
-        if is_hovered { accent } else { muted_color },
+        FontId::proportional(15.5),
+        if is_hovered { theme.text } else { theme.muted },
     );
 
     // Hover tooltip showing shortcut

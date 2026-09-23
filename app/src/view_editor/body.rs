@@ -32,7 +32,10 @@ pub fn render_editor_body(
     let font_h = painter.layout_no_wrap("M".to_owned(), font.clone(), Color32::WHITE).size().y;
     let y_pad = ((lh - font_h) * 0.5).round().max(0.0);
     let stroke_w = (font_size * 0.088).clamp(1.2, 1.8);
-    let visible_h = editor_rect.height();
+    let visible_h = editor_rect.height().max(0.0);
+    if visible_h < 10.0 {
+        return;
+    }
 
     let total_content_h = visual_lines.len() as f32 * lh;
     let max_scroll = (total_content_h + 16.0 - visible_h + lh * 4.0).max(0.0);
@@ -126,7 +129,7 @@ pub fn render_editor_body(
     let caret_x = ed_origin.x + col as f32 * cw;
     let target = pos2(caret_x, ed_origin.y + row as f32 * lh);
     caret.update(dt, target, typed, now, cw, lh);
-    caret.paint(&caret_painter, cw, lh, now, theme.accent);
+    caret.paint(&caret_painter, cw, lh, now, theme.accent, theme.is_light());
 
     let is_block = caret.kind == crate::caret::CaretKind::Block;
 
@@ -278,8 +281,9 @@ pub fn render_editor_body(
     }
 
     // Interactive scrollbar indicator in the right margin gutter
-    if total_content_h > visible_h && max_scroll > 0.0 {
-        let thumb_h = ((visible_h / total_content_h) * visible_h).clamp(28.0, visible_h);
+    if visible_h > 35.0 && total_content_h > visible_h && max_scroll > 0.0 {
+        let max_thumb = visible_h.max(28.0);
+        let thumb_h = ((visible_h / total_content_h) * visible_h).clamp(28.0, max_thumb);
         let scroll_ratio = (*scroll_y / max_scroll).clamp(0.0, 1.0);
         let thumb_y = editor_rect.min.y + scroll_ratio * (visible_h - thumb_h);
         let track_x = window_bounds.max.x - 8.0;
@@ -292,7 +296,8 @@ pub fn render_editor_body(
         let is_track_hovered = ui.rect_contains_pointer(track_rect);
         if is_track_hovered && ui.input(|i| i.pointer.primary_down()) {
             if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
-                let ratio = ((pos.y - editor_rect.min.y - thumb_h * 0.5) / (visible_h - thumb_h)).clamp(0.0, 1.0);
+                let avail_track = (visible_h - thumb_h).max(1.0);
+                let ratio = ((pos.y - editor_rect.min.y - thumb_h * 0.5) / avail_track).clamp(0.0, 1.0);
                 *scroll_y = ratio * max_scroll;
             }
         }

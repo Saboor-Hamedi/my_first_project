@@ -21,27 +21,27 @@ pub fn render_backup_tab(
         p_origin,
         Align2::LEFT_TOP,
         "Auto-Backup & Snapshots",
-        FontId::monospace(15.0),
+        FontId::proportional(15.0),
         theme.highlight,
     );
     painter.text(
         p_origin + vec2(0.0, 22.0),
         Align2::LEFT_TOP,
         "Atomic SQLite database snapshots with WAL write-protection",
-        FontId::monospace(11.0),
+        FontId::proportional(12.0),
         theme.muted,
     );
 
     let mut cur_y = p_origin.y + 60.0;
-    let card_w = panel_rect.width() - 56.0;
+    let card_w = (panel_rect.width() - 56.0).max(320.0);
 
     // Card 1: Backup Directory Path
     let path_card = Rect::from_min_size(pos2(p_origin.x, cur_y), vec2(card_w, 90.0));
     painter.rect(
         path_card,
-        5.0,
-        Color32::from_rgb(18, 20, 26),
-        Stroke::new(1.0, Color32::from_rgb(34, 37, 48)),
+        6.0,
+        theme.surface(),
+        Stroke::new(1.0, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -49,8 +49,8 @@ pub fn render_backup_tab(
         path_card.min + vec2(14.0, 12.0),
         Align2::LEFT_TOP,
         "Backup Destination Directory",
-        FontId::monospace(12.5),
-        Color32::from_gray(220),
+        FontId::proportional(13.0),
+        theme.text,
     );
 
     // Display current path in a pill box
@@ -68,9 +68,9 @@ pub fn render_backup_tab(
     );
     painter.rect(
         pill_rect,
-        4.0,
-        Color32::from_rgb(12, 13, 17),
-        Stroke::new(1.0, Color32::from_rgb(28, 30, 40)),
+        5.0,
+        theme.sidebar_bg(),
+        Stroke::new(1.0, theme.border()),
         egui::StrokeKind::Inside,
     );
     painter.text(
@@ -88,23 +88,26 @@ pub fn render_backup_tab(
     );
     let browse_hover = ui.rect_contains_pointer(browse_rect);
     let browse_bg = if browse_hover {
-        Color32::from_rgb(36, 40, 54)
+        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 35)
     } else {
-        Color32::from_rgb(26, 28, 38)
+        theme.sidebar_bg()
     };
     painter.rect(
         browse_rect,
-        4.0,
+        5.0,
         browse_bg,
-        Stroke::new(1.0, if browse_hover { theme.accent } else { Color32::from_rgb(48, 52, 68) }),
+        Stroke::new(1.0, if browse_hover { theme.accent } else { theme.border() }),
         egui::StrokeKind::Inside,
     );
+    if browse_hover {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
     painter.text(
         browse_rect.center(),
         Align2::CENTER_CENTER,
         "📁 Browse...",
-        FontId::monospace(11.5),
-        if browse_hover { Color32::WHITE } else { Color32::from_gray(210) },
+        FontId::proportional(12.0),
+        if browse_hover { theme.accent } else { theme.text },
     );
 
     if browse_hover && ui.input(|i| i.pointer.primary_clicked()) {
@@ -121,9 +124,9 @@ pub fn render_backup_tab(
     let action_card = Rect::from_min_size(pos2(p_origin.x, cur_y), vec2(card_w, 82.0));
     painter.rect(
         action_card,
-        5.0,
-        Color32::from_rgb(18, 20, 26),
-        Stroke::new(1.0, Color32::from_rgb(34, 37, 48)),
+        6.0,
+        theme.surface(),
+        Stroke::new(1.0, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -131,8 +134,8 @@ pub fn render_backup_tab(
         action_card.min + vec2(14.0, 12.0),
         Align2::LEFT_TOP,
         "1-Click Snapshot",
-        FontId::monospace(12.5),
-        Color32::from_gray(220),
+        FontId::proportional(13.0),
+        theme.text,
     );
 
     let status_str = match last_backup_status {
@@ -144,7 +147,7 @@ pub fn render_backup_tab(
         action_card.min + vec2(14.0, 38.0),
         Align2::LEFT_TOP,
         status_str,
-        FontId::monospace(10.5),
+        FontId::proportional(11.0),
         theme.muted,
     );
 
@@ -154,22 +157,25 @@ pub fn render_backup_tab(
     );
     let run_hover = ui.rect_contains_pointer(run_btn_rect);
     let run_bg = if run_hover {
-        Color32::from_rgb(28, 48, 38)
+        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 38)
     } else {
-        Color32::from_rgb(20, 32, 26)
+        theme.sidebar_bg()
     };
+    if run_hover {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
     painter.rect(
         run_btn_rect,
-        4.0,
+        5.0,
         run_bg,
-        Stroke::new(1.0, if run_hover { theme.accent } else { Color32::from_rgb(36, 68, 50) }),
+        Stroke::new(1.0, if run_hover { theme.accent } else { theme.border() }),
         egui::StrokeKind::Inside,
     );
     painter.text(
         run_btn_rect.center(),
         Align2::CENTER_CENTER,
         "⚡ Snapshot (:backup)",
-        FontId::monospace(11.5),
+        FontId::proportional(12.0),
         theme.accent,
     );
 
@@ -183,9 +189,9 @@ pub fn render_backup_tab(
     let info_card = Rect::from_min_size(pos2(p_origin.x, cur_y), vec2(card_w, 132.0));
     painter.rect(
         info_card,
-        5.0,
-        Color32::from_rgb(14, 15, 20),
-        Stroke::new(1.0, Color32::from_rgb(26, 28, 36)),
+        6.0,
+        theme.surface(),
+        Stroke::new(1.0, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -200,15 +206,15 @@ pub fn render_backup_tab(
             pos2(info_card.min.x + 14.0, y),
             Align2::LEFT_TOP,
             *label,
-            FontId::monospace(11.0),
+            FontId::proportional(11.5),
             theme.accent,
         );
         painter.text(
             pos2(info_card.min.x + 14.0, y + 16.0),
             Align2::LEFT_TOP,
             *desc,
-            FontId::monospace(10.0),
-            Color32::from_gray(160),
+            FontId::proportional(11.0),
+            theme.muted,
         );
     }
 

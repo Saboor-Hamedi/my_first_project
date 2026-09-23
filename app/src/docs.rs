@@ -54,6 +54,12 @@ pub const BRAIN_DOCS: &[DocItem] = &[
         filename: "scan.md",
         content: include_str!("../../brain/scan.md"),
     },
+    DocItem {
+        id: "terminal",
+        title: "Terminal",
+        filename: "terminal.md",
+        content: include_str!("../../brain/terminal.md"),
+    },
 ];
 
 /// Returns all available documentation documents.
@@ -526,7 +532,7 @@ mod tests {
 
     #[test]
     fn test_brain_docs_embedded_and_valid() {
-        assert_eq!(BRAIN_DOCS.len(), 7);
+        assert_eq!(BRAIN_DOCS.len(), 8);
         for doc in BRAIN_DOCS {
             assert!(!doc.id.is_empty());
             assert!(!doc.title.is_empty());
@@ -553,7 +559,7 @@ mod tests {
     #[test]
     fn test_doc_selection_bounds() {
         let total = BRAIN_DOCS.len();
-        assert_eq!(total, 7);
+        assert_eq!(total, 8);
         let mut selected = 0usize;
         // simulate Down / j moves
         for _ in 0..10 {

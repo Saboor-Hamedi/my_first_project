@@ -1,379 +1,123 @@
-# Prompt for coding agent: add a real embedded terminal (`:term`) to Mindforge — v2
+Here is a precise, self-contained prompt for your agent. It defines the "Lumina" aesthetic from scratch using design principles rather than references, and explicitly protects your existing layout gaps.
 
-**This replaces the previous terminal prompt.** That version had the agent hand-roll
-PTY spawning (`portable-pty`) and ANSI parsing (`vte`) from scratch. That was more
-risk than necessary: `egui_term` (https://github.com/Harzu/egui_term) already does
-this job, using `alacritty_terminal` — the actual engine behind the real Alacritty
-terminal — as its backend, instead of a partial VT100 implementation written by
-hand. Use it as the primary path. Section 6 below is the old hand-rolled approach,
-kept only as a fallback if `egui_term` turns out not to fit (see step 0).
+***
 
-## Step 0 (do this first): check version compatibility
+### 🎯 Prompt for AI Agent: MindForge UI Refactor to "Modern Workspace" Aesthetic
 
-`egui_term = "0.1"` depends on `egui ^0.31.0`. Check Mindforge's current
-`eframe`/`egui` version in `app/Cargo.toml`.
+**Context:**
+We are refactoring the **MindForge** Egui application to match a specific "Modern Knowledge Workspace" visual style (codenamed "Lumina"). The goal is to transform the UI from a "rigid IDE" look to a "soft, premium workspace" feel.
 
-- **Versions match (or Mindforge can reasonably upgrade to 0.31.x):** proceed with
-  `egui_term`, sections 1-5 below.
-- **Versions conflict and upgrading egui isn't acceptable right now:** `TerminalView`
-  won't type-check against your `Ui`, full stop — fall back to Appendix A (the
-  hand-rolled `portable-pty` + `vte` approach), which has zero dependency on egui's
-  version since it doesn't touch egui at all, only exposes a plain grid of cells for
-  `app` to paint with whatever egui version it's on.
+**️ CRITICAL CONSTRAINT: PRESERVE LAYOUT GAPS**
+*   **DO NOT** remove, shrink, or merge the spacing/gaps between UI components (sidebar, editor, title bar).
+*   **DO NOT** change the panel docking logic or resize handles.
+*   The structural grid and breathing room between panels must remain **exactly as they are**. We are only changing *surface styling* (colors, fonts, shapes), not *geometry*.
 
-## Same constraint as before: don't touch the `:` command bar
+**Design System Definition ("Lumina Style"):**
+Since you do not have external references, adhere strictly to these rules:
 
-Everything in the earlier discussion still applies: `:term` is one more arm in the
-existing `execute_command` match (same shape as `:scan`/`:stats`), keystrokes inside
-terminal mode bypass `execute_command`/`handle_command_key` entirely, and the shell
-session should persist across mode switches rather than respawning. Reuse the
-`app.scan_rx` / `app.prev_mode_before_scan` pattern already in the real `commands.rs`
-— call the terminal's equivalents `app.term_backend` / `app.prev_mode_before_term`.
+1.  **Color Palette (Deep Slate & Soft Accents):**
+    *   **Backgrounds:** Replace pure blacks/grays with deep slate/navy tones (e.g., `#0f1115` for main bg, `#16181d` for sidebars).
+    *   **Text:** Never use pure white (`#FFFFFF`). Use off-white (`#e2e8f0`) for primary text and muted slate (`#94a3b8`) for secondary text/labels.
+    *   **Accents:** Replace harsh yellow selections with a soft, electric purple/pink (`#d946ef`) or warm amber (`#d4a373`) at low opacity (15-20%) for backgrounds.
 
-## 1. Before writing any integration code: read the real examples
+2.  **Typography Hierarchy:**
+    *   **UI Elements (Sidebar, Tabs, Headers):** Switch from Monospace to a clean **Sans-Serif** font (Inter, Roboto, or System UI). This distinguishes "interface" from "code."
+    *   **Editor Content:** Keep Monospace for code only.
+    *   **Line Numbers:** Reduce opacity to 40% so they recede visually.
 
-`egui_term`'s public surface (confirmed via docs.rs) is:
-```
-Structs: BackendSettings, Binding, ColorPalette, FontSettings, TerminalBackend,
-         TerminalFont, TerminalTheme, TerminalView
-Enums:   BackendCommand, BindingAction, InputKind
-Aliases: KeyboardBinding, PtyEvent, TerminalMode
-Macro:   generate_bindings
-```
-That's the shape, but not the exact call sequence — clone the repo and read these two files before writing any integration code, they are the ground truth for how the pieces actually connect:
-- `github.com/Harzu/egui_term/blob/main/examples/full_screen/main.rs` — minimal working terminal: spawning `TerminalBackend`, polling `PtyEvent`s, drawing `TerminalView`.
-- `github.com/Harzu/egui_term/blob/main/examples/custom_bindings/main.rs` — how to add a custom keybinding, which is exactly what's needed for "the key that exits terminal mode back to Mindforge" (see section 4).
+3.  **Component Styling Rules:**
+    *   **Selection States:** Instead of solid block highlights, use **rounded rectangles** (`corner_radius = 4.0`) with a soft tinted background. Shrink the highlight rect by 2-4px from the edges so it "floats" inside the list item.
+    *   **Dividers:** Remove hard 1px border lines between panels. Rely on **background color contrast** (e.g., sidebar is 5% lighter than editor) to define space.
+    *   **Tabs:** Style tabs as "floating chips" rather than a connected strip. Give them rounded corners and distinct separation.
+    *   **Cursor:** Change from Block cursor to a **thin vertical beam** with a subtle glow effect.
 
-Do not guess method names or invent an API surface — match what those files actually do.
+4.  **Egui Implementation Specifics:**
+    *   Use `ui.painter().rect_filled()` with `shrink()` for selection highlights to achieve the "floating pill" look.
+    *   Apply `WindowFrame::shadow` to floating elements (modals, menus) to create depth.
+    *   Ensure all interactive elements have a smooth transition state (if possible in Egui) or at least a distinct hover state that doesn't rely on brightness alone.
 
-## 2. Cargo changes
+**Execution Plan:**
+1.  Update the global `Style` object in Egui with the new color palette and font families.
+2.  Refactor the Sidebar list rendering to use rounded, inset selection highlights.
+3.  Adjust the Tab Bar rendering to look like discrete chips.
+4.  Verify that all original panel gaps and resize handles are untouched.
 
-`app/Cargo.toml`:
-```toml
-egui_term = "0.1"
-```
-No `portable-pty` or `vte` needed — `egui_term` already depends on `alacritty_terminal`
-internally, which supersedes both.
+***
 
-No new `terminal/` crate is needed either, unlike the `webscan`-style separate-crate
-pattern used elsewhere in this project: `egui_term` is already a self-contained
-widget library, so the integration surface is small enough to live directly in
-`app` (e.g. a new `app/src/terminal_pane.rs`). If it grows a lot of Mindforge-specific
-logic later (multiple named sessions, persistence, etc.), it can be split out then.
+### 💡 Why This Prompt Works
+*   **Self-Contained Definition:** It doesn't say "make it like Lumina." It says "make it Deep Slate, Sans-Serif UI, Rounded Selections." The agent can execute this without seeing a screenshot.
+*   **Explicit Guardrails:** The "CRITICAL CONSTRAINT" section uses bold caps and negative commands ("DO NOT") to prevent the agent from "fixing" the gaps it might perceive as inefficiencies.
+*   **Technical Translation:** It translates abstract design goals ("premium feel") into concrete Egui API calls (`rect_filled`, `shrink`, `WindowFrame::shadow`).
 
-## 3. Sketch of the shape (confirm exact calls against the real examples)
 
-```rust
-// app/src/terminal_pane.rs — confirm every call here against
-// examples/full_screen/main.rs before treating this as correct.
 
-use egui_term::{TerminalBackend, TerminalView, BackendSettings, PtyEvent};
-use std::sync::mpsc;
+Here is the comprehensive, consolidated prompt for your agent. It combines the previous "Lumina/Porcelain" styling instructions with your new specific fixes for the settings icon, hover states, and list spacing.
 
-pub struct TerminalPane {
-    backend: TerminalBackend,
-    event_rx: mpsc::Receiver<(u64, PtyEvent)>, // confirm exact PtyEvent channel shape in the example
-}
+***
 
-impl TerminalPane {
-    pub fn spawn(ctx: &eframe::egui::Context) -> anyhow::Result<Self> {
-        let (tx, rx) = mpsc::channel();
-        let backend = TerminalBackend::new(0, ctx.clone(), tx, BackendSettings::default())?;
-        Ok(Self { backend, event_rx: rx })
-    }
+### 🎯 Prompt for AI Agent: MindForge UI Refactor to "Porcelain" Workspace Aesthetic
 
-    /// Call every frame: drains pending PTY events into the backend.
-    /// Confirm against the example whether this is manual or handled
-    /// internally by TerminalView — don't assume.
-    pub fn pump(&mut self) {
-        while let Ok((_id, event)) = self.event_rx.try_recv() {
-            self.backend.process_event(event); // confirm exact method name
-        }
-    }
+**Context:**
+We are refactoring the **MindForge** Egui application to match a specific "Modern Knowledge Workspace" visual style (codenamed "Porcelain"). The goal is to transform the UI from a "rigid IDE" look to a "soft, premium workspace" feel.
 
-    pub fn ui(&mut self, ui: &mut eframe::egui::Ui) {
-        ui.add(TerminalView::new(ui, &mut self.backend)); // confirm builder methods (focus, size) in example
-    }
-}
-```
-
-## 4. The "leave terminal mode" key
-
-Use `egui_term`'s own custom-bindings mechanism (see `examples/custom_bindings/main.rs`
-and the `generate_bindings!` macro / `Binding` / `KeyboardBinding` types) to bind one
-dedicated key combo to a Mindforge-specific action, rather than intercepting keys
-before they reach the widget. As before: **don't use plain `Esc`** — real programs
-run inside the terminal (`vim`, `less`) use `Esc` themselves. Pick something like
-`Ctrl+Shift+Escape` or another combo unlikely to collide with normal shell/editor use,
-and confirm in the example how a custom binding communicates "an app-level action
-happened" back out to the surrounding Mindforge code (likely via `BackendCommand` or
-a callback — check the example, don't assume).
-
-## 5. Theming
-
-`ColorPalette` / `TerminalTheme` (confirm construction in `examples/themes/main.rs`)
-let the terminal pane match whatever `ThemeKind` is currently active in Mindforge —
-map `Theme::bg`/`text`/`accent`/etc. into the palette so switching `:theme` also
-re-themes the terminal pane consistently, rather than the terminal looking like a
-foreign widget dropped into the app.
-
-## Build order
-
-1. Confirm step 0 (version compatibility) before anything else.
-2. Get the `examples/full_screen` example running standalone, unmodified, to confirm
-   the crate itself works in this environment before integrating anything.
-3. Wire `Mode::Terminal` + `:term`, following the real `commands.rs`/`Mode` patterns.
-4. Add the custom exit-key binding (section 4).
-5. Add theming (section 5).
-6. Run `vim` inside it — same real test as before: full-screen redraws, cursor
-   movement, `Ctrl-C`/`Ctrl-D` all need to behave normally.
-
-## Definition of done
-
-Same as before: `:term` opens a real shell with working `ls`/`cd`/`git status`,
-colored output renders correctly, `vim`/`htop` work inside the pane, the session
-persists across mode switches, terminal input never triggers `:` commands, and none
-of the existing `:` commands are affected.
+**️ CRITICAL CONSTRAINT: PRESERVE LAYOUT GEOMETRY**
+*   **DO NOT** remove, shrink, or merge the spacing/gaps between UI components (sidebar, editor, title bar).
+*   **DO NOT** change the panel docking logic or resize handles.
+*   **DO NOT** change the height of the window or main panels.
+*   We are only changing *surface styling* (colors, fonts, shapes, padding), not *structural geometry*.
 
 ---
 
-## Appendix A: fallback — hand-rolled PTY + VT parsing
+### 🛠️ Specific Fixes Required (Priority)
 
-Only use this path if step 0 found a real version conflict with `egui_term` that
-isn't worth resolving right now. This is the original approach: a separate
-`terminal/` crate using `portable-pty` for PTY spawning and `vte` for ANSI parsing,
-built entirely by hand with no egui dependency at all — so it has zero coupling to
-Mindforge's egui version, at the cost of reimplementing what `alacritty_terminal`
-already does well. It's a real, working starting point, just a rougher one: the ANSI
-subset it handles is smaller (colors and cursor positioning only; screen/line
-clearing are stubbed), so expect more `TODO`s to fill in with real-world usage
-(`git status`, colored prompts) than the `egui_term` path needs.
+1.  **Settings Icon Theme Mismatch:**
+    *   The gear/settings icon in the bottom-left sidebar is currently stark black/white.
+    *   **Fix:** Recolor it to match the secondary text color (`#64748b` or similar slate gray). It should feel integrated into the light theme, not like a high-contrast sticker.
 
-### `terminal/Cargo.toml`
-```toml
-[package]
-name = "terminal"
-version = "0.1.0"
-edition = "2021"
+2.  **Sidebar Note Hover State:**
+    *   Currently, hovering over a note in the sidebar turns the background black. This is too harsh for the light "Porcelain" theme.
+    *   **Fix:** Change the hover background to a soft, transparent gray (e.g., `rgba(0, 0, 0, 0.05)` or `#F1F5F9`). Text color should remain dark gray, not white.
 
-[dependencies]
-portable-pty = "0.8"
-vte = "0.13"
-```
+3.  **Note List Item Height:**
+    *   The vertical height of individual note items in the sidebar is too small/cramped.
+    *   **Fix:** Increase the minimum height of each list item row by `4px` to `8px`. Ensure vertical centering of text is maintained. The list should feel breathable, not dense.
 
-### `terminal/src/lib.rs`
-```rust
-mod pty; mod vt;
-pub use vt::{Cell, Grid};
+---
 
-pub struct Term {
-    pty: pty::PtySession,
-    grid: vt::Grid,
-}
+### 🎨 General "Porcelain" Design System Rules
 
-impl Term {
-    pub fn spawn(cols: u16, rows: u16) -> anyhow::Result<Self> {
-        let pty = pty::PtySession::spawn(cols, rows)?;
-        Ok(Self { pty, grid: vt::Grid::new(cols, rows) })
-    }
+**1. Color Palette (Light & Airy):**
+*   **Backgrounds:** Use soft whites and light grays. Main canvas: `#FFFFFF`, Sidebar: `#FAFAFA` or `#F8FAFC`.
+*   **Text:** Never pure black. Primary text: `#1E293B` (Slate 800). Secondary text: `#64748B` (Slate 500).
+*   **Accents:** Use the specific Cyan/Blue seen in the screenshots (`#0EA5E9` or similar) for active states, but keep it soft.
 
-    pub fn send_input(&mut self, bytes: &[u8]) -> anyhow::Result<()> {
-        self.pty.write(bytes)
-    }
+**2. Typography Hierarchy:**
+*   **UI Elements (Sidebar, Tabs, Headers):** Switch from Monospace to a clean **Sans-Serif** font (Inter, Roboto, or System UI).
+*   **Editor Content:** Keep Monospace for code only.
+*   **Line Numbers:** Reduce opacity to 40% so they recede visually.
 
-    pub fn pump(&mut self) -> anyhow::Result<bool> {
-        let mut changed = false;
-        while let Some(chunk) = self.pty.try_read()? {
-            self.grid.feed(&chunk);
-            changed = true;
-        }
-        Ok(changed)
-    }
+**3. Component Styling Rules:**
+*   **Sidebar Selection ("Floating Pill"):**
+    *   Do NOT use a full-width block highlight.
+    *   Use a rounded rectangle (`corner_radius = 6px`) that is inset by `4px` on left/right margins.
+    *   Background should be a soft tint (e.g., `rgba(14, 165, 233, 0.1)`).
+*   **Tabs:**
+    *   Break the continuous top strip into discrete "chips".
+    *   Add gaps between tabs.
+    *   Active tab: White background, subtle shadow. Inactive tab: Light gray background.
+*   **Settings Modal:**
+    *   Remove zebra-striping from lists (like Shortcuts). Use uniform backgrounds with hover highlights only.
+    *   Selected cards (like "Candle" caret) should have a subtle background tint + border, not just a border.
 
-    pub fn resize(&mut self, cols: u16, rows: u16) -> anyhow::Result<()> {
-        self.pty.resize(cols, rows)?;
-        self.grid.resize(cols, rows);
-        Ok(())
-    }
+**4. Egui Implementation Specifics:**
+*   Use `ui.painter().rect_filled()` with `shrink()` for selection highlights.
+*   Apply `WindowFrame::shadow` to floating elements (modals, menus).
+*   Ensure all interactive elements have a distinct hover state that doesn't rely on high-contrast inversion (no black-on-white flipping).
 
-    pub fn grid(&self) -> &Grid { &self.grid }
-    pub fn is_alive(&mut self) -> bool { self.pty.is_alive() }
-}
-```
-
-### `terminal/src/pty.rs`
-```rust
-use portable_pty::{native_pty_system, CommandBuilder, PtySize, Child, MasterPty};
-use std::io::{Read, Write};
-use std::sync::mpsc::{channel, Receiver, TryRecvError};
-
-pub struct PtySession {
-    master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
-    rx: Receiver<Vec<u8>>,
-    child: Box<dyn Child + Send + Sync>,
-}
-
-impl PtySession {
-    pub fn spawn(cols: u16, rows: u16) -> anyhow::Result<Self> {
-        let pty_system = native_pty_system();
-        let pair = pty_system.openpty(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })?;
-
-        let shell = std::env::var("SHELL").unwrap_or_else(|_| {
-            if cfg!(windows) { "powershell.exe".into() } else { "/bin/bash".into() }
-        });
-        let cmd = CommandBuilder::new(shell);
-        let child = pair.slave.spawn_command(cmd)?;
-
-        let mut reader = pair.master.try_clone_reader()?;
-        let writer = pair.master.take_writer()?;
-
-        let (tx, rx) = channel();
-        std::thread::spawn(move || {
-            let mut buf = [0u8; 4096];
-            loop {
-                match reader.read(&mut buf) {
-                    Ok(0) => break,
-                    Ok(n) => { if tx.send(buf[..n].to_vec()).is_err() { break; } }
-                    Err(_) => break,
-                }
-            }
-        });
-
-        Ok(Self { master: pair.master, writer, rx, child })
-    }
-
-    pub fn write(&mut self, bytes: &[u8]) -> anyhow::Result<()> {
-        self.writer.write_all(bytes)?;
-        Ok(())
-    }
-
-    pub fn try_read(&mut self) -> anyhow::Result<Option<Vec<u8>>> {
-        match self.rx.try_recv() {
-            Ok(chunk) => Ok(Some(chunk)),
-            Err(TryRecvError::Empty) => Ok(None),
-            Err(TryRecvError::Disconnected) => Ok(None),
-        }
-    }
-
-    pub fn resize(&mut self, cols: u16, rows: u16) -> anyhow::Result<()> {
-        self.master.resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })?;
-        Ok(())
-    }
-
-    pub fn is_alive(&mut self) -> bool {
-        matches!(self.child.try_wait(), Ok(None))
-    }
-}
-```
-
-### `terminal/src/vt.rs`
-```rust
-use vte::{Params, Parser, Perform};
-
-#[derive(Clone, Copy, Default)]
-pub struct Cell { pub ch: char, pub fg: (u8,u8,u8), pub bg: (u8,u8,u8), pub bold: bool }
-
-pub struct Grid {
-    cells: Vec<Vec<Cell>>,
-    cursor: (usize, usize),
-    cols: u16, rows: u16,
-    parser: Parser,
-    cur_fg: (u8,u8,u8),
-    cur_bg: (u8,u8,u8),
-}
-
-impl Grid {
-    pub fn new(cols: u16, rows: u16) -> Self {
-        Self {
-            cells: vec![vec![Cell::default(); cols as usize]; rows as usize],
-            cursor: (0, 0), cols, rows,
-            parser: Parser::new(),
-            cur_fg: (220, 220, 220), cur_bg: (0, 0, 0),
-        }
-    }
-
-    pub fn feed(&mut self, bytes: &[u8]) {
-        let mut performer = GridPerformer { grid: self };
-        for &b in bytes {
-            performer.grid.parser.advance(&mut performer, b);
-        }
-    }
-
-    pub fn resize(&mut self, cols: u16, rows: u16) {
-        self.cols = cols; self.rows = rows;
-        self.cells = vec![vec![Cell::default(); cols as usize]; rows as usize];
-        self.cursor = (0, 0);
-    }
-
-    pub fn rows(&self) -> &[Vec<Cell>] { &self.cells }
-    pub fn cursor(&self) -> (usize, usize) { self.cursor }
-}
-
-struct GridPerformer<'a> { grid: &'a mut Grid }
-
-impl<'a> Perform for GridPerformer<'a> {
-    fn print(&mut self, c: char) {
-        let (col, row) = self.grid.cursor;
-        if let Some(cell) = self.grid.cells.get_mut(row).and_then(|r| r.get_mut(col)) {
-            *cell = Cell { ch: c, fg: self.grid.cur_fg, bg: self.grid.cur_bg, bold: false };
-        }
-        self.grid.cursor.0 = (col + 1).min(self.grid.cols as usize - 1);
-    }
-
-    fn execute(&mut self, byte: u8) {
-        match byte {
-            b'\n' => { self.grid.cursor.1 = (self.grid.cursor.1 + 1).min(self.grid.rows as usize - 1); self.grid.cursor.0 = 0; }
-            b'\r' => { self.grid.cursor.0 = 0; }
-            _ => {}
-        }
-    }
-
-    fn csi_dispatch(&mut self, params: &Params, _intermediates: &[u8], _ignore: bool, action: char) {
-        match action {
-            'm' => self.apply_sgr(params),
-            'H' | 'f' => {
-                let mut it = params.iter();
-                let row = it.next().and_then(|p| p.first()).copied().unwrap_or(1).max(1) as usize - 1;
-                let col = it.next().and_then(|p| p.first()).copied().unwrap_or(1).max(1) as usize - 1;
-                self.grid.cursor = (col.min(self.grid.cols as usize - 1), row.min(self.grid.rows as usize - 1));
-            }
-            'J' => { /* TODO: clear screen variants */ }
-            'K' => { /* TODO: clear line variants */ }
-            _ => {}
-        }
-    }
-}
-
-impl<'a> GridPerformer<'a> {
-    fn apply_sgr(&mut self, params: &Params) {
-        for p in params.iter() {
-            match p.first().copied().unwrap_or(0) {
-                0 => { self.grid.cur_fg = (220,220,220); self.grid.cur_bg = (0,0,0); }
-                30..=37 => self.grid.cur_fg = ansi_16(p[0] as u8 - 30),
-                40..=47 => self.grid.cur_bg = ansi_16(p[0] as u8 - 40),
-                _ => {}
-            }
-        }
-    }
-}
-
-fn ansi_16(n: u8) -> (u8, u8, u8) {
-    const PALETTE: [(u8,u8,u8); 8] = [
-        (0,0,0), (205,49,49), (13,188,121), (229,229,16),
-        (36,114,200), (188,63,188), (17,168,205), (229,229,229),
-    ];
-    PALETTE[n as usize % 8]
-}
-```
-
-## Rules for the agent (both paths)
-
-- Do not modify `execute_command`'s existing arms beyond adding one new `"term"` arm.
-- Try `egui_term` first (sections 1-5). Only drop to Appendix A if step 0's version
-  check genuinely fails, or if `egui_term` proves broken/unmaintained-feeling in
-  practice after actually trying it — don't switch paths on a hunch, switch on a
-  concrete blocker.
-- Read the real example files before writing integration code; do not invent method
-  names that weren't confirmed against them.
-- After each build step, give a 3-line summary of what changed and what to try.
+**Execution Plan:**
+1.  Fix the Settings Icon color immediately.
+2.  Adjust Sidebar row height and hover colors.
+3.  Update global Style object with Porcelain palette and Sans-Serif UI font.
+4.  Refactor Sidebar list rendering for "floating pill" selection.
+5.  Refactor Tab Bar for discrete chips.
+6.  Verify all original panel gaps and resize handles are untouched.

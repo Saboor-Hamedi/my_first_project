@@ -28,6 +28,8 @@ mod docs;
 mod help_panel;
 mod scan_history_view;
 mod scan_view;
+pub mod terminal_pane;
+pub mod ui_components;
 
 pub use types::{snapshot, visual_line};
 

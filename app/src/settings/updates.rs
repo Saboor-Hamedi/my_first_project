@@ -22,14 +22,14 @@ pub fn render_updates_tab(
         p_origin,
         Align2::LEFT_TOP,
         "SOFTWARE UPDATES",
-        FontId::monospace(14.5),
+        FontId::proportional(15.0),
         theme.highlight,
     );
     painter.text(
         p_origin + vec2(0.0, 22.0),
         Align2::LEFT_TOP,
         "Manage updates for MindForge",
-        FontId::monospace(11.5),
+        FontId::proportional(12.0),
         theme.muted,
     );
 
@@ -37,9 +37,9 @@ pub fn render_updates_tab(
     let ver_card = Rect::from_min_size(pos2(p_origin.x, p_origin.y + 54.0), vec2(card_w, 64.0));
     painter.rect(
         ver_card,
-        5.0,
-        Color32::from_rgb(14, 15, 20),
-        Stroke::new(1.0, Color32::from_rgb(26, 28, 36)),
+        6.0,
+        theme.surface(),
+        Stroke::new(1.0, theme.border()),
         egui::StrokeKind::Inside,
     );
     painter.text(
@@ -61,9 +61,9 @@ pub fn render_updates_tab(
     let status_card = Rect::from_min_size(pos2(p_origin.x, p_origin.y + 132.0), vec2(card_w, 120.0));
     painter.rect(
         status_card,
-        5.0,
-        Color32::from_rgb(14, 15, 20),
-        Stroke::new(1.0, Color32::from_rgb(26, 28, 36)),
+        6.0,
+        theme.surface(),
+        Stroke::new(1.0, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -74,7 +74,7 @@ pub fn render_updates_tab(
                 Align2::LEFT_TOP,
                 "⟳  Ready to check for updates",
                 FontId::monospace(12.0),
-                Color32::from_gray(160),
+                theme.muted,
             );
         }
         UpdateStatus::Checking => {
@@ -92,7 +92,7 @@ pub fn render_updates_tab(
                 Align2::LEFT_TOP,
                 &format!("✓  You are on the latest version (v{})", version),
                 FontId::monospace(12.0),
-                Color32::from_rgb(80, 200, 120),
+                theme.accent,
             );
         }
         UpdateStatus::UpdateAvailable { new_version, release_notes, .. } => {
@@ -101,7 +101,7 @@ pub fn render_updates_tab(
                 Align2::LEFT_TOP,
                 &format!("🔔  Update available: v{}", new_version),
                 FontId::monospace(12.5),
-                Color32::from_rgb(255, 200, 60),
+                theme.highlight,
             );
             // Truncate release notes to 2 lines
             let notes: String = release_notes.lines().take(2).collect::<Vec<_>>().join(" • ");
@@ -111,7 +111,7 @@ pub fn render_updates_tab(
                 Align2::LEFT_TOP,
                 &notes_short,
                 FontId::monospace(10.5),
-                Color32::from_gray(150),
+                theme.muted,
             );
         }
         UpdateStatus::Downloading { new_version, progress, downloaded_bytes, total_bytes } => {
@@ -127,7 +127,7 @@ pub fn render_updates_tab(
                 status_card.min + vec2(16.0, 40.0),
                 vec2(card_w - 32.0, 10.0),
             );
-            painter.rect_filled(bar_bg, 5.0, Color32::from_rgb(25, 28, 36));
+            painter.rect_filled(bar_bg, 5.0, theme.border());
             if *progress > 0.0 {
                 let fill_w = (bar_bg.width() * progress).max(10.0);
                 let bar_fill = Rect::from_min_size(bar_bg.min, vec2(fill_w, bar_bg.height()));
@@ -149,7 +149,7 @@ pub fn render_updates_tab(
                 Align2::LEFT_TOP,
                 &format!("✓  v{} downloaded — restart to apply", new_version),
                 FontId::monospace(12.0),
-                Color32::from_rgb(80, 200, 120),
+                theme.accent,
             );
         }
         UpdateStatus::Error(msg) => {
@@ -165,35 +165,25 @@ pub fn render_updates_tab(
     }
 
     // ── Action button — morphs per state ─────────────────────────────
-    let (btn_label, btn_color, btn_border, can_click) = match &status {
+    let (btn_label, can_click) = match &status {
         UpdateStatus::Idle | UpdateStatus::UpToDate { .. } | UpdateStatus::Error(_) => (
             "⟳  Check for Updates",
-            Color32::from_rgb(18, 32, 50),
-            Color32::from_rgb(36, 68, 100),
             true,
         ),
         UpdateStatus::Checking => (
             "⟳  Checking…",
-            Color32::from_rgb(14, 20, 36),
-            Color32::from_rgb(30, 50, 80),
             false,
         ),
         UpdateStatus::UpdateAvailable { .. } => (
             "⬇  Download Update",
-            Color32::from_rgb(40, 50, 14),
-            Color32::from_rgb(100, 130, 30),
             true,
         ),
         UpdateStatus::Downloading { .. } => (
             "⬇  Downloading…",
-            Color32::from_rgb(14, 20, 36),
-            Color32::from_rgb(30, 50, 80),
             false,
         ),
         UpdateStatus::ReadyToRestart { .. } => (
             "↺  Restart to Apply Update",
-            Color32::from_rgb(14, 36, 20),
-            Color32::from_rgb(36, 120, 60),
             true,
         ),
     };
@@ -203,12 +193,19 @@ pub fn render_updates_tab(
         vec2(card_w, 42.0),
     );
     let btn_hov = can_click && ui.rect_contains_pointer(btn_rect);
-    let bg = if btn_hov { Color32::from_rgb(btn_color.r().saturating_add(12), btn_color.g().saturating_add(12), btn_color.b().saturating_add(12)) } else { btn_color };
+    if btn_hov {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    let bg = if btn_hov {
+        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 35)
+    } else {
+        theme.surface()
+    };
     painter.rect(
         btn_rect,
         6.0,
         bg,
-        Stroke::new(1.0, btn_border),
+        Stroke::new(1.0, if btn_hov { theme.accent } else { theme.border() }),
         egui::StrokeKind::Inside,
     );
     painter.text(

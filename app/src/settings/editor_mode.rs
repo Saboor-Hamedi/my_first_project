@@ -17,14 +17,14 @@ pub fn render_editor_mode_tab(
         p_origin,
         Align2::LEFT_TOP,
         "TYPING & EDITING ENGINE",
-        FontId::monospace(14.5),
+        FontId::proportional(15.0),
         theme.highlight,
     );
     painter.text(
         p_origin + vec2(0.0, 22.0),
         Align2::LEFT_TOP,
         "Select your preferred editing cockpit (or toggle anytime via :vim)",
-        FontId::monospace(11.0),
+        FontId::proportional(12.0),
         theme.muted,
     );
 
@@ -42,17 +42,17 @@ pub fn render_editor_mode_tab(
     }
 
     let hybrid_bg = if is_hybrid {
-        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 30)
+        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 26)
     } else if hybrid_hover {
-        Color32::from_rgb(20, 22, 28)
+        theme.surface().lerp_to_gamma(theme.accent, 0.08)
     } else {
-        Color32::from_rgb(14, 15, 20)
+        theme.surface()
     };
     painter.rect(
         hybrid_card,
-        5.0,
+        6.0,
         hybrid_bg,
-        Stroke::new(1.0, if is_hybrid { theme.accent } else { Color32::from_rgb(32, 34, 44) }),
+        Stroke::new(if is_hybrid { 1.5 } else { 1.0 }, if is_hybrid { theme.accent } else if hybrid_hover { theme.border().lerp_to_gamma(theme.accent, 0.4) } else { theme.border() }),
         egui::StrokeKind::Inside,
     );
 
@@ -60,15 +60,15 @@ pub fn render_editor_mode_tab(
         hybrid_card.min + vec2(14.0, 11.0),
         Align2::LEFT_TOP,
         "⚡ Hybrid Mode (Modern Power IDE)",
-        FontId::monospace(12.5),
-        if is_hybrid { theme.accent } else { theme.highlight },
+        FontId::proportional(13.5),
+        if is_hybrid { theme.accent } else { theme.text },
     );
     if is_hybrid {
         painter.text(
             pos2(hybrid_card.max.x - 14.0, hybrid_card.min.y + 11.0),
             Align2::RIGHT_TOP,
             "● ACTIVE",
-            FontId::monospace(10.5),
+            FontId::proportional(11.0),
             theme.accent,
         );
     }
@@ -82,8 +82,8 @@ pub fn render_editor_mode_tab(
     ];
     for (idx, (label, desc)) in hybrid_features.iter().enumerate() {
         let y = hybrid_card.min.y + 34.0 + idx as f32 * 17.5;
-        painter.text(pos2(hybrid_card.min.x + 14.0, y), Align2::LEFT_TOP, *label, FontId::monospace(10.0), theme.accent);
-        painter.text(pos2(hybrid_card.min.x + 110.0, y), Align2::LEFT_TOP, *desc, FontId::monospace(9.5), Color32::from_gray(175));
+        painter.text(pos2(hybrid_card.min.x + 14.0, y), Align2::LEFT_TOP, *label, FontId::proportional(11.0), theme.accent);
+        painter.text(pos2(hybrid_card.min.x + 110.0, y), Align2::LEFT_TOP, *desc, FontId::proportional(11.0), theme.muted);
     }
 
     cur_y += 138.0;
@@ -99,17 +99,17 @@ pub fn render_editor_mode_tab(
     }
 
     let vim_bg = if is_vim {
-        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 30)
+        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 26)
     } else if vim_hover {
-        Color32::from_rgb(20, 22, 28)
+        theme.surface().lerp_to_gamma(theme.accent, 0.08)
     } else {
-        Color32::from_rgb(14, 15, 20)
+        theme.surface()
     };
     painter.rect(
         vim_card,
-        5.0,
+        6.0,
         vim_bg,
-        Stroke::new(1.0, if is_vim { theme.accent } else { Color32::from_rgb(32, 34, 44) }),
+        Stroke::new(if is_vim { 1.5 } else { 1.0 }, if is_vim { theme.accent } else if vim_hover { theme.border().lerp_to_gamma(theme.accent, 0.4) } else { theme.border() }),
         egui::StrokeKind::Inside,
     );
 
@@ -117,15 +117,15 @@ pub fn render_editor_mode_tab(
         vim_card.min + vec2(14.0, 11.0),
         Align2::LEFT_TOP,
         "⚔ Vim Mode (Modal Keyboard Engine)",
-        FontId::monospace(12.5),
-        if is_vim { theme.accent } else { theme.highlight },
+        FontId::proportional(13.5),
+        if is_vim { theme.accent } else { theme.text },
     );
     if is_vim {
         painter.text(
             pos2(vim_card.max.x - 14.0, vim_card.min.y + 11.0),
             Align2::RIGHT_TOP,
             "● ACTIVE",
-            FontId::monospace(10.5),
+            FontId::proportional(11.0),
             theme.accent,
         );
     }
@@ -139,7 +139,7 @@ pub fn render_editor_mode_tab(
     ];
     for (idx, (label, desc)) in vim_features.iter().enumerate() {
         let y = vim_card.min.y + 34.0 + idx as f32 * 17.5;
-        painter.text(pos2(vim_card.min.x + 14.0, y), Align2::LEFT_TOP, *label, FontId::monospace(10.0), theme.accent);
-        painter.text(pos2(vim_card.min.x + 110.0, y), Align2::LEFT_TOP, *desc, FontId::monospace(9.5), Color32::from_gray(175));
+        painter.text(pos2(vim_card.min.x + 14.0, y), Align2::LEFT_TOP, *label, FontId::proportional(11.0), theme.accent);
+        painter.text(pos2(vim_card.min.x + 110.0, y), Align2::LEFT_TOP, *desc, FontId::proportional(11.0), theme.muted);
     }
 }

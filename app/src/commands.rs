@@ -22,9 +22,10 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
 
     match cmd.as_str() {
         "help" | "guidance" | "guide" | "h" | "?" => {
-            app.help_open = true;
-            app.help_just_opened = true;
-            app.set_status("Guidance & Help Center opened (Esc to close)", now);
+            app.mode = Mode::Help;
+            app.help_tab = 0;
+            app.help_scroll_y = 0.0;
+            app.set_status("Help & Guidance opened as tab (Esc to return to notes)", now);
         }
         "set" => {
             let opt = args.to_lowercase();
@@ -140,6 +141,7 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
                 | "preview 0"
                 | "preview disable" => {
                     app.preview_open = false;
+                    app.split_ratio = 0.5;
                     let _ = app.db_tx.send(DbMsg::SaveSetting {
                         key: "preview".into(),
                         val: "false".into(),
@@ -161,6 +163,9 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
                 }
                 "preview!" | "prev!" => {
                     app.preview_open = !app.preview_open;
+                    if !app.preview_open {
+                        app.split_ratio = 0.5;
+                    }
                     let val = if app.preview_open { "true" } else { "false" };
                     let _ = app.db_tx.send(DbMsg::SaveSetting {
                         key: "preview".into(),
@@ -248,6 +253,7 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
             match args.to_lowercase().trim() {
                 "off" | "disable" | "0" | "false" => {
                     app.preview_open = false;
+                    app.split_ratio = 0.5;
                     let _ = app.db_tx.send(DbMsg::SaveSetting {
                         key: "preview".into(),
                         val: "false".into(),
@@ -264,6 +270,9 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
                 }
                 _ => {
                     app.preview_open = !app.preview_open;
+                    if !app.preview_open {
+                        app.split_ratio = 0.5;
+                    }
                     let val = if app.preview_open { "true" } else { "false" };
                     let _ = app.db_tx.send(DbMsg::SaveSetting {
                         key: "preview".into(),
@@ -591,6 +600,16 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
         "stats" => {
             app.mode = Mode::Stats;
         }
+        "term" | "terminal" => {
+            app.terminal_open = !app.terminal_open;
+            if app.terminal_open {
+                app.terminal_focused = true;
+                app.set_status("Terminal opened (Ctrl+\\ to toggle, click editor to edit)", now);
+            } else {
+                app.terminal_focused = false;
+                app.set_status("Terminal closed", now);
+            }
+        }
         "clear" => {
             app.ed.clear();
             app.is_dirty = true;
@@ -654,6 +673,11 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
             app.set_status("Webscan History (↑/↓ to navigate, Enter to view report, Esc to exit)", now);
         }
         "quit" | "q" => {
+            if app.mode == Mode::Help {
+                app.mode = Mode::Normal;
+                app.set_status("Closed Help", now);
+                return;
+            }
             std::process::exit(0);
         }
         _ => {

@@ -54,37 +54,37 @@ pub fn render_setting_tabs(
     painter: &egui::Painter,
     tabs_rect: Rect,
     active_tab: &mut SettingTab,
-    accent: Color32,
+    theme: &crate::theme::Theme,
 ) {
-    // Left tab sidebar background with 5px rounded left corners
+    // Left tab sidebar background with 8px rounded left corners
     painter.rect(
         tabs_rect,
         egui::CornerRadius {
-            nw: 5,
-            sw: 5,
+            nw: 8,
+            sw: 8,
             ne: 0,
             se: 0,
         },
-        Color32::from_rgb(11, 12, 15),
+        theme.sidebar_bg(),
         Stroke::NONE,
         egui::StrokeKind::Inside,
     );
     painter.line_segment(
         [tabs_rect.right_top(), tabs_rect.right_bottom()],
-        Stroke::new(1.0, Color32::from_rgb(30, 32, 40)),
+        Stroke::new(1.0, theme.border()),
     );
 
     let start_y = tabs_rect.min.y + 24.0;
     let tab_w = tabs_rect.width() - 16.0;
     let tab_h = 42.0;
 
-    // "PREFERENCES" header — higher contrast
+    // "PREFERENCES" header
     painter.text(
         pos2(tabs_rect.min.x + 16.0, start_y),
         Align2::LEFT_TOP,
         "PREFERENCES",
-        FontId::monospace(10.5),
-        Color32::from_gray(155),
+        FontId::proportional(11.0),
+        theme.muted,
     );
 
     for (i, &tab) in SettingTab::ALL.iter().enumerate() {
@@ -100,19 +100,23 @@ pub fn render_setting_tabs(
             painter.rect_filled(
                 item_rect,
                 6.0,
-                Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 26),
+                Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 26),
             );
             // Left accent border bar
             let bar = Rect::from_min_size(
                 pos2(item_rect.min.x + 2.0, item_rect.min.y + 7.0),
                 vec2(3.5, item_rect.height() - 14.0),
             );
-            painter.rect_filled(bar, 2.0, accent);
+            painter.rect_filled(bar, 2.0, theme.accent);
         } else if hovered {
             painter.rect_filled(
                 item_rect,
                 6.0,
-                Color32::from_rgb(20, 22, 28),
+                if theme.is_light() {
+                    Color32::from_rgba_unmultiplied(0, 0, 0, 10)
+                } else {
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 12)
+                },
             );
         }
 
@@ -121,11 +125,11 @@ pub fn render_setting_tabs(
         }
 
         let (icon_color, label_color) = if is_sel {
-            (accent, Color32::WHITE)
+            (theme.accent, theme.text)
         } else if hovered {
-            (Color32::from_gray(200), Color32::from_gray(210))
+            (theme.accent, theme.text)
         } else {
-            (Color32::from_gray(100), Color32::from_gray(145))
+            (theme.muted, theme.muted)
         };
 
         // Icon — larger, in accent color when selected
@@ -133,16 +137,16 @@ pub fn render_setting_tabs(
             pos2(item_rect.min.x + 16.0, item_rect.center().y - 1.0),
             Align2::LEFT_CENTER,
             tab.icon(),
-            FontId::monospace(15.0),
+            FontId::proportional(15.0),
             icon_color,
         );
 
         // Label — slightly right of icon
         painter.text(
-            pos2(item_rect.min.x + 36.0, item_rect.center().y),
+            pos2(item_rect.min.x + 38.0, item_rect.center().y),
             Align2::LEFT_CENTER,
             tab.title(),
-            FontId::monospace(12.5),
+            FontId::proportional(13.0),
             label_color,
         );
     }

@@ -11,6 +11,9 @@ use eframe::egui::Color32;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ThemeKind {
     Shell,
+    Cream,
+    Latte,
+    White,
     TokyoNight,
     Dracula,
     Catppuccin,
@@ -20,7 +23,6 @@ pub enum ThemeKind {
     Green,
     Amber,
     Ice,
-    White,
     Gruvbox,
     Everforest,
     Monokai,
@@ -31,6 +33,9 @@ pub enum ThemeKind {
 
 impl ThemeKind {
     pub const ALL: &'static [ThemeKind] = &[
+        ThemeKind::Cream,
+        ThemeKind::Latte,
+        ThemeKind::White,
         ThemeKind::Shell,
         ThemeKind::TokyoNight,
         ThemeKind::Dracula,
@@ -41,7 +46,6 @@ impl ThemeKind {
         ThemeKind::Green,
         ThemeKind::Amber,
         ThemeKind::Ice,
-        ThemeKind::White,
         ThemeKind::Gruvbox,
         ThemeKind::Everforest,
         ThemeKind::Monokai,
@@ -52,6 +56,9 @@ impl ThemeKind {
 
     pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().replace(['-', '_', ' '], "").as_str() {
+            "cream" | "warmcream" | "parchment" | "papercream" => Some(Self::Cream),
+            "latte" | "catppuccinlatte" | "milky" => Some(Self::Latte),
+            "white" | "light" | "purelight" | "paper" | "mono" | "monochrome" => Some(Self::White),
             "shell" | "012b36" | "terminal" | "solarized" | "solarizeddark" => Some(Self::Shell),
             "green" | "matrix" => Some(Self::Green),
             "amber" => Some(Self::Amber),
@@ -62,7 +69,6 @@ impl ThemeKind {
             "cyberpunk" | "cyber" => Some(Self::Cyberpunk),
             "rose" | "rosepine" => Some(Self::RosePine),
             "ice" => Some(Self::Ice),
-            "white" | "mono" | "monochrome" => Some(Self::White),
             "gruvbox" | "gruv" => Some(Self::Gruvbox),
             "everforest" | "forest" => Some(Self::Everforest),
             "monokai" | "monokaipro" => Some(Self::Monokai),
@@ -75,6 +81,9 @@ impl ThemeKind {
 
     pub fn name(&self) -> &'static str {
         match self {
+            Self::Cream => "cream",
+            Self::Latte => "latte",
+            Self::White => "white",
             Self::Shell => "shell",
             Self::TokyoNight => "tokyonight",
             Self::Dracula => "dracula",
@@ -85,7 +94,6 @@ impl ThemeKind {
             Self::Green => "green",
             Self::Amber => "amber",
             Self::Ice => "ice",
-            Self::White => "white",
             Self::Gruvbox => "gruvbox",
             Self::Everforest => "everforest",
             Self::Monokai => "monokai",
@@ -97,6 +105,9 @@ impl ThemeKind {
 
     pub fn display_name(&self) -> &'static str {
         match self {
+            Self::Cream => "Warm Cream",
+            Self::Latte => "Catppuccin Latte",
+            Self::White => "Pure Light",
             Self::Shell => "Shell (#012b36)",
             Self::TokyoNight => "Tokyo Night",
             Self::Dracula => "Dracula",
@@ -107,7 +118,6 @@ impl ThemeKind {
             Self::Green => "Matrix Green",
             Self::Amber => "Amber CRT",
             Self::Ice => "Glacier Ice",
-            Self::White => "Monochrome",
             Self::Gruvbox => "Gruvbox Dark",
             Self::Everforest => "Everforest",
             Self::Monokai => "Monokai Pro",
@@ -115,6 +125,10 @@ impl ThemeKind {
             Self::Ayu => "Ayu Dark",
             Self::Kanagawa => "Kanagawa",
         }
+    }
+
+    pub fn is_light(&self) -> bool {
+        matches!(self, Self::Cream | Self::Latte | Self::White)
     }
 }
 
@@ -129,28 +143,53 @@ pub struct Theme {
 }
 
 impl Theme {
+    pub fn is_light(&self) -> bool {
+        self.kind.is_light() || relative_luminance(self.bg) > 0.5
+    }
+
     /// Slightly elevated surface color for cards and active tabs
     pub fn surface(&self) -> Color32 {
-        let r = (self.bg.r() as u16 + 10).min(255) as u8;
-        let g = (self.bg.g() as u16 + 12).min(255) as u8;
-        let b = (self.bg.b() as u16 + 16).min(255) as u8;
-        Color32::from_rgb(r, g, b)
+        if self.is_light() {
+            let r = self.bg.r().saturating_sub(8);
+            let g = self.bg.g().saturating_sub(8);
+            let b = self.bg.b().saturating_sub(10);
+            Color32::from_rgb(r, g, b)
+        } else {
+            let r = (self.bg.r() as u16 + 10).min(255) as u8;
+            let g = (self.bg.g() as u16 + 12).min(255) as u8;
+            let b = (self.bg.b() as u16 + 16).min(255) as u8;
+            Color32::from_rgb(r, g, b)
+        }
     }
 
     /// Border color for containers and dividers
     pub fn border(&self) -> Color32 {
-        let r = (self.bg.r() as u16 + 22).min(255) as u8;
-        let g = (self.bg.g() as u16 + 26).min(255) as u8;
-        let b = (self.bg.b() as u16 + 32).min(255) as u8;
-        Color32::from_rgb(r, g, b)
+        if self.is_light() {
+            let r = self.bg.r().saturating_sub(26);
+            let g = self.bg.g().saturating_sub(26);
+            let b = self.bg.b().saturating_sub(28);
+            Color32::from_rgb(r, g, b)
+        } else {
+            let r = (self.bg.r() as u16 + 22).min(255) as u8;
+            let g = (self.bg.g() as u16 + 26).min(255) as u8;
+            let b = (self.bg.b() as u16 + 32).min(255) as u8;
+            Color32::from_rgb(r, g, b)
+        }
     }
 
     /// Sidebar background color (subtly adjusted relative to theme.bg)
     pub fn sidebar_bg(&self) -> Color32 {
-        let r = self.bg.r().saturating_sub(4);
-        let g = self.bg.g().saturating_sub(4);
-        let b = self.bg.b().saturating_sub(4);
-        Color32::from_rgb(r, g, b)
+        if self.is_light() {
+            let r = self.bg.r().saturating_sub(5);
+            let g = self.bg.g().saturating_sub(5);
+            let b = self.bg.b().saturating_sub(7);
+            Color32::from_rgb(r, g, b)
+        } else {
+            let r = self.bg.r().saturating_sub(4);
+            let g = self.bg.g().saturating_sub(4);
+            let b = self.bg.b().saturating_sub(4);
+            Color32::from_rgb(r, g, b)
+        }
     }
 
     pub fn from_kind(kind: ThemeKind) -> Self {
@@ -235,13 +274,29 @@ impl Theme {
                 muted: Color32::from_rgb(95, 155, 185),
                 highlight: Color32::from_rgb(150, 235, 255),
             },
+            ThemeKind::Cream => Self {
+                kind,
+                bg: Color32::from_rgb(247, 243, 233),        // #f7f3e9 warm parchment cream
+                text: Color32::from_rgb(44, 38, 33),         // #2c2621 deep espresso ink (AAA contrast)
+                accent: Color32::from_rgb(168, 70, 22),      // #a84616 warm terracotta ember
+                muted: Color32::from_rgb(118, 108, 96),      // #766c60 warm stone gray
+                highlight: Color32::from_rgb(28, 102, 118),  // #1c6676 deep jade teal
+            },
+            ThemeKind::Latte => Self {
+                kind,
+                bg: Color32::from_rgb(239, 241, 245),        // #eff1f5 catppuccin latte base
+                text: Color32::from_rgb(76, 79, 105),        // #4c4f69 deep slate ink
+                accent: Color32::from_rgb(136, 57, 239),     // #8839ef vivid lavender
+                muted: Color32::from_rgb(112, 115, 134),     // #707386 soft graphite
+                highlight: Color32::from_rgb(30, 102, 245),  // #1e66f5 sapphire blue
+            },
             ThemeKind::White => Self {
                 kind,
-                bg: Color32::from_rgb(26, 26, 30),
-                text: Color32::from_rgb(240, 240, 240),
-                accent: Color32::from_rgb(255, 255, 255),
-                muted: Color32::from_rgb(150, 150, 150),
-                highlight: Color32::from_rgb(210, 230, 255),
+                bg: Color32::from_rgb(250, 250, 252),        // #fafafc crisp paper white
+                text: Color32::from_rgb(28, 31, 35),         // #1c1f23 deep slate ink (AAA contrast)
+                accent: Color32::from_rgb(9, 105, 218),      // #0969da modern electric blue
+                muted: Color32::from_rgb(101, 109, 118),     // #656d76 neutral slate gray
+                highlight: Color32::from_rgb(110, 84, 148),  // #6e5494 royal indigo
             },
 
             // --- New themes ---

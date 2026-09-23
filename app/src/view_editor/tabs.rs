@@ -44,8 +44,10 @@ pub fn render_tab_bar(
         Stroke::new(1.0, theme.border()),
     );
 
-    let tab_gap = 2.0;
-    let tab_h = tab_bar_rect.height() - 2.0;
+    let tab_gap = 6.0;
+    let initial_pad = 6.0;
+    let chip_margin_y = 4.0;
+    let tab_h = tab_bar_rect.height() - chip_margin_y * 2.0;
     let primary_clicked = ui.input(|i| i.pointer.primary_clicked());
     let mouse_pos = ui.input(|i| i.pointer.interact_pos());
     let is_occluded = occluded_rect.map_or(false, |r| mouse_pos.map_or(false, |p| r.contains(p)));
@@ -68,20 +70,20 @@ pub fn render_tab_bar(
             title_clean.to_string()
         };
 
-        let text_w = display_title.len() as f32 * 7.2;
-        let tab_w = (text_w + 50.0).clamp(94.0, 210.0);
+        let text_w = display_title.len() as f32 * 7.0;
+        let tab_w = (text_w + 46.0).clamp(94.0, 210.0);
         tab_widths.push(tab_w);
         display_titles.push(display_title);
     }
 
-    // Relative start and end offsets from content origin (0.0 = first tab left edge)
+    // Relative start and end offsets from content origin (initial_pad = first tab left margin)
     let mut tab_positions: Vec<(f32, f32)> = Vec::with_capacity(tabs.len());
-    let mut current_offset = 0.0;
+    let mut current_offset = initial_pad;
     for &w in &tab_widths {
         tab_positions.push((current_offset, current_offset + w));
         current_offset += w + tab_gap;
     }
-    let total_content_w = (current_offset - tab_gap).max(0.0);
+    let total_content_w = (current_offset - tab_gap + initial_pad).max(0.0);
 
     let has_overflow = total_content_w > tab_bar_rect.width();
     let scroll_btn_w = if has_overflow { 48.0 } else { 0.0 };
@@ -130,15 +132,14 @@ pub fn render_tab_bar(
 
     *scroll_offset = (*scroll_offset).clamp(0.0, max_scroll);
 
-    // 4. Render visible tabs
+    // 4. Render visible tabs as discrete floating chips
     for (idx, tab) in tabs.iter().enumerate() {
         let (rel_start, rel_end) = tab_positions[idx];
         let tab_w = rel_end - rel_start;
-        // First tab has zero gap from the left edge of the tab bar
         let tab_x = visible_tab_area.min.x + rel_start - *scroll_offset;
 
         let tab_rect = Rect::from_min_size(
-            pos2(tab_x, tab_bar_rect.min.y + 1.0),
+            pos2(tab_x, tab_bar_rect.min.y + chip_margin_y),
             vec2(tab_w, tab_h),
         );
 
@@ -149,45 +150,47 @@ pub fn render_tab_bar(
 
         let is_tab_hovered = mouse_in_bar && ui.rect_contains_pointer(tab_rect);
 
-        // Close button: taller rounded button almost matching tab interior height
-        let btn_w = 20.0;
-        let btn_h = (tab_h - 10.0).clamp(20.0, 24.0);
+        // Close button: compact rounded chip button inside tab
+        let btn_w = 18.0;
+        let btn_h = 18.0;
         let close_rect = Rect::from_center_size(
-            pos2(tab_rect.max.x - 15.0, tab_rect.center().y),
+            pos2(tab_rect.max.x - 14.0, tab_rect.center().y),
             vec2(btn_w, btn_h),
         );
         let is_close_hovered = mouse_in_bar && ui.rect_contains_pointer(close_rect);
 
-        // Tab surface styling
+        // Tab chip surface styling
         if tab.is_active {
-            // Elevated active tab card
-            clip_painter.rect_filled(
+            // Elevated active tab chip with crisp subtle border
+            clip_painter.rect(
                 tab_rect,
-                4.0,
+                6.0,
                 theme.surface(),
+                Stroke::new(1.0, theme.border()),
+                egui::StrokeKind::Inside,
             );
-            // Accent bottom indicator line
-            clip_painter.line_segment(
-                [
-                    pos2(tab_rect.min.x + 4.0, tab_rect.max.y),
-                    pos2(tab_rect.max.x - 4.0, tab_rect.max.y),
-                ],
-                Stroke::new(2.0, theme.accent),
+            // Discrete bottom accent indicator pill
+            let accent_w = (tab_rect.width() - 24.0).max(18.0);
+            let accent_bar = Rect::from_center_size(
+                pos2(tab_rect.center().x, tab_rect.max.y - 2.5),
+                vec2(accent_w, 2.0),
             );
+            clip_painter.rect_filled(accent_bar, 1.0, theme.accent);
         } else if is_tab_hovered {
             // Subtle, soft faded hover background
-            clip_painter.rect_filled(
-                tab_rect,
-                4.0,
-                Color32::from_rgba_unmultiplied(255, 255, 255, 6),
-            );
+            let bg = if theme.is_light() {
+                Color32::from_rgba_unmultiplied(0, 0, 0, 10)
+            } else {
+                Color32::from_rgba_unmultiplied(255, 255, 255, 12)
+            };
+            clip_painter.rect_filled(tab_rect, 6.0, bg);
         }
 
         // Title and dirty indicator
         let text_color = if tab.is_active {
             theme.text
         } else if is_tab_hovered {
-            Color32::from_gray(165)
+            theme.text.lerp_to_gamma(theme.muted, 0.3)
         } else {
             theme.muted
         };
@@ -203,28 +206,29 @@ pub fn render_tab_bar(
             label_pos,
             Align2::LEFT_CENTER,
             label_text,
-            FontId::monospace(11.5),
+            FontId::proportional(12.0),
             text_color,
         );
 
         // Close button (×)
         if tabs.len() > 1 || tab.is_dirty {
             let close_color = if is_close_hovered {
-                Color32::from_rgb(245, 105, 105)
+                Color32::from_rgb(235, 90, 90)
             } else if tab.is_active {
-                Color32::from_gray(140)
-            } else if is_tab_hovered {
-                Color32::from_gray(115)
+                theme.text.lerp_to_gamma(theme.muted, 0.4)
             } else {
-                Color32::from_gray(75)
+                theme.muted
             };
 
             if is_close_hovered {
-                // Slightly bolder background on close button hover than the tab hover
                 clip_painter.rect_filled(
                     close_rect,
                     4.0,
-                    Color32::from_rgba_unmultiplied(255, 255, 255, 24),
+                    if theme.is_light() {
+                        Color32::from_rgba_unmultiplied(0, 0, 0, 16)
+                    } else {
+                        Color32::from_rgba_unmultiplied(255, 255, 255, 20)
+                    },
                 );
             }
 
@@ -232,7 +236,7 @@ pub fn render_tab_bar(
                 close_rect.center(),
                 Align2::CENTER_CENTER,
                 "×",
-                FontId::monospace(13.0),
+                FontId::proportional(13.0),
                 close_color,
             );
         }

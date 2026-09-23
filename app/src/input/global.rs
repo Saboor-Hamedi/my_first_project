@@ -7,60 +7,51 @@ use eframe::egui;
 /// Processes global shortcuts (saving, note creation, modals, clipboard, undo/redo).
 /// Returns `Some(typed)` if a global shortcut fully handled the frame, or `None` to continue to typing.
 pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> Option<bool> {
+    // Global terminal toggle shortcut: Ctrl+J or Ctrl+` (Backtick / Tilde)
+    let toggle_term = ctx.input(|i| {
+        (i.modifiers.ctrl && !i.modifiers.shift && !i.modifiers.alt && i.key_pressed(egui::Key::J))
+            || (i.modifiers.ctrl && i.key_pressed(egui::Key::Backtick))
+    });
+    if toggle_term {
+        app.terminal_open = !app.terminal_open;
+        if app.terminal_open {
+            app.terminal_focused = true;
+            app.set_status("Terminal opened (Ctrl+J to toggle, click editor or Esc to edit)", now);
+        } else {
+            app.terminal_focused = false;
+            app.set_status("Terminal closed", now);
+        }
+        return Some(false);
+    }
+
     // When Vim search is active, bypass ALL global shortcuts so every keystroke
     // flows through as a Text event into the search buffer (fixes missing chars).
     if app.editor_input_mode == crate::app::EditorInputMode::Vim && app.vim.is_searching() {
         return None;
     }
 
-    // Modal Dialog Input Isolation: Help Center has complete input priority over editor
-    if app.help_open {
-        let (help_esc, tab_next, tab_prev, scroll_up, scroll_down, num_1, num_2, num_3, num_4) = ctx.input(|i| (
-            i.key_pressed(egui::Key::Escape) || (i.modifiers.ctrl && i.key_pressed(egui::Key::H)) || i.key_pressed(egui::Key::F1),
-            (!i.modifiers.ctrl && !i.modifiers.shift && (i.key_pressed(egui::Key::Tab) || i.key_pressed(egui::Key::L) || i.key_pressed(egui::Key::ArrowRight))),
-            (!i.modifiers.ctrl && ((i.modifiers.shift && i.key_pressed(egui::Key::Tab)) || i.key_pressed(egui::Key::H) || i.key_pressed(egui::Key::ArrowLeft))),
+    // Help Tab Input Isolation & Navigation (single Quick Start tab)
+    if app.mode == Mode::Help {
+        let (help_esc, scroll_up, scroll_down) = ctx.input(|i| (
+            i.key_pressed(egui::Key::Escape),
             (!i.modifiers.ctrl && (i.key_pressed(egui::Key::K) || i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::PageUp))),
             (!i.modifiers.ctrl && (i.key_pressed(egui::Key::J) || i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::PageDown))),
-            i.key_pressed(egui::Key::Num1),
-            i.key_pressed(egui::Key::Num2),
-            i.key_pressed(egui::Key::Num3),
-            i.key_pressed(egui::Key::Num4),
         ));
 
         if help_esc {
-            app.help_open = false;
+            app.mode = Mode::Normal;
+            app.set_status("Returned to notes", now);
             return Some(false);
         }
-
-        if tab_next {
-            app.help_tab = (app.help_tab + 1) % 4;
-            app.help_scroll_y = 0.0;
-            app.sound.play();
-            return Some(false);
-        }
-        if tab_prev {
-            app.help_tab = if app.help_tab == 0 { 3 } else { app.help_tab - 1 };
-            app.help_scroll_y = 0.0;
-            app.sound.play();
-            return Some(false);
-        }
-
-        if num_1 { app.help_tab = 0; app.help_scroll_y = 0.0; app.sound.play(); return Some(false); }
-        if num_2 { app.help_tab = 1; app.help_scroll_y = 0.0; app.sound.play(); return Some(false); }
-        if num_3 { app.help_tab = 2; app.help_scroll_y = 0.0; app.sound.play(); return Some(false); }
-        if num_4 { app.help_tab = 3; app.help_scroll_y = 0.0; app.sound.play(); return Some(false); }
 
         if scroll_down {
-            app.help_scroll_y = (app.help_scroll_y + 45.0).clamp(0.0, 600.0);
+            app.help_scroll_y = (app.help_scroll_y + 45.0).max(0.0);
             return Some(false);
         }
         if scroll_up {
-            app.help_scroll_y = (app.help_scroll_y - 45.0).clamp(0.0, 600.0);
+            app.help_scroll_y = (app.help_scroll_y - 45.0).max(0.0);
             return Some(false);
         }
-
-        // Absorbs all keys while help modal is active — zero keystrokes leak to editor
-        return Some(false);
     }
 
     // Accent Color Dropdown input priority
@@ -417,6 +408,21 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
         return Some(false);
     }
 
+    if ctrl_backslash {
+        app.preview_open = !app.preview_open;
+        let val = if app.preview_open { "true" } else { "false" };
+        let _ = app.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+            key: "preview".into(),
+            val: val.into(),
+        });
+        let msg = if app.preview_open {
+            "Markdown Live Preview ON (Ctrl + \\ to toggle, drag center knob)"
+        } else {
+            "Markdown Live Preview OFF (Ctrl + \\)"
+        };
+        app.set_status(msg, now);
+        return Some(false);
+    }
 
     if ctrl_b {
         if app.mode == Mode::Doc {
@@ -573,29 +579,17 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
         return Some(false);
     }
 
-    if ctrl_backslash {
-        app.preview_open = !app.preview_open;
-        let val = if app.preview_open { "true" } else { "false" };
-        let _ = app.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
-            key: "preview".into(),
-            val: val.into(),
-        });
-        let msg = if app.preview_open {
-            "Markdown Live Preview ON (Ctrl + \\ to toggle, drag center knob)"
-        } else {
-            "Markdown Live Preview OFF (Ctrl + \\)"
-        };
-        app.set_status(msg, now);
-        return Some(false);
-    }
-
-    // Help & Guidance Center (F1 or Ctrl+H)
+    // Help & Guidance Tab (F1 or Ctrl+H)
     let trigger_help = ctx.input(|i| {
         i.key_pressed(egui::Key::F1) || (i.modifiers.ctrl && i.key_pressed(egui::Key::H))
     });
     if trigger_help && !app.in_command {
-        app.help_open = !app.help_open;
-        app.help_just_opened = app.help_open;
+        if app.mode == Mode::Help {
+            app.mode = Mode::Normal;
+            app.set_status("Returned to notes", now);
+        } else {
+            app.open_help_tab(now);
+        }
         return Some(false);
     }
 
@@ -612,11 +606,6 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
         if app.ed.has_selection() {
             app.ed.clear_selection();
             return Some(true);
-        }
-        if app.sidebar_open {
-            app.sidebar_open = false;
-            app.sidebar_focused = false;
-            return Some(false);
         }
         if app.in_command {
             app.in_command = false;

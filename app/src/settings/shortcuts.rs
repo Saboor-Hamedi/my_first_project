@@ -1,7 +1,7 @@
 //! Keyboard shortcuts reference table tab.
 
 use crate::theme::Theme;
-use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Pos2, Rect, Stroke};
+use eframe::egui::{self, pos2, vec2, Align2, FontId, Pos2, Rect, Stroke};
 
 pub fn render_shortcuts_tab(
     ui: &egui::Ui,
@@ -14,14 +14,14 @@ pub fn render_shortcuts_tab(
         p_origin,
         Align2::LEFT_TOP,
         "KEYBOARD SHORTCUTS",
-        FontId::monospace(14.5),
+        FontId::proportional(15.0),
         theme.highlight,
     );
     painter.text(
         p_origin + vec2(0.0, 22.0),
         Align2::LEFT_TOP,
         "Keyboard-driven navigation reference",
-        FontId::monospace(11.5),
+        FontId::proportional(12.0),
         theme.muted,
     );
 
@@ -53,11 +53,11 @@ pub fn render_shortcuts_tab(
     ];
 
     let row_w = panel_rect.width() - 56.0;
-    let row_h = 21.0;
+    let row_h = 24.0;
     let badge_w = 110.0;
     let group_gap = 6.0;
     let header_h = 14.0;
-    let item_gap = 2.0;
+    let item_gap = 3.0;
 
     let mut cur_y = p_origin.y + 44.0;
 
@@ -65,19 +65,19 @@ pub fn render_shortcuts_tab(
         // Group header line
         painter.line_segment(
             [pos2(p_origin.x, cur_y + header_h * 0.5), pos2(p_origin.x + 28.0, cur_y + header_h * 0.5)],
-            Stroke::new(1.0, Color32::from_gray(40)),
+            Stroke::new(1.0, theme.border()),
         );
         painter.text(
             pos2(p_origin.x + 34.0, cur_y + header_h * 0.5),
             Align2::LEFT_CENTER,
             *g_label,
-            FontId::monospace(10.0),
-            Color32::from_gray(90),
+            FontId::proportional(11.0),
+            theme.muted,
         );
-        let label_end_x = p_origin.x + 34.0 + g_label.len() as f32 * 6.2 + 8.0;
+        let label_end_x = p_origin.x + 34.0 + g_label.len() as f32 * 6.8 + 8.0;
         painter.line_segment(
             [pos2(label_end_x, cur_y + header_h * 0.5), pos2(p_origin.x + row_w, cur_y + header_h * 0.5)],
-            Stroke::new(1.0, Color32::from_gray(40)),
+            Stroke::new(1.0, theme.border()),
         );
         cur_y += header_h + 4.0;
 
@@ -86,43 +86,42 @@ pub fn render_shortcuts_tab(
             let hovered = ui.rect_contains_pointer(row_rect);
 
             // Row background
+            let row_bg = if hovered {
+                theme.surface().lerp_to_gamma(theme.accent, 0.08)
+            } else {
+                theme.surface()
+            };
+            let row_stroke = Stroke::new(
+                1.0,
+                if hovered { theme.accent } else { theme.border() },
+            );
             painter.rect(
                 row_rect,
-                4.0,
-                if hovered { Color32::from_rgb(20, 22, 30) } else { Color32::from_rgb(13, 14, 18) },
-                Stroke::new(1.0, if hovered { Color32::from_rgb(40, 44, 56) } else { Color32::from_rgb(22, 24, 30) }),
+                5.0,
+                row_bg,
+                row_stroke,
                 egui::StrokeKind::Inside,
             );
 
-            // Keycap badge — 3D-ish: face + shadow strip at bottom
+            // Keycap badge — crisp rounded tag
             let badge_rect = Rect::from_min_size(
                 pos2(row_rect.min.x + 5.0, row_rect.min.y + 3.0),
                 vec2(badge_w, row_h - 6.0),
             );
-            // Shadow strip (bottom 2px darker)
-            let shadow_strip = Rect::from_min_size(
-                pos2(badge_rect.min.x, badge_rect.max.y - 3.0),
-                vec2(badge_rect.width(), 3.0),
-            );
-            painter.rect_filled(
-                badge_rect,
-                3.0,
-                Color32::from_rgb(26, 28, 38),
-            );
-            painter.rect_filled(
-                shadow_strip,
-                egui::CornerRadius { nw: 0, ne: 0, sw: 3, se: 3 },
-                Color32::from_rgb(14, 15, 22),
-            );
+            let badge_bg = if hovered {
+                theme.surface().lerp_to_gamma(theme.accent, 0.16)
+            } else {
+                theme.bg
+            };
             painter.rect(
                 badge_rect,
-                3.0,
-                Color32::TRANSPARENT,
-                Stroke::new(1.0, Color32::from_rgb(48, 52, 68)),
+                4.0,
+                badge_bg,
+                Stroke::new(1.0, if hovered { theme.accent } else { theme.border() }),
                 egui::StrokeKind::Inside,
             );
             painter.text(
-                badge_rect.center() - vec2(0.0, 1.0),
+                badge_rect.center() - vec2(0.0, 0.5),
                 Align2::CENTER_CENTER,
                 *key,
                 FontId::monospace(10.5),
@@ -134,8 +133,8 @@ pub fn render_shortcuts_tab(
                 pos2(row_rect.min.x + badge_w + 14.0, row_rect.center().y),
                 Align2::LEFT_CENTER,
                 *desc,
-                FontId::monospace(11.5),
-                if hovered { Color32::WHITE } else { Color32::from_gray(180) },
+                FontId::proportional(12.5),
+                if hovered { theme.text } else { theme.muted },
             );
 
             cur_y += row_h + item_gap;
@@ -146,12 +145,12 @@ pub fn render_shortcuts_tab(
 
     // Keymap file info footer (pointing to keymap.json in settings directory)
     let keymap_path = crate::vim::VimKeymap::get_keymap_path();
-    let footer_rect = Rect::from_min_size(pos2(p_origin.x, cur_y + 4.0), vec2(row_w, 24.0));
+    let footer_rect = Rect::from_min_size(pos2(p_origin.x, cur_y + 4.0), vec2(row_w, 28.0));
     painter.rect(
         footer_rect,
-        4.0,
-        Color32::from_rgb(16, 17, 22),
-        Stroke::new(1.0, Color32::from_rgb(32, 34, 44)),
+        5.0,
+        theme.surface(),
+        Stroke::new(1.0, theme.border()),
         egui::StrokeKind::Inside,
     );
     let path_display = keymap_path.to_string_lossy();
@@ -161,25 +160,32 @@ pub fn render_shortcuts_tab(
         path_display.to_string()
     };
     painter.text(
-        pos2(footer_rect.min.x + 8.0, footer_rect.center().y),
+        pos2(footer_rect.min.x + 10.0, footer_rect.center().y),
         Align2::LEFT_CENTER,
         format!("⚙ Config: {}", short_path),
-        FontId::monospace(10.5),
+        FontId::proportional(11.5),
         theme.muted,
     );
-    let open_btn = Rect::from_min_size(pos2(footer_rect.max.x - 94.0, footer_rect.min.y + 2.0), vec2(90.0, 20.0));
+    let open_btn = Rect::from_min_size(pos2(footer_rect.max.x - 96.0, footer_rect.min.y + 4.0), vec2(90.0, 20.0));
     let open_hover = ui.rect_contains_pointer(open_btn);
-    painter.rect_filled(
+    let btn_bg = if open_hover {
+        theme.surface().lerp_to_gamma(theme.accent, 0.15)
+    } else {
+        theme.bg
+    };
+    painter.rect(
         open_btn,
-        3.0,
-        if open_hover { Color32::from_rgb(34, 38, 48) } else { Color32::from_rgb(22, 24, 32) },
+        4.0,
+        btn_bg,
+        Stroke::new(1.0, if open_hover { theme.accent } else { theme.border() }),
+        egui::StrokeKind::Inside,
     );
     painter.text(
         open_btn.center(),
         Align2::CENTER_CENTER,
         "Open Folder",
-        FontId::monospace(10.5),
-        if open_hover { theme.accent } else { Color32::from_gray(180) },
+        FontId::proportional(11.0),
+        if open_hover { theme.accent } else { theme.text },
     );
     if open_hover && ui.input(|i| i.pointer.primary_clicked()) {
         if let Some(parent) = keymap_path.parent() {

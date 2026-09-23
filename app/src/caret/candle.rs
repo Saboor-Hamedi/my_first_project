@@ -8,9 +8,15 @@ pub fn paint_candle(
     lh: f32,
     now: f64,
     particles: &[Particle],
+    is_light: bool,
 ) {
-    // Ivory wax candle body
-    p.rect_filled(Rect::from_min_size(pos, vec2(w, lh)), 1.0, Color32::from_rgb(248, 242, 228));
+    // Beeswax amber on light themes, ivory wax on dark themes
+    let wax_color = if is_light {
+        Color32::from_rgb(195, 120, 20)
+    } else {
+        Color32::from_rgb(248, 242, 228)
+    };
+    p.rect_filled(Rect::from_min_size(pos, vec2(w, lh)), 1.0, wax_color);
 
     let wick_x = pos.x + w * 0.5;
     let wick_top = pos.y - 2.5;

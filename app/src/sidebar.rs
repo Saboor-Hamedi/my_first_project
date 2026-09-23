@@ -57,8 +57,7 @@ pub fn render_sidebar(
         sb_origin,
         sidebar_w,
         active_mode_idx,
-        theme.accent,
-        theme.text,
+        theme,
     );
 
     // 2. Sidebar Body (File explorer / SQLite documents)
@@ -72,8 +71,7 @@ pub fn render_sidebar(
         notes_limit,
         total_notes_count,
         is_dirty,
-        theme.accent,
-        theme.muted,
+        theme,
         sidebar_selected_idx,
         sidebar_focused,
     );
@@ -83,8 +81,7 @@ pub fn render_sidebar(
         ui,
         painter,
         sb_rect,
-        theme.accent,
-        theme.muted,
+        theme,
     );
 
     header_action.or(body_action).or(footer_action)

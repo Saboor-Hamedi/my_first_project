@@ -269,8 +269,8 @@ fn build_inline_job(
                 let code_end = i + 1 + end_rel;
                 flush_plain(&mut plain_acc, &mut job);
                 let code_text: String = chars[i + 1..code_end].iter().collect();
-                let mut fmt = TextFormat::simple(FontId::monospace(base_font_size * 0.92), theme.accent);
-                fmt.background = Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 26);
+                // Clean syntax highlighting on text without any clunky background box/layer
+                let fmt = TextFormat::simple(FontId::monospace(base_font_size * 0.92), theme.accent);
                 job.append(&code_text, 0.0, fmt);
                 i = code_end + 1;
                 continue;
@@ -454,7 +454,8 @@ fn highlight_code_line(
     job
 }
 
-/// Renders parsed markdown blocks inside `rect` with mouse-wheel scrolling and polished styling.
+/// Renders parsed markdown blocks inside `rect` with mouse-wheel scrolling, top header with close button, and polished styling.
+/// Returns `true` if the user clicked the close button.
 pub fn render_markdown_preview(
     ui: &egui::Ui,
     painter: &egui::Painter,
@@ -463,17 +464,91 @@ pub fn render_markdown_preview(
     scroll_y: &mut f32,
     theme: &Theme,
     font_size: f32,
+) -> bool {
+    render_markdown_view_inner(ui, painter, rect, content, scroll_y, theme, font_size, true)
+}
+
+/// Renders parsed markdown blocks inside `rect` as a full-height document without any nested header bar.
+/// Ideal for tabs such as the Quick Start Help guide.
+pub fn render_markdown_document(
+    ui: &egui::Ui,
+    painter: &egui::Painter,
+    rect: Rect,
+    content: &str,
+    scroll_y: &mut f32,
+    theme: &Theme,
+    font_size: f32,
 ) {
+    let _ = render_markdown_view_inner(ui, painter, rect, content, scroll_y, theme, font_size, false);
+}
+
+fn render_markdown_view_inner(
+    ui: &egui::Ui,
+    painter: &egui::Painter,
+    rect: Rect,
+    content: &str,
+    scroll_y: &mut f32,
+    theme: &Theme,
+    font_size: f32,
+    show_header: bool,
+) -> bool {
+    let mut close_clicked = false;
+
+    let content_rect = if show_header {
+        // Header bar (28px height)
+        let header_h = 28.0;
+        let header_rect = Rect::from_min_max(
+            rect.min,
+            pos2(rect.max.x, rect.min.y + header_h),
+        );
+
+        // Header subtle background & bottom border
+        painter.rect_filled(header_rect, 0.0, theme.surface());
+        painter.line_segment(
+            [pos2(header_rect.min.x, header_rect.max.y), pos2(header_rect.max.x, header_rect.max.y)],
+            Stroke::new(1.0, theme.border()),
+        );
+
+        // Header title
+        painter.text(
+            pos2(header_rect.min.x + 12.0, header_rect.center().y),
+            Align2::LEFT_CENTER,
+            "PREVIEW",
+            FontId::proportional(font_size * 0.75),
+            theme.muted,
+        );
+
+        // Unified sleek close button on top-right
+        let btn_center = pos2(header_rect.max.x - 16.0, header_rect.center().y);
+        if crate::ui_components::render_close_button(
+            ui,
+            painter,
+            btn_center,
+            20.0,
+            theme,
+            "preview_header_close",
+        ) {
+            close_clicked = true;
+        }
+
+        Rect::from_min_max(
+            pos2(rect.min.x, rect.min.y + header_h),
+            rect.max,
+        )
+    } else {
+        rect
+    };
+
     let blocks = parse_markdown(content);
 
     // Inner padding & content area aligned with editor body
-    let pad_x = 16.0;
-    let pad_y = 10.0;
-    let content_painter = painter.with_clip_rect(rect);
-    let max_text_w = (rect.width() - pad_x * 2.0).max(60.0);
+    let pad_x = 24.0;
+    let pad_y = if show_header { 12.0 } else { 18.0 };
+    let content_painter = painter.with_clip_rect(content_rect);
+    let max_text_w = (content_rect.width() - pad_x * 2.0).max(60.0);
 
     // Mouse scroll handling inside preview pane
-    if ui.rect_contains_pointer(rect) {
+    if ui.rect_contains_pointer(content_rect) {
         let delta = ui.input(|i| {
             if i.smooth_scroll_delta.y.abs() > 0.001 {
                 i.smooth_scroll_delta.y
@@ -488,26 +563,26 @@ pub fn render_markdown_preview(
 
     // Empty state placeholder
     if blocks.is_empty() {
-        let placeholder_y = rect.center().y - 10.0;
+        let placeholder_y = content_rect.center().y - 10.0;
         content_painter.text(
-            pos2(rect.center().x, placeholder_y),
+            pos2(content_rect.center().x, placeholder_y),
             Align2::CENTER_CENTER,
             "Nothing to preview yet",
             FontId::proportional(font_size * 1.05),
             Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 120),
         );
         content_painter.text(
-            pos2(rect.center().x, placeholder_y + 20.0),
+            pos2(content_rect.center().x, placeholder_y + 20.0),
             Align2::CENTER_CENTER,
             "Type markdown in the editor to see live rendering",
             FontId::proportional(font_size * 0.85),
             Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 80),
         );
-        return;
+        return close_clicked;
     }
 
-    let start_x = rect.min.x + pad_x;
-    let mut current_y = rect.min.y + pad_y - *scroll_y;
+    let start_x = content_rect.min.x + pad_x;
+    let mut current_y = content_rect.min.y + pad_y - *scroll_y;
     let mut code_block_idx: usize = 0;
 
     for block in &blocks {
@@ -935,6 +1010,8 @@ pub fn render_markdown_preview(
     let bottom_pad = 28.0;
     let max_scroll = (total_h + bottom_pad - rect.height()).max(0.0);
     *scroll_y = scroll_y.clamp(0.0, max_scroll);
+
+    close_clicked
 }
 
 #[cfg(test)]

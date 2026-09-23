@@ -19,37 +19,53 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
 
     let mut typed = false;
 
-    // 2. Dispatch events for either command bar or active editor
+    // 2. Dispatch events for either command bar, focused terminal, or active editor
     ctx.input(|i| {
         for ev in &i.events {
-            match ev {
-                egui::Event::Paste(s) => {
-                    if app.in_command {
-                        command::handle_command_paste(app, s, now);
-                    } else if editor::handle_editor_paste(app, s, now) {
-                        typed = true;
-                    }
-                }
-                egui::Event::Text(s) => {
-                    if app.in_command {
-                        command::handle_command_text(app, s, now);
-                    } else if editor::handle_editor_text(app, s, now) {
-                        typed = true;
-                    }
-                }
-                egui::Event::Key {
-                    key,
-                    pressed: true,
-                    modifiers,
-                    ..
-                } => {
-                    if app.in_command {
+            if app.in_command {
+                match ev {
+                    egui::Event::Paste(s) => command::handle_command_paste(app, s, now),
+                    egui::Event::Text(s) => command::handle_command_text(app, s, now),
+                    egui::Event::Key { key, pressed: true, modifiers, .. } => {
                         command::handle_command_key(app, *key, *modifiers, now);
-                    } else if editor::handle_editor_key(app, *key, *modifiers, now) {
-                        typed = true;
+                    }
+                    _ => {}
+                }
+            } else if app.terminal_open && app.terminal_focused {
+                if let egui::Event::Key { key: egui::Key::Escape, pressed: true, modifiers, .. } = ev {
+                    if !modifiers.ctrl && !modifiers.shift && !modifiers.alt {
+                        app.terminal_focused = false;
+                        app.set_status("Editor focused (Ctrl+J to return to terminal)", now);
+                        continue;
                     }
                 }
-                _ => {}
+                if let Some(ref mut pane) = app.term_pane {
+                    pane.feed_event(ev, i.modifiers);
+                }
+            } else {
+                match ev {
+                    egui::Event::Paste(s) => {
+                        if editor::handle_editor_paste(app, s, now) {
+                            typed = true;
+                        }
+                    }
+                    egui::Event::Text(s) => {
+                        if editor::handle_editor_text(app, s, now) {
+                            typed = true;
+                        }
+                    }
+                    egui::Event::Key {
+                        key,
+                        pressed: true,
+                        modifiers,
+                        ..
+                    } => {
+                        if editor::handle_editor_key(app, *key, *modifiers, now) {
+                            typed = true;
+                        }
+                    }
+                    _ => {}
+                }
             }
         }
     });

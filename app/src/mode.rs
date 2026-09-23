@@ -5,6 +5,8 @@ pub enum Mode {
     Normal,
     Stats,
     Doc,
+    Help,
     ScanReport,
     ScanHistory,
+    Terminal,
 }

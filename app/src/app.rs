@@ -7,7 +7,6 @@ use crate::editor::{Editor, VisualLine};
 use crate::fuzzy::SearchItem;
 use crate::input::{handle_input, window_shortcuts};
 use crate::modals::{render_delete_confirm_modal, render_rename_modal, render_search_modal};
-use crate::help_panel::render_help_panel;
 use crate::hybrid::HybridEngine;
 use crate::mode::Mode;
 use crate::notes::{delete_active_note, quick_save_active_note, rename_active_note, update_search_results};
@@ -99,11 +98,11 @@ pub struct App {
     pub delete_just_opened: bool,
     pub pending_delete_note_id: Option<i64>,
 
-    // Guidance & Help modal (:help or F1)
+    // Guidance & Help Tab (:help or F1)
     pub help_open: bool,
-    pub help_just_opened: bool,
     pub help_tab: usize,
     pub help_scroll_y: f32,
+    pub help_tab_scroll_offset: f32,
 
     // Active document & sidebar limits
     pub active_note_id: Option<i64>,
@@ -173,6 +172,14 @@ pub struct App {
     pub clipboard_text: Option<String>,
     pub accent_overrides: crate::accent::AccentOverrides,
     pub accent_dropdown_open: bool,
+
+    // Embedded Terminal (:term) docked session state
+    pub terminal_open: bool,
+    pub terminal_split_ratio: f32,
+    pub is_dragging_terminal_splitter: bool,
+    pub terminal_focused: bool,
+    pub term_pane: Option<crate::terminal_pane::TerminalPane>,
+    pub prev_mode_before_term: Mode,
 }
 
 impl App {
@@ -220,9 +227,9 @@ impl App {
             delete_just_opened: false,
             pending_delete_note_id: None,
             help_open: false,
-            help_just_opened: false,
             help_tab: 0,
             help_scroll_y: 0.0,
+            help_tab_scroll_offset: 0.0,
             active_note_id: None,
             active_note_title: "Untitled Note".to_string(),
             notes_list: Vec::new(),
@@ -276,6 +283,12 @@ impl App {
             clipboard_text: None,
             accent_overrides: crate::accent::AccentOverrides::default(),
             accent_dropdown_open: false,
+            terminal_open: false,
+            terminal_split_ratio: 0.38,
+            is_dragging_terminal_splitter: false,
+            terminal_focused: false,
+            term_pane: None,
+            prev_mode_before_term: Mode::Normal,
         };
 
         app.load_settings();
@@ -849,6 +862,12 @@ impl App {
         self.open_docs_mode(now);
     }
 
+    pub fn open_help_tab(&mut self, now: f64) {
+        self.mode = Mode::Help;
+        self.help_scroll_y = 0.0;
+        self.set_status("Opened Help & Guidance Tab (Esc to return to notes)", now);
+    }
+
     pub fn set_status(&mut self, msg: impl Into<String>, now: f64) {
         self.status_msg = msg.into();
         self.status_time = now;
@@ -935,8 +954,10 @@ impl App {
                 (format!("📖 {}", doc_title), false)
             }
             Mode::Normal => (self.active_note_title.clone(), self.is_dirty),
+            Mode::Help => ("✦ Quick Start Guide".to_string(), false),
             Mode::Stats => ("📊 Daily Story & Statistics".to_string(), false),
             Mode::ScanReport | Mode::ScanHistory => ("🌐 Security Scanner".to_string(), false),
+            Mode::Terminal => ("💻 Embedded Terminal".to_string(), false),
         };
 
         let (titlebar_action, accent_anchor_rect) = crate::view_editor::render_full_titlebar(
@@ -1198,16 +1219,72 @@ impl App {
                     }
                 }
             }
+        } else if self.mode == Mode::Help {
+            let tab_items = [crate::view_editor::TabItem {
+                title: "⚡ Quick Start",
+                is_dirty: false,
+                is_active: true,
+            }];
+
+            if let Some(action) = crate::view_editor::render_tab_bar(
+                ui,
+                &painter,
+                tab_bar_rect,
+                &tab_items,
+                &self.theme,
+                &mut self.help_tab_scroll_offset,
+                false,
+                tab_occluded_rect,
+            ) {
+                match action {
+                    crate::view_editor::TabAction::Select(_) => {}
+                    crate::view_editor::TabAction::Close(_) => {
+                        self.mode = Mode::Normal;
+                        self.set_status("Closed Quick Start", now);
+                    }
+                }
+            }
         }
 
-        // Body area below tab strip (for editor, gutter, preview)
-        let body_rect = if self.mode == Mode::Normal || self.mode == Mode::Doc {
-            Rect::from_min_max(
-                pos2(editor_panel_rect.min.x, tab_bar_rect.max.y),
+        // Docked bottom terminal layout: splits editor_panel_rect vertically so terminal sits under editor & preview
+        let (top_panel_rect, bottom_terminal_rect, term_splitter_rect_opt) = if self.terminal_open && (self.mode == Mode::Normal || self.mode == Mode::Doc) {
+            let total_h = editor_panel_rect.height();
+            let divider_h = 10.0;
+            let tab_bar_h = tab_bar_rect.height().max(30.0);
+            let min_top_h = tab_bar_h + 60.0;
+            let available_h = (total_h - divider_h).max(min_top_h + 80.0);
+            let min_h = 80.0f32;
+            let max_h = (total_h - divider_h - min_top_h).max(min_h);
+            let term_h = (available_h * self.terminal_split_ratio).clamp(min_h, max_h);
+
+            let top_split_y = (editor_panel_rect.max.y - term_h - divider_h).max(editor_panel_rect.min.y + min_top_h);
+            let top_rect = Rect::from_min_max(
+                editor_panel_rect.min,
+                pos2(editor_panel_rect.max.x, top_split_y),
+            );
+            let divider_rect = Rect::from_min_max(
+                pos2(editor_panel_rect.min.x, top_rect.max.y),
+                pos2(editor_panel_rect.max.x, top_rect.max.y + divider_h),
+            );
+            let bottom_rect = Rect::from_min_max(
+                pos2(editor_panel_rect.min.x, divider_rect.max.y),
                 editor_panel_rect.max,
+            );
+            (top_rect, Some(bottom_rect), Some(divider_rect))
+        } else {
+            (editor_panel_rect, None, None)
+        };
+
+        // Body area below tab strip (for editor, gutter, preview, help)
+        let body_rect = if self.mode == Mode::Normal || self.mode == Mode::Doc || self.mode == Mode::Help {
+            let body_min_y = tab_bar_rect.max.y;
+            let body_max_y = top_panel_rect.max.y.max(body_min_y + 30.0);
+            Rect::from_min_max(
+                pos2(top_panel_rect.min.x, body_min_y),
+                pos2(top_panel_rect.max.x, body_max_y),
             )
         } else {
-            editor_panel_rect
+            top_panel_rect
         };
 
         // Split Editor & Preview panes setup inside body_rect
@@ -1269,29 +1346,6 @@ impl App {
                     original_caret_kind,
                 );
 
-                let search_matches = if self.editor_input_mode == EditorInputMode::Vim
-                    && (!self.vim.search.match_indices.is_empty() || self.vim.is_searching())
-                {
-                    let q_len = if self.vim.is_searching() {
-                        self.vim.search.query.chars().count()
-                    } else {
-                        self.vim.search.last_query.chars().count()
-                    };
-                    if q_len > 0 && !self.vim.search.match_indices.is_empty() {
-                        Some((self.vim.search.match_indices.as_slice(), q_len))
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                };
-
-                let (target_ed_mut, target_scroll_y) = if self.mode == Mode::Doc {
-                    (&mut self.doc_ed, &mut self.doc_scroll_y)
-                } else {
-                    (&mut self.ed, &mut self.scroll_y)
-                };
-
                 if let (Some(_), Some(divider_rect)) = (preview_rect_opt, divider_rect_opt) {
                     let total_w = editor_panel_rect.width();
                     let available_w = (total_w - divider_w).max(200.0);
@@ -1311,8 +1365,20 @@ impl App {
                         if primary_down {
                             ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
                             if let Some(pos) = ui.input(|i| i.pointer.interact_pos().or_else(|| i.pointer.hover_pos())) {
-                                let new_ratio = ((pos.x - body_rect.min.x - divider_w * 0.5) / available_w).clamp(0.15, 0.85);
-                                self.split_ratio = new_ratio;
+                                let raw_ratio = (pos.x - body_rect.min.x - divider_w * 0.5) / available_w;
+                                if raw_ratio > 0.90 || raw_ratio < 0.10 {
+                                    self.preview_open = false;
+                                    self.is_dragging_splitter = false;
+                                    self.split_ratio = 0.5;
+                                    let _ = self.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+                                        key: "preview".into(),
+                                        val: "false".into(),
+                                    });
+                                    self.set_status("Live preview closed", now);
+                                    ui.ctx().request_repaint();
+                                } else {
+                                    self.split_ratio = raw_ratio.clamp(0.15, 0.85);
+                                }
                             }
                         } else {
                             self.is_dragging_splitter = false;
@@ -1350,6 +1416,29 @@ impl App {
                     self.is_dragging_splitter = false;
                 }
 
+                let (target_ed_mut, target_scroll_y) = if self.mode == Mode::Doc {
+                    (&mut self.doc_ed, &mut self.doc_scroll_y)
+                } else {
+                    (&mut self.ed, &mut self.scroll_y)
+                };
+
+                let search_matches = if self.editor_input_mode == EditorInputMode::Vim
+                    && (!self.vim.search.match_indices.is_empty() || self.vim.is_searching())
+                {
+                    let q_len = if self.vim.is_searching() {
+                        self.vim.search.query.chars().count()
+                    } else {
+                        self.vim.search.last_query.chars().count()
+                    };
+                    if q_len > 0 && !self.vim.search.match_indices.is_empty() {
+                        Some((self.vim.search.match_indices.as_slice(), q_len))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
                 render_editor_body(
                     ui,
                     &painter,
@@ -1383,7 +1472,7 @@ impl App {
                 // Render Live Markdown Preview side-by-side if active
                 if let Some(p_rect) = preview_rect_opt {
                     let note_text = self.ed.text();
-                    render_markdown_preview(
+                    let close_requested = render_markdown_preview(
                         ui,
                         &painter,
                         p_rect,
@@ -1392,12 +1481,117 @@ impl App {
                         &self.theme,
                         self.font_size,
                     );
+                    if close_requested {
+                        self.preview_open = false;
+                        self.split_ratio = 0.5;
+                        let _ = self.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+                            key: "preview".into(),
+                            val: "false".into(),
+                        });
+                        self.set_status("Live preview closed", now);
+                        ui.ctx().request_repaint();
+                    }
                 }
 
                 // Floating Keystroke Card (Vim showcmd): large borderless capsule pill — bottom-right of editor
                 if self.editor_input_mode == EditorInputMode::Vim {
                     let card_anchor = pos2(actual_editor_rect.max.x - 16.0, actual_editor_rect.max.y - 20.0);
                     self.showcmd.render_card(&painter, card_anchor, self.theme.accent, now);
+                }
+
+                if ui.rect_contains_pointer(actual_editor_rect) && ui.input(|i| i.pointer.primary_clicked()) {
+                    self.terminal_focused = false;
+                }
+
+                // Render Bottom-Docked Embedded Terminal (underneath editor & preview)
+                if let (Some(term_rect), Some(divider_rect)) = (bottom_terminal_rect, term_splitter_rect_opt) {
+                    let total_h = editor_panel_rect.height();
+                    let divider_h = 10.0;
+                    let available_h = (total_h - divider_h).max(140.0);
+                    let divider_hit_rect = divider_rect.expand2(vec2(0.0, 8.0));
+                    let is_divider_hovered = ui.rect_contains_pointer(divider_hit_rect);
+                    let primary_down = ui.input(|i| i.pointer.primary_down());
+                    let primary_pressed = ui.input(|i| i.pointer.primary_clicked() || i.pointer.button_pressed(egui::PointerButton::Primary));
+
+                    if is_divider_hovered && primary_pressed {
+                        self.is_dragging_terminal_splitter = true;
+                    }
+
+                    if self.is_dragging_terminal_splitter {
+                        if primary_down {
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeRow);
+                            if let Some(pos) = ui.input(|i| i.pointer.interact_pos().or_else(|| i.pointer.hover_pos())) {
+                                let term_pixel_h = editor_panel_rect.max.y - pos.y;
+                                let raw_ratio = term_pixel_h / available_h;
+                                self.terminal_split_ratio = raw_ratio.clamp(0.12, 0.85);
+                                ui.ctx().request_repaint();
+                            }
+                        } else {
+                            self.is_dragging_terminal_splitter = false;
+                        }
+                    } else if is_divider_hovered {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeRow);
+                    }
+
+                    let is_active = is_divider_hovered || self.is_dragging_terminal_splitter;
+                    let divider_color = if is_active {
+                        self.theme.accent
+                    } else {
+                        Color32::from_rgba_unmultiplied(self.theme.muted.r(), self.theme.muted.g(), self.theme.muted.b(), 65)
+                    };
+                    let mid_y = divider_rect.center().y;
+                    painter.line_segment(
+                        [pos2(divider_rect.min.x, mid_y), pos2(divider_rect.max.x, mid_y)],
+                        Stroke::new(if is_active { 1.5 } else { 1.0 }, divider_color),
+                    );
+                    let knob_w = 48.0;
+                    let knob_h = if is_active { 8.0 } else { 5.0 };
+                    let knob_rect = Rect::from_center_size(pos2(divider_rect.center().x, mid_y), vec2(knob_w, knob_h));
+                    painter.rect_filled(knob_rect, 3.5, divider_color);
+
+                    let knob_mid = knob_rect.center();
+                    let grip_color = self.theme.bg;
+                    for dx in [-8.0, -4.0, 0.0, 4.0, 8.0] {
+                        painter.line_segment(
+                            [pos2(knob_mid.x + dx, knob_mid.y - 2.0), pos2(knob_mid.x + dx, knob_mid.y + 2.0)],
+                            Stroke::new(1.0, grip_color),
+                        );
+                    }
+
+                    if self.term_pane.is_none() {
+                        self.term_pane = crate::terminal_pane::TerminalPane::spawn(ui.ctx(), &self.theme).ok();
+                    }
+                    if let Some(ref mut pane) = self.term_pane {
+                        let action = pane.ui(ui, term_rect, &self.theme, self.font_size, self.terminal_focused);
+                        match action {
+                            crate::terminal_pane::TerminalAction::Close => {
+                                self.terminal_open = false;
+                                self.terminal_focused = false;
+                                self.set_status("Terminal closed", now);
+                                ui.ctx().request_repaint();
+                            }
+                            crate::terminal_pane::TerminalAction::RequestFocus => {
+                                self.terminal_focused = true;
+                            }
+                            crate::terminal_pane::TerminalAction::None => {}
+                        }
+                    }
+                } else {
+                    self.is_dragging_terminal_splitter = false;
+                }
+            }
+            Mode::Help => {
+                let action = crate::help_panel::render_help_tab_view(
+                    ui,
+                    &painter,
+                    body_rect,
+                    &mut self.help_scroll_y,
+                    &self.theme,
+                    self.font_size,
+                );
+                if action.should_close {
+                    self.mode = Mode::Normal;
+                    self.set_status("Closed Quick Start", now);
                 }
             }
             Mode::Stats => {
@@ -1458,6 +1652,27 @@ impl App {
                         self.scan_report_scroll_y = 0.0;
                         self.mode = Mode::ScanReport;
                     }
+                }
+            }
+            Mode::Terminal => {
+                if self.term_pane.is_none() {
+                    self.term_pane = crate::terminal_pane::TerminalPane::spawn(ui.ctx(), &self.theme).ok();
+                }
+                if let Some(ref mut pane) = self.term_pane {
+                    let action = pane.ui(ui, editor_panel_rect, &self.theme, self.font_size, true);
+                    if action == crate::terminal_pane::TerminalAction::Close {
+                        self.mode = self.prev_mode_before_term;
+                        self.set_status("Exited terminal", now);
+                        ui.ctx().request_repaint();
+                    }
+                } else {
+                    painter.text(
+                        editor_panel_rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        "Failed to initialize terminal session.",
+                        FontId::monospace(self.font_size),
+                        self.theme.muted,
+                    );
                 }
             }
         }
@@ -1522,7 +1737,7 @@ impl App {
                 let active_mode_idx = match self.mode {
                     Mode::Normal => 0,
                     Mode::Stats => 1,
-                    Mode::Doc | Mode::ScanReport | Mode::ScanHistory => 0,
+                    Mode::Doc | Mode::Help | Mode::ScanReport | Mode::ScanHistory | Mode::Terminal => 0,
                 };
                 let action = render_sidebar(
                     ui,
@@ -1616,8 +1831,8 @@ impl App {
         if self.settings_open {
             painter.rect_filled(bounds, 0.0, Color32::from_black_alpha(175));
 
-            let modal_w = 780.0f32.min(bounds.width() - 40.0);
-            let modal_h = 560.0f32.min(bounds.height() - 40.0);
+            let modal_w = 980.0f32.min(bounds.width() - 36.0);
+            let modal_h = 680.0f32.min(bounds.height() - 36.0);
             let modal_rect = Rect::from_center_size(bounds.center(), eframe::egui::vec2(modal_w, modal_h));
 
             // Dismiss modal if clicking backdrop outside dialog (skip on frame opened to prevent immediate close)
@@ -1629,38 +1844,38 @@ impl App {
                 }
             }
 
+            // Adaptive modal background: matches active theme surface with crisp border
+            let modal_bg = if self.theme.is_light() {
+                self.theme.bg
+            } else {
+                self.theme.surface()
+            };
             painter.rect(
                 modal_rect,
-                6.0,
-                Color32::from_rgb(14, 15, 18),
-                eframe::egui::Stroke::new(1.0, Color32::from_rgb(44, 48, 62)),
+                8.0,
+                modal_bg,
+                eframe::egui::Stroke::new(1.0, self.theme.border()),
                 eframe::egui::StrokeKind::Inside,
             );
 
-            // Close icon button (✕) on the right side of the settings modal
-            let close_size = 26.0;
-            let close_rect = Rect::from_min_size(
-                pos2(modal_rect.max.x - close_size - 10.0, modal_rect.min.y + 10.0),
-                vec2(close_size, close_size),
-            );
-            let close_hover = ui.rect_contains_pointer(close_rect);
-            if close_hover {
-                painter.rect_filled(close_rect, 4.0, Color32::from_rgb(220, 50, 50));
-            }
-            let close_color = if close_hover { Color32::WHITE } else { Color32::from_gray(140) };
-            let c = close_rect.center();
-            let d = 4.5;
-            painter.line_segment([pos2(c.x - d, c.y - d), pos2(c.x + d, c.y + d)], Stroke::new(1.5, close_color));
-            painter.line_segment([pos2(c.x + d, c.y - d), pos2(c.x - d, c.y + d)], Stroke::new(1.5, close_color));
-            if close_hover && ui.input(|i| i.pointer.primary_clicked()) {
+            // Unified sleek close button on top-right of modal
+            let close_center = pos2(modal_rect.max.x - 20.0, modal_rect.min.y + 20.0);
+            if crate::ui_components::render_close_button(
+                ui,
+                &painter,
+                close_center,
+                24.0,
+                &self.theme,
+                "settings_modal_close",
+            ) {
                 self.settings_open = false;
             }
 
-            let tab_w = 175.0;
+            let tab_w = 205.0;
             let tabs_rect = Rect::from_min_max(modal_rect.min, pos2(modal_rect.min.x + tab_w, modal_rect.max.y));
             let panel_rect = Rect::from_min_max(pos2(modal_rect.min.x + tab_w, modal_rect.min.y), modal_rect.max);
 
-            render_setting_tabs(ui, &painter, tabs_rect, &mut self.active_setting_tab, self.theme.accent);
+            render_setting_tabs(ui, &painter, tabs_rect, &mut self.active_setting_tab, &self.theme);
 
             // Consume scroll events inside the modal so they never reach the editor
             let scroll_consumed = ui.input(|i| i.raw_scroll_delta.y);
@@ -1796,32 +2011,6 @@ impl App {
             }
         }
 
-        // Help & Guidance Center Modal (:help or F1)
-        if self.help_open {
-            let action = render_help_panel(
-                ui,
-                &painter,
-                bounds,
-                &mut self.help_tab,
-                &mut self.help_scroll_y,
-                self.theme.accent,
-                self.help_just_opened,
-            );
-            self.help_just_opened = false;
-
-            if action.open_docs {
-                self.help_open = false;
-                self.open_docs_mode(now);
-            }
-            if action.open_settings {
-                self.help_open = false;
-                self.settings_open = true;
-            }
-            if action.should_close {
-                self.help_open = false;
-            }
-        }
-
         // Accent Color Customizer Dropdown
         if self.accent_dropdown_open {
             let default_theme = Theme::from_kind(self.theme.kind);
@@ -1898,6 +2087,19 @@ impl eframe::App for App {
         let max_cols = (text_area_w / cw).floor().max(15.0) as usize;
         let active_ed = if self.mode == Mode::Doc { &self.doc_ed } else { &self.ed };
         self.visual_lines = active_ed.compute_visual_lines(max_cols);
+
+        if self.terminal_open || self.mode == Mode::Terminal {
+            if let Some(ref mut pane) = self.term_pane {
+                if pane.pump() {
+                    self.terminal_open = false;
+                    self.terminal_focused = false;
+                    if self.mode == Mode::Terminal {
+                        self.mode = self.prev_mode_before_term;
+                    }
+                    self.set_status("Terminal session ended", now);
+                }
+            }
+        }
 
         let typed = handle_input(self, ctx, now);
 
