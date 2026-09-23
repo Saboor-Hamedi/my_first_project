@@ -465,7 +465,7 @@ pub fn render_markdown_preview(
     theme: &Theme,
     font_size: f32,
 ) -> bool {
-    render_markdown_view_inner(ui, painter, rect, content, scroll_y, theme, font_size, true)
+    render_markdown_view_inner(ui, painter, rect, content, scroll_y, theme, font_size, false)
 }
 
 /// Renders parsed markdown blocks inside `rect` as a full-height document without any nested header bar.
@@ -636,7 +636,7 @@ fn render_markdown_view_inner(
                 let galley = painter.layout_job(job);
                 let text_h = galley.size().y;
                 if current_y + text_h >= rect.min.y && current_y <= rect.max.y {
-                    content_painter.galley(pos2(start_x, current_y), galley, Color32::WHITE);
+                    content_painter.galley(pos2(start_x, current_y), galley, theme.text);
                 }
                 current_y += text_h + 10.0;
             }
@@ -663,7 +663,7 @@ fn render_markdown_view_inner(
                         Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 22)),
                         egui::StrokeKind::Inside,
                     );
-                    content_painter.galley(pos2(start_x + 14.0, current_y + 6.0), galley, Color32::WHITE);
+                    content_painter.galley(pos2(start_x + 14.0, current_y + 6.0), galley, theme.text);
                 }
                 current_y += box_h + 10.0;
             }
@@ -715,7 +715,7 @@ fn render_markdown_view_inner(
                                 Stroke::new(1.5, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 140)),
                                 egui::StrokeKind::Inside,
                             );
-                            content_painter.galley(pos2(item_start_x + 24.0, current_y), galley, Color32::WHITE);
+                            content_painter.galley(pos2(item_start_x + 24.0, current_y), galley, theme.text);
                         }
                     } else {
                         // Standard bullet or numbered list
@@ -727,7 +727,7 @@ fn render_markdown_view_inner(
                             16.0
                         };
                         content_painter.text(pos2(item_start_x, current_y), Align2::LEFT_TOP, bullet, bullet_font, b_color);
-                        content_painter.galley(pos2(item_start_x + bullet_w + 6.0, current_y), galley, Color32::WHITE);
+                        content_painter.galley(pos2(item_start_x + bullet_w + 6.0, current_y), galley, theme.text);
                     }
                 }
                 current_y += row_h + 6.0;
@@ -874,7 +874,7 @@ fn render_markdown_view_inner(
                         code_painter.galley(
                             pos2(code_rect.min.x + pad_x - scroll_x, line_y),
                             galley,
-                            Color32::WHITE,
+                            theme.text,
                         );
                         line_y += line_h;
                     }
@@ -958,7 +958,7 @@ fn render_markdown_view_inner(
                         let c_x = start_x + c_idx as f32 * col_w + cell_pad_x;
                         let job = build_inline_job(h_text, font_size * 0.95, theme.highlight, theme, col_w - cell_pad_x * 2.0);
                         let galley = painter.layout_job(job);
-                        content_painter.galley(pos2(c_x, current_y + cell_pad_y), galley, Color32::WHITE);
+                        content_painter.galley(pos2(c_x, current_y + cell_pad_y), galley, theme.highlight);
                     }
 
                     // Data rows
@@ -984,7 +984,7 @@ fn render_markdown_view_inner(
                                 let c_x = start_x + c_idx as f32 * col_w + cell_pad_x;
                                 let job = build_inline_job(cell_text, font_size * 0.90, theme.text, theme, col_w - cell_pad_x * 2.0);
                                 let galley = painter.layout_job(job);
-                                content_painter.galley(pos2(c_x, r_y + cell_pad_y), galley, Color32::WHITE);
+                                content_painter.galley(pos2(c_x, r_y + cell_pad_y), galley, theme.text);
                             }
                         }
                         r_y += row_h;

@@ -172,8 +172,8 @@ pub fn render_stats(
                 p.rect(
                     chart_container,
                     5.0,
-                    Color32::from_rgb(14, 15, 18),
-                    Stroke::new(1.0, Color32::from_rgb(26, 28, 34)),
+                    theme.surface(),
+                    Stroke::new(1.0, theme.border()),
                     egui::StrokeKind::Inside,
                 );
 
@@ -215,6 +215,8 @@ pub fn render_stats(
                         theme.highlight
                     } else if is_active {
                         theme.accent
+                    } else if theme.is_light() {
+                        Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 35)
                     } else {
                         Color32::from_rgb(24, 25, 30)
                     };
@@ -290,8 +292,12 @@ pub fn render_stats(
                         p.rect(
                             row_rect,
                             4.0,
-                            if is_today { Color32::from_rgb(18, 26, 20) } else { Color32::from_rgb(14, 15, 18) },
-                            Stroke::new(1.0, if is_today { theme.accent } else { Color32::from_rgb(26, 28, 34) }),
+                            if is_today {
+                                Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), if theme.is_light() { 22 } else { 38 })
+                            } else {
+                                theme.surface()
+                            },
+                            Stroke::new(1.0, if is_today { theme.accent } else { theme.border() }),
                             egui::StrokeKind::Inside,
                         );
 
@@ -309,7 +315,7 @@ pub fn render_stats(
                             Align2::LEFT_CENTER,
                             display_date,
                             FontId::monospace((11.0 * scale).max(11.5)),
-                            if is_today { theme.accent } else { Color32::from_gray(180) },
+                            if is_today { theme.accent } else { theme.text },
                         );
 
                         // Flexible positioning depending on available width
@@ -324,7 +330,7 @@ pub fn render_stats(
                                 Align2::LEFT_CENTER,
                                 format!("⏱ {}", format_duration(act.active_seconds)),
                                 FontId::monospace((11.0 * scale).max(11.5)),
-                                Color32::from_gray(190),
+                                theme.text,
                             );
 
                             p.text(
@@ -340,7 +346,7 @@ pub fn render_stats(
                                 Align2::LEFT_CENTER,
                                 format!("⌨ {} keys", format_number(act.keystrokes as u64)),
                                 FontId::monospace((11.0 * scale).max(11.5)),
-                                Color32::from_gray(160),
+                                theme.muted,
                             );
 
                             p.text(
@@ -360,7 +366,7 @@ pub fn render_stats(
                                 Align2::LEFT_CENTER,
                                 format!("⏱ {}", format_duration(act.active_seconds)),
                                 FontId::monospace((10.5 * scale).max(11.0)),
-                                Color32::from_gray(190),
+                                theme.text,
                             );
 
                             p.text(
@@ -404,8 +410,8 @@ fn draw_metric_card(
     p.rect(
         rect,
         5.0,
-        Color32::from_rgb(15, 16, 20),
-        Stroke::new(1.0, Color32::from_rgb(30, 32, 40)),
+        theme.surface(),
+        Stroke::new(1.0, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -439,6 +445,6 @@ fn draw_metric_card(
         Align2::LEFT_TOP,
         sub,
         FontId::monospace((10.0 * scale).max(10.5)),
-        Color32::from_gray(140),
+        theme.muted,
     );
 }

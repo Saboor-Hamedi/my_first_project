@@ -135,30 +135,27 @@ pub fn render_accent_dropdown(
 
     let alpha = (open_t * 255.0) as u8;
 
-    // Soft drop shadow.
+    // Soft ambient shadow (never a harsh black ring)
+    let shadow_alpha = if theme.is_light() {
+        (18.0 * open_t) as u8
+    } else {
+        (55.0 * open_t) as u8
+    };
     painter.rect(
-        dropdown_rect.expand(3.0),
-        9.0,
-        Color32::from_black_alpha((150.0 * open_t) as u8),
+        dropdown_rect.expand(4.0),
+        10.0,
+        Color32::from_black_alpha(shadow_alpha),
         Stroke::NONE,
         egui::StrokeKind::Outside,
     );
 
-    // Card body.
+    // Card body: sleek surface and border matching modal styling
     painter.rect(
         dropdown_rect,
-        7.0,
+        8.0,
         theme.surface().gamma_multiply(open_t),
         Stroke::new(1.0, theme.border().gamma_multiply(open_t)),
         egui::StrokeKind::Inside,
-    );
-    // Faint top highlight for a glassy edge.
-    painter.line_segment(
-        [
-            dropdown_rect.left_top() + vec2(8.0, 1.0),
-            dropdown_rect.right_top() + vec2(-8.0, 1.0),
-        ],
-        Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 255, 255, (12.0 * open_t) as u8)),
     );
 
     // --- Header ---
@@ -189,14 +186,19 @@ pub fn render_accent_dropdown(
     let close_hovered = ui.rect_contains_pointer(close_btn_rect);
     let close_t = ui.ctx().animate_bool(ui.id().with("close_btn_hover"), close_hovered);
     if close_t > 0.0 {
-        painter.rect_filled(close_btn_rect, 4.0, Color32::from_white_alpha((25.0 * close_t) as u8));
+        let hover_bg = if theme.is_light() {
+            Color32::from_black_alpha((18.0 * close_t) as u8)
+        } else {
+            Color32::from_white_alpha((25.0 * close_t) as u8)
+        };
+        painter.rect_filled(close_btn_rect, 4.0, hover_bg);
     }
     painter.text(
         close_btn_rect.center(),
         Align2::CENTER_CENTER,
         "\u{2715}",
         FontId::monospace(12.0),
-        lerp_color(theme.muted, Color32::WHITE, close_t),
+        lerp_color(theme.muted, theme.text, close_t),
     );
     if close_hovered && ui.input(|i| i.pointer.primary_clicked()) {
         return Some(AccentAction::Close);
@@ -370,16 +372,21 @@ fn render_color_section(
         let grown = base_rect.expand(hover_t * 2.0);
 
         let stroke = if is_selected {
-            Stroke::new(1.8, Color32::WHITE)
+            Stroke::new(1.8, theme.accent)
         } else if hover_t > 0.0 {
-            Stroke::new(1.0 + 0.5 * hover_t, lerp_color(Color32::from_gray(50), theme.accent, hover_t))
+            Stroke::new(1.0 + 0.5 * hover_t, theme.accent)
         } else {
-            Stroke::new(0.8, Color32::from_gray(50))
+            Stroke::new(0.8, theme.border())
         };
 
         painter.rect(grown, 3.5, swatch, stroke, egui::StrokeKind::Inside);
         if is_selected {
-            painter.circle_filled(grown.center(), 2.2, Color32::WHITE);
+            let dot_col = if crate::theme::relative_luminance(swatch) > 0.5 {
+                Color32::BLACK
+            } else {
+                Color32::WHITE
+            };
+            painter.circle_filled(grown.center(), 2.2, dot_col);
         }
         if resp.clicked() {
             *current_override = Some(swatch);

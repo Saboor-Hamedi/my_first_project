@@ -360,7 +360,7 @@ impl Default for Theme {
 
 /// WCAG relative luminance of an sRGB color (0.0 = black, 1.0 = white).
 /// https://www.w3.org/TR/WCAG21/#dfn-relative-luminance
-fn relative_luminance(c: Color32) -> f32 {
+pub fn relative_luminance(c: Color32) -> f32 {
     let chan = |v: u8| -> f32 {
         let s = v as f32 / 255.0;
         if s <= 0.03928 {

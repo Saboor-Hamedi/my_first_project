@@ -1,4 +1,5 @@
 use crate::fuzzy::SearchItem;
+use crate::theme::Theme;
 use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, Stroke};
 
 pub struct SearchModalAction {
@@ -13,7 +14,7 @@ pub fn render_search_modal(
     query: &mut String,
     results: &[SearchItem],
     selected_idx: &mut usize,
-    accent: Color32,
+    theme: &Theme,
     just_opened: bool,
 ) -> SearchModalAction {
     let mut action = SearchModalAction {
@@ -22,7 +23,8 @@ pub fn render_search_modal(
     };
 
     // Dimmed translucent backdrop
-    painter.rect_filled(bounds, 0.0, Color32::from_black_alpha(150));
+    let backdrop_alpha = if theme.is_light() { 90 } else { 160 };
+    painter.rect_filled(bounds, 0.0, Color32::from_black_alpha(backdrop_alpha));
 
     // Spotlight layout: positioned towards the top (~18% from window top)
     let modal_w = 600.0f32.min(bounds.width() - 32.0);
@@ -52,9 +54,9 @@ pub fn render_search_modal(
         }
     }
 
-    // Modern macOS Spotlight container: frosted dark surface with smooth rounded corners
-    let glass_bg = Color32::from_rgb(18, 20, 26);
-    let glass_border = Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 255, 255, 28));
+    // Modern macOS Spotlight container: surface matching active theme with smooth rounded corners
+    let glass_bg = theme.surface();
+    let glass_border = Stroke::new(1.0, theme.border());
     painter.rect(modal_rect, 10.0, glass_bg, glass_border, egui::StrokeKind::Inside);
 
     // ── Search Bar Input Row ────────────────────────────────────────────────
@@ -66,7 +68,7 @@ pub fn render_search_modal(
         Align2::LEFT_CENTER,
         "🔍",
         FontId::monospace(14.0),
-        Color32::from_gray(140),
+        theme.muted,
     );
 
     // Escape shortcut pill keycap on far right of search bar, vertically centered
@@ -78,8 +80,8 @@ pub fn render_search_modal(
     painter.rect(
         esc_pill,
         4.0,
-        Color32::from_rgb(26, 28, 36),
-        Stroke::new(1.0, Color32::from_rgb(44, 48, 62)),
+        theme.bg,
+        Stroke::new(1.0, theme.border()),
         egui::StrokeKind::Inside,
     );
     painter.text(
@@ -87,7 +89,7 @@ pub fn render_search_modal(
         Align2::CENTER_CENTER,
         "esc",
         FontId::monospace(10.5),
-        Color32::from_gray(140),
+        theme.muted,
     );
 
     // Single-line text input vertically aligned with the search icon
@@ -100,7 +102,7 @@ pub fn render_search_modal(
         edit_rect,
         egui::TextEdit::singleline(query)
             .font(FontId::monospace(14.0))
-            .text_color(Color32::WHITE)
+            .text_color(theme.text)
             .hint_text("Search notes...")
             .margin(vec2(0.0, 2.0))
             .frame(false),
@@ -141,7 +143,7 @@ pub fn render_search_modal(
         let div_y = modal_rect.min.y + bar_h;
         painter.line_segment(
             [pos2(modal_rect.min.x, div_y), pos2(modal_rect.max.x, div_y)],
-            Stroke::new(1.0, Color32::from_rgb(32, 35, 45)),
+            Stroke::new(1.0, theme.border()),
         );
 
         let results_y = div_y + 8.0;
@@ -152,7 +154,7 @@ pub fn render_search_modal(
                 Align2::CENTER_CENTER,
                 format!("No matching notes found for \"{}\"", query.trim()),
                 FontId::monospace(12.5),
-                Color32::from_gray(125),
+                theme.muted,
             );
         } else {
             for (i, item) in results.iter().take(visible_items).enumerate() {
@@ -165,9 +167,11 @@ pub fn render_search_modal(
 
                 if is_selected || is_hovered {
                     let sel_bg = if is_selected {
-                        Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 32)
+                        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), if theme.is_light() { 24 } else { 38 })
+                    } else if theme.is_light() {
+                        Color32::from_rgba_unmultiplied(0, 0, 0, 10)
                     } else {
-                        Color32::from_rgb(24, 27, 35)
+                        Color32::from_rgba_unmultiplied(255, 255, 255, 12)
                     };
                     painter.rect_filled(item_rect, 6.0, sel_bg);
 
@@ -176,7 +180,7 @@ pub fn render_search_modal(
                             item_rect.left_top() + vec2(0.0, 6.0),
                             vec2(3.0, item_rect.height() - 12.0),
                         );
-                        painter.rect_filled(bar_rect, 1.5, accent);
+                        painter.rect_filled(bar_rect, 1.5, theme.accent);
                     }
                 }
 
@@ -189,7 +193,7 @@ pub fn render_search_modal(
                 // Type badge pill
                 let badge_text = "NOTE";
                 let badge_w = 46.0;
-                let badge_bg = Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 35);
+                let badge_bg = Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), if theme.is_light() { 24 } else { 35 });
                 let badge_rect = Rect::from_min_size(item_rect.min + vec2(10.0, 8.0), vec2(badge_w, 20.0));
                 painter.rect_filled(badge_rect, 4.0, badge_bg);
                 painter.text(
@@ -197,7 +201,7 @@ pub fn render_search_modal(
                     Align2::CENTER_CENTER,
                     badge_text,
                     FontId::monospace(10.0),
-                    accent,
+                    theme.accent,
                 );
 
                 // Note Title
@@ -211,7 +215,7 @@ pub fn render_search_modal(
                     Align2::LEFT_TOP,
                     title_display,
                     FontId::monospace(13.0),
-                    if is_selected { Color32::WHITE } else { Color32::from_gray(210) },
+                    if is_selected { theme.highlight } else { theme.text },
                 );
 
                 // Right side: "↵ Open" if selected, snippet if not
@@ -220,8 +224,8 @@ pub fn render_search_modal(
                     painter.rect(
                         open_pill,
                         3.0,
-                        Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 25),
-                        Stroke::new(1.0, Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 80)),
+                        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 25),
+                        Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 80)),
                         egui::StrokeKind::Inside,
                     );
                     painter.text(
@@ -229,7 +233,7 @@ pub fn render_search_modal(
                         Align2::CENTER_CENTER,
                         "↵ Open",
                         FontId::monospace(10.5),
-                        accent,
+                        theme.accent,
                     );
                 } else if !item.snippet.is_empty() {
                     let short_snippet = if item.snippet.len() > 22 {
@@ -242,7 +246,7 @@ pub fn render_search_modal(
                         Align2::RIGHT_TOP,
                         short_snippet,
                         FontId::monospace(11.0),
-                        Color32::from_gray(105),
+                        theme.muted,
                     );
                 }
             }
@@ -252,14 +256,14 @@ pub fn render_search_modal(
         let footer_y = modal_rect.max.y - 28.0;
         painter.line_segment(
             [pos2(modal_rect.min.x + 16.0, footer_y - 4.0), pos2(modal_rect.max.x - 16.0, footer_y - 4.0)],
-            Stroke::new(1.0, Color32::from_rgb(28, 30, 40)),
+            Stroke::new(1.0, theme.border()),
         );
         painter.text(
             pos2(modal_rect.min.x + 18.0, footer_y + 1.0),
             Align2::LEFT_TOP,
             "↑↓ Navigate  ·  ↵ Select  ·  esc Close",
             FontId::monospace(10.5),
-            Color32::from_gray(115),
+            theme.muted,
         );
     }
 
@@ -276,10 +280,11 @@ pub fn render_rename_modal(
     painter: &egui::Painter,
     bounds: Rect,
     input_text: &mut String,
-    accent: Color32,
+    theme: &Theme,
     just_opened: bool,
 ) -> RenameModalAction {
-    painter.rect_filled(bounds, 0.0, Color32::from_black_alpha(175));
+    let backdrop_alpha = if theme.is_light() { 90 } else { 160 };
+    painter.rect_filled(bounds, 0.0, Color32::from_black_alpha(backdrop_alpha));
 
     let modal_w = 460.0;
     let modal_h = 160.0;
@@ -288,8 +293,8 @@ pub fn render_rename_modal(
     painter.rect(
         modal_rect,
         5.0,
-        Color32::from_rgb(16, 17, 21),
-        Stroke::new(1.0, Color32::from_rgb(38, 41, 50)),
+        theme.surface(),
+        Stroke::new(1.0, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -299,22 +304,27 @@ pub fn render_rename_modal(
         Align2::LEFT_TOP,
         "Rename Document",
         FontId::monospace(15.0),
-        Color32::WHITE,
+        theme.highlight,
     );
     painter.text(
         m_origin + vec2(0.0, 22.0),
         Align2::LEFT_TOP,
         "Enter a new title for this document",
         FontId::monospace(12.0),
-        Color32::from_gray(140),
+        theme.muted,
     );
 
     let input_rect = Rect::from_min_size(m_origin + vec2(0.0, 48.0), vec2(modal_w - 48.0, 34.0));
+    let input_bg = if theme.is_light() {
+        Color32::from_rgb(255, 255, 255)
+    } else {
+        theme.bg
+    };
     painter.rect(
         input_rect,
         5.0,
-        Color32::from_rgb(24, 26, 32),
-        Stroke::new(1.0, Color32::from_rgb(46, 50, 62)),
+        input_bg,
+        Stroke::new(1.0, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -323,7 +333,7 @@ pub fn render_rename_modal(
         edit_rect,
         egui::TextEdit::singleline(input_text)
             .font(FontId::monospace(14.0))
-            .text_color(Color32::WHITE)
+            .text_color(theme.text)
             .frame(false),
     );
 
@@ -366,7 +376,7 @@ pub fn render_rename_modal(
         Align2::LEFT_TOP,
         "Enter to rename  ·  Esc to cancel",
         FontId::monospace(11.0),
-        accent,
+        theme.accent,
     );
 
     action
@@ -382,21 +392,23 @@ pub fn render_delete_confirm_modal(
     painter: &egui::Painter,
     bounds: Rect,
     doc_title: &str,
+    theme: &Theme,
     just_opened: bool,
 ) -> DeleteModalAction {
     // Dimmed background overlay
-    painter.rect_filled(bounds, 0.0, Color32::from_black_alpha(175));
+    let backdrop_alpha = if theme.is_light() { 90 } else { 160 };
+    painter.rect_filled(bounds, 0.0, Color32::from_black_alpha(backdrop_alpha));
 
     let modal_w = 460.0;
     let modal_h = 175.0;
     let modal_rect = Rect::from_center_size(bounds.center(), vec2(modal_w, modal_h));
 
-    // Obsidian container with subtle warm charcoal border
+    // Surface container with subtle border
     painter.rect(
         modal_rect,
         5.0,
-        Color32::from_rgb(17, 18, 22),
-        Stroke::new(1.0, Color32::from_rgb(44, 46, 56)),
+        theme.surface(),
+        Stroke::new(1.0, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -404,13 +416,18 @@ pub fn render_delete_confirm_modal(
 
     // Red warning pill badge
     let badge_rect = Rect::from_min_size(m_origin, vec2(54.0, 20.0));
-    painter.rect_filled(badge_rect, 4.0, Color32::from_rgb(48, 20, 24));
+    let (badge_bg, badge_text_col) = if theme.is_light() {
+        (Color32::from_rgb(254, 226, 226), Color32::from_rgb(185, 28, 28))
+    } else {
+        (Color32::from_rgb(48, 20, 24), Color32::from_rgb(255, 100, 110))
+    };
+    painter.rect_filled(badge_rect, 4.0, badge_bg);
     painter.text(
         badge_rect.center(),
         Align2::CENTER_CENTER,
         "DELETE",
         FontId::monospace(10.0),
-        Color32::from_rgb(255, 100, 110),
+        badge_text_col,
     );
 
     // Modal Title
@@ -419,7 +436,7 @@ pub fn render_delete_confirm_modal(
         Align2::LEFT_TOP,
         "Delete Note",
         FontId::monospace(14.5),
-        Color32::WHITE,
+        theme.highlight,
     );
 
     // Truncate note title cleanly if long so it never overflows the container
@@ -438,15 +455,20 @@ pub fn render_delete_confirm_modal(
         Align2::LEFT_TOP,
         "Permanently delete this document?",
         FontId::monospace(12.5),
-        Color32::from_gray(215),
+        theme.text,
     );
 
+    let doc_highlight_col = if theme.is_light() {
+        Color32::from_rgb(190, 24, 38)
+    } else {
+        Color32::from_rgb(255, 130, 140)
+    };
     painter.text(
         m_origin + vec2(0.0, 52.0),
         Align2::LEFT_TOP,
         format!("\"{}\"", safe_title),
         FontId::monospace(12.0),
-        Color32::from_rgb(255, 130, 140),
+        doc_highlight_col,
     );
 
     painter.text(
@@ -454,7 +476,7 @@ pub fn render_delete_confirm_modal(
         Align2::LEFT_TOP,
         "This action cannot be undone.",
         FontId::monospace(11.0),
-        Color32::from_gray(120),
+        theme.muted,
     );
 
     // Buttons: Cancel (Esc) & Delete (Enter)
@@ -484,11 +506,25 @@ pub fn render_delete_confirm_modal(
     };
 
     // Cancel button
+    let (cancel_bg, cancel_stroke, cancel_fg) = if theme.is_light() {
+        if cancel_hover {
+            (Color32::from_rgb(228, 231, 238), theme.border(), theme.highlight)
+        } else {
+            (Color32::from_rgb(241, 243, 247), theme.border(), theme.text)
+        }
+    } else {
+        if cancel_hover {
+            (Color32::from_rgb(28, 30, 38), Color32::from_gray(80), Color32::WHITE)
+        } else {
+            (Color32::from_rgb(22, 23, 28), Color32::from_gray(50), Color32::from_gray(180))
+        }
+    };
+
     painter.rect(
         cancel_rect,
         5.0,
-        if cancel_hover { Color32::from_rgb(28, 30, 38) } else { Color32::from_rgb(22, 23, 28) },
-        Stroke::new(1.0, if cancel_hover { Color32::from_gray(80) } else { Color32::from_gray(50) }),
+        cancel_bg,
+        Stroke::new(1.0, cancel_stroke),
         egui::StrokeKind::Inside,
     );
     painter.text(
@@ -496,15 +532,29 @@ pub fn render_delete_confirm_modal(
         Align2::CENTER_CENTER,
         "Cancel (Esc)",
         FontId::monospace(11.5),
-        if cancel_hover { Color32::WHITE } else { Color32::from_gray(180) },
+        cancel_fg,
     );
 
     // Delete button (Destructive red)
+    let (del_bg, del_stroke, del_fg) = if theme.is_light() {
+        if delete_hover {
+            (Color32::from_rgb(220, 38, 38), Color32::from_rgb(185, 28, 28), Color32::WHITE)
+        } else {
+            (Color32::from_rgb(239, 68, 68), Color32::from_rgb(220, 38, 38), Color32::WHITE)
+        }
+    } else {
+        if delete_hover {
+            (Color32::from_rgb(75, 22, 28), Color32::from_rgb(220, 60, 70), Color32::from_rgb(255, 140, 150))
+        } else {
+            (Color32::from_rgb(52, 16, 20), Color32::from_rgb(160, 45, 55), Color32::from_rgb(255, 140, 150))
+        }
+    };
+
     painter.rect(
         delete_rect,
         5.0,
-        if delete_hover { Color32::from_rgb(75, 22, 28) } else { Color32::from_rgb(52, 16, 20) },
-        Stroke::new(1.0, if delete_hover { Color32::from_rgb(220, 60, 70) } else { Color32::from_rgb(160, 45, 55) }),
+        del_bg,
+        Stroke::new(1.0, del_stroke),
         egui::StrokeKind::Inside,
     );
     painter.text(
@@ -512,7 +562,7 @@ pub fn render_delete_confirm_modal(
         Align2::CENTER_CENTER,
         "Delete (Enter)",
         FontId::monospace(11.5),
-        Color32::from_rgb(255, 140, 150),
+        del_fg,
     );
 
     if (delete_hover && ui.input(|i| i.pointer.primary_clicked())) || enter {

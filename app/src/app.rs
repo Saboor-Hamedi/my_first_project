@@ -180,6 +180,10 @@ pub struct App {
     pub terminal_focused: bool,
     pub term_pane: Option<crate::terminal_pane::TerminalPane>,
     pub prev_mode_before_term: Mode,
+
+    // Editor-only smooth zoom (0.5 to 3.0) and HUD display
+    pub editor_zoom: f32,
+    pub zoom_hud_time: f64,
 }
 
 impl App {
@@ -197,6 +201,8 @@ impl App {
             theme: Theme::from_kind(ThemeKind::Green),
             sound: SoundEngine::new(SoundProfile::Thocky), // Mechanical keyboard enabled by default
             font_size: 16.0,
+            editor_zoom: 1.0,
+            zoom_hud_time: -10.0,
             opacity: 1.0,
             last_char_time: -10.0,
             cell: None,
@@ -918,8 +924,23 @@ impl App {
         })
     }
 
+    /// Computes the zoom-scaled character advance width and line height specifically for the editor text buffer.
+    pub fn editor_cell_size(&self, ctx: &egui::Context) -> (f32, f32, f32) {
+        let ed_font_size = (self.font_size * self.editor_zoom).clamp(8.0, 60.0);
+        let font = FontId::monospace(ed_font_size);
+        let (cw, lh) = ctx.fonts(|f| {
+            let sample_100 = "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM";
+            let g100 = f.layout_no_wrap(sample_100.to_owned(), font.clone(), Color32::WHITE);
+            let g1 = f.layout_no_wrap("M".to_owned(), font, Color32::WHITE);
+            let cw = (g100.size().x - g1.size().x) / 99.0;
+            let lh = (g1.size().y * 1.30).round();
+            (cw, lh)
+        });
+        (ed_font_size, cw, lh)
+    }
+
     pub fn draw(&mut self, ui: &mut egui::Ui, dt: f32, now: f64, typed: bool) {
-        let (cw, lh) = self.cell_size(ui.ctx());
+        let (_cw, _lh) = self.cell_size(ui.ctx());
         let painter = ui.painter().clone();
 
         let bounds = ui.max_rect();
@@ -1011,24 +1032,30 @@ impl App {
 
             // Draw vertical divider bar and tactile knob
             let is_active = is_splitter_hovered || self.is_dragging_sidebar_splitter;
-            let divider_color = if is_active {
-                self.theme.accent
-            } else {
-                Color32::from_rgba_unmultiplied(self.theme.muted.r(), self.theme.muted.g(), self.theme.muted.b(), 65)
-            };
             let panel_top = editor_panel_rect.min.y;
             let panel_bottom = editor_panel_rect.max.y;
-            painter.line_segment(
-                [pos2(center_x, panel_top), pos2(center_x, panel_bottom)],
-                Stroke::new(1.0, divider_color),
-            );
+            if is_active {
+                let line_rect = Rect::from_center_size(
+                    pos2(center_x, (panel_top + panel_bottom) * 0.5),
+                    vec2(5.0, (panel_bottom - panel_top).max(0.0)),
+                );
+                painter.rect_filled(line_rect, 2.5, self.theme.accent);
+            }
             let knob_w = if is_active { 7.0 } else { 5.0 };
             let knob_h = 42.0;
             let knob_rect = Rect::from_center_size(
                 pos2(center_x, (panel_top + panel_bottom) * 0.5),
                 vec2(knob_w, knob_h),
             );
-            painter.rect_filled(knob_rect, 3.0, divider_color);
+            painter.rect_filled(
+                knob_rect,
+                3.0,
+                if is_active {
+                    self.theme.accent
+                } else {
+                    Color32::from_rgba_unmultiplied(self.theme.muted.r(), self.theme.muted.g(), self.theme.muted.b(), 100)
+                },
+            );
 
             let knob_mid = knob_rect.center();
             let grip_color = self.theme.bg;
@@ -1093,38 +1120,41 @@ impl App {
         }
 
         // Detached Editor & Preview Panel Surface (subtle card background & border derived from theme)
-        // Bottom border removed so editor and preview seamlessly share identical gap and margins above the statusbar
-        painter.rect_filled(editor_panel_rect, 5.0, self.theme.bg);
-        let panel_stroke = Stroke::new(1.0, self.theme.border());
-        // Left border
-        painter.line_segment(
-            [pos2(editor_panel_rect.min.x, editor_panel_rect.min.y + 4.0), pos2(editor_panel_rect.min.x, editor_panel_rect.max.y)],
-            panel_stroke,
-        );
-        // Top border
-        painter.line_segment(
-            [pos2(editor_panel_rect.min.x + 4.0, editor_panel_rect.min.y), pos2(editor_panel_rect.max.x - 4.0, editor_panel_rect.min.y)],
-            panel_stroke,
-        );
-        // Right border
-        painter.line_segment(
-            [pos2(editor_panel_rect.max.x, editor_panel_rect.min.y + 4.0), pos2(editor_panel_rect.max.x, editor_panel_rect.max.y)],
-            panel_stroke,
-        );
-        // Top-left and top-right subtle rounded corners
-        painter.line_segment(
-            [pos2(editor_panel_rect.min.x, editor_panel_rect.min.y + 4.0), pos2(editor_panel_rect.min.x + 4.0, editor_panel_rect.min.y)],
-            panel_stroke,
-        );
-        painter.line_segment(
-            [pos2(editor_panel_rect.max.x - 4.0, editor_panel_rect.min.y), pos2(editor_panel_rect.max.x, editor_panel_rect.min.y + 4.0)],
-            panel_stroke,
-        );
+        let is_preview_active = self.preview_open && self.mode == Mode::Normal;
+        let divider_w = 11.0;
+        let available_w = (editor_panel_rect.width() - divider_w).max(200.0);
+        let min_w = 140.0f32;
+        let max_w = (available_w - 140.0f32).max(min_w);
+        let left_w = if is_preview_active {
+            (available_w * self.split_ratio).clamp(min_w, max_w)
+        } else {
+            editor_panel_rect.width()
+        };
 
-        // Tab strip at the top of the editor panel (inside the panel card)
-        let tab_bar_rect = Rect::from_min_max(
+        let ed_card_rect = Rect::from_min_max(
             editor_panel_rect.min,
-            pos2(editor_panel_rect.max.x, editor_panel_rect.min.y + crate::view_editor::TAB_ROW_H),
+            pos2(editor_panel_rect.min.x + left_w, editor_panel_rect.max.y),
+        );
+        let preview_card_rect = if is_preview_active {
+            Some(Rect::from_min_max(
+                pos2(ed_card_rect.max.x + divider_w, editor_panel_rect.min.y),
+                editor_panel_rect.max,
+            ))
+        } else {
+            None
+        };
+
+        // Draw card surfaces: when preview is open, editor and preview are separate floating cards with a gap
+        let panel_stroke = Stroke::new(1.0, self.theme.border());
+        painter.rect(ed_card_rect, 5.0, self.theme.bg, panel_stroke, egui::StrokeKind::Inside);
+        if let Some(p_card) = preview_card_rect {
+            painter.rect(p_card, 5.0, self.theme.bg, panel_stroke, egui::StrokeKind::Inside);
+        }
+
+        // Tab strip on the editor card
+        let tab_bar_rect = Rect::from_min_max(
+            ed_card_rect.min,
+            pos2(ed_card_rect.max.x, ed_card_rect.min.y + crate::view_editor::TAB_ROW_H),
         );
 
         let tab_occluded_rect = if self.settings_open
@@ -1289,44 +1319,119 @@ impl App {
 
         // Split Editor & Preview panes setup inside body_rect
         let is_preview_active = self.preview_open && self.mode == Mode::Normal;
-        let divider_w = 12.0;
+        let divider_w = 11.0;
         let (actual_editor_rect, preview_rect_opt, divider_rect_opt) = if is_preview_active {
-            let total_w = body_rect.width();
+            let total_w = top_panel_rect.width();
             let available_w = (total_w - divider_w).max(200.0);
-            let min_w = 120.0f32;
-            let max_w = (available_w - 120.0f32).max(min_w);
+            let min_w = 140.0f32;
+            let max_w = (available_w - 140.0f32).max(min_w);
             let left_w = (available_w * self.split_ratio).clamp(min_w, max_w);
 
             let left_rect = Rect::from_min_max(
                 body_rect.min,
-                pos2(body_rect.min.x + left_w, body_rect.max.y),
+                pos2(top_panel_rect.min.x + left_w, body_rect.max.y),
             );
             let divider_rect = Rect::from_min_max(
-                pos2(left_rect.max.x, body_rect.min.y),
-                pos2(left_rect.max.x + divider_w, body_rect.max.y),
+                pos2(top_panel_rect.min.x + left_w, top_panel_rect.min.y),
+                pos2(top_panel_rect.min.x + left_w + divider_w, top_panel_rect.max.y),
             );
             let right_rect = Rect::from_min_max(
-                pos2(divider_rect.max.x, body_rect.min.y),
-                body_rect.max,
+                pos2(divider_rect.max.x, top_panel_rect.min.y),
+                top_panel_rect.max,
             );
             (left_rect, Some(right_rect), Some(divider_rect))
         } else {
             (body_rect, None, None)
         };
 
+        // Smooth Zoom (mouse wheel / trackpad pinch / Ctrl+0 / Ctrl+= / Ctrl+-) ONLY for editor
+        let is_pointer_in_editor = ui.rect_contains_pointer(actual_editor_rect);
+        let mut zoom_changed = false;
+
+        let modals_open = self.settings_open
+            || self.search_open
+            || self.help_open
+            || self.rename_open
+            || self.delete_confirm_open
+            || self.accent_dropdown_open
+            || self.is_dragging_splitter
+            || self.is_dragging_sidebar_splitter
+            || self.is_dragging_terminal_splitter;
+
+        if (self.mode == Mode::Normal || self.mode == Mode::Doc) && !modals_open {
+            if is_pointer_in_editor {
+                // 1. Trackpad pinch-to-zoom
+                let zoom_delta = ui.input(|i| i.zoom_delta());
+                if (zoom_delta - 1.0).abs() > 0.001 {
+                    let new_zoom = (self.editor_zoom * zoom_delta).clamp(0.5, 3.0);
+                    if (new_zoom - self.editor_zoom).abs() > 0.001 {
+                        self.editor_zoom = new_zoom;
+                        zoom_changed = true;
+                    }
+                }
+
+                // 2. Ctrl + Mouse Wheel (or smooth trackpad vertical scroll with Ctrl)
+                let (ctrl_down, wheel_y) = ui.input(|i| (
+                    i.modifiers.ctrl || i.modifiers.command,
+                    if i.raw_scroll_delta.y.abs() > 0.0 {
+                        i.raw_scroll_delta.y
+                    } else {
+                        i.smooth_scroll_delta.y
+                    },
+                ));
+                if ctrl_down && wheel_y.abs() > 0.0 {
+                    let factor = (1.0 + wheel_y * 0.002).clamp(0.85, 1.15);
+                    let new_zoom = (self.editor_zoom * factor).clamp(0.5, 3.0);
+                    if (new_zoom - self.editor_zoom).abs() > 0.001 {
+                        self.editor_zoom = new_zoom;
+                        zoom_changed = true;
+                    }
+                }
+            }
+
+            // 3. Keyboard zoom shortcuts: Ctrl+0, Ctrl+= / Ctrl++, Ctrl+-
+            let (ctrl_zero, ctrl_plus, ctrl_minus) = ui.input(|i| {
+                let ctrl = i.modifiers.ctrl || i.modifiers.command;
+                (
+                    ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::Num0),
+                    ctrl && (i.key_pressed(egui::Key::Plus) || i.key_pressed(egui::Key::Equals)),
+                    ctrl && i.key_pressed(egui::Key::Minus),
+                )
+            });
+
+            if ctrl_zero {
+                self.editor_zoom = 1.0;
+                zoom_changed = true;
+                self.set_status("Editor zoom reset to 100% (Ctrl+0)", now);
+            } else if ctrl_plus {
+                self.editor_zoom = (self.editor_zoom * 1.08).clamp(0.5, 3.0);
+                zoom_changed = true;
+            } else if ctrl_minus {
+                self.editor_zoom = (self.editor_zoom / 1.08).clamp(0.5, 3.0);
+                zoom_changed = true;
+            }
+        }
+
+        if zoom_changed {
+            self.zoom_hud_time = now;
+            ui.ctx().request_repaint();
+        }
+
+        let (ed_font_size, ed_cw, ed_lh) = self.editor_cell_size(ui.ctx());
+
         // Keep visual lines updated to exact editor width (accounting for preview split and line numbers)
         let target_ed = if self.mode == Mode::Doc { &self.doc_ed } else { &self.ed };
         let total_lines = (target_ed.buf.iter().filter(|&&c| c == '\n').count() + 1).max(1);
         let digits = total_lines.to_string().len().max(2);
         let gutter_space = if self.show_line_numbers {
-            (digits as f32 * cw + 10.0).max(22.0) + 6.0
+            (digits as f32 * ed_cw + 10.0).max(22.0) + 6.0
         } else {
             0.0
         };
 
         let effective_editor_w = actual_editor_rect.width();
         let text_area_w = (effective_editor_w - gutter_space - 10.0).max(100.0);
-        let max_cols = (text_area_w / cw).floor().max(15.0) as usize;
+        let max_cols = (text_area_w / ed_cw).floor().max(15.0) as usize;
         self.visual_lines = target_ed.compute_visual_lines(max_cols);
 
 
@@ -1365,7 +1470,7 @@ impl App {
                         if primary_down {
                             ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
                             if let Some(pos) = ui.input(|i| i.pointer.interact_pos().or_else(|| i.pointer.hover_pos())) {
-                                let raw_ratio = (pos.x - body_rect.min.x - divider_w * 0.5) / available_w;
+                                let raw_ratio = (pos.x - top_panel_rect.min.x - divider_w * 0.5) / available_w;
                                 if raw_ratio > 0.90 || raw_ratio < 0.10 {
                                     self.preview_open = false;
                                     self.is_dragging_splitter = false;
@@ -1388,21 +1493,29 @@ impl App {
                     }
 
                     let is_active = is_divider_hovered || self.is_dragging_splitter;
-                    let divider_color = if is_active {
-                        self.theme.accent
-                    } else {
-                        Color32::from_rgba_unmultiplied(self.theme.muted.r(), self.theme.muted.g(), self.theme.muted.b(), 65)
-                    };
+                    let panel_top = top_panel_rect.min.y;
+                    let panel_bottom = top_panel_rect.max.y;
                     let mid_x = divider_rect.center().x;
-                    painter.line_segment(
-                        [pos2(mid_x, divider_rect.min.y), pos2(mid_x, divider_rect.max.y)],
-                        Stroke::new(1.0, divider_color),
-                    );
-                    // Center pill knob handle with tactile grip dots
+                    if is_active {
+                        let line_rect = Rect::from_center_size(
+                            pos2(mid_x, (panel_top + panel_bottom) * 0.5),
+                            vec2(5.0, (panel_bottom - panel_top).max(0.0)),
+                        );
+                        painter.rect_filled(line_rect, 2.5, self.theme.accent);
+                    }
+                    // Center pill knob handle with tactile grip dots (identical to sidebar splitter)
                     let knob_w = if is_active { 7.0 } else { 5.0 };
                     let knob_h = 42.0;
-                    let knob_rect = Rect::from_center_size(pos2(mid_x, actual_editor_rect.center().y), vec2(knob_w, knob_h));
-                    painter.rect_filled(knob_rect, 3.0, divider_color);
+                    let knob_rect = Rect::from_center_size(pos2(mid_x, (panel_top + panel_bottom) * 0.5), vec2(knob_w, knob_h));
+                    painter.rect_filled(
+                        knob_rect,
+                        3.0,
+                        if is_active {
+                            self.theme.accent
+                        } else {
+                            Color32::from_rgba_unmultiplied(self.theme.muted.r(), self.theme.muted.g(), self.theme.muted.b(), 100)
+                        },
+                    );
 
                     let knob_mid = knob_rect.center();
                     let grip_color = self.theme.bg;
@@ -1449,9 +1562,9 @@ impl App {
                     &mut self.caret,
                     target_scroll_y,
                     &self.theme,
-                    self.font_size,
-                    cw,
-                    lh,
+                    ed_font_size,
+                    ed_cw,
+                    ed_lh,
                     dt,
                     now,
                     typed,
@@ -1469,10 +1582,47 @@ impl App {
                 );
                 self.caret.kind = original_caret_kind;
 
+                // Center-editor Zoom Percentage HUD (around 50pt fading text in middle of editor)
+                let zoom_elapsed = (now - self.zoom_hud_time) as f32;
+                if zoom_elapsed < 1.3 && self.zoom_hud_time > 0.0 {
+                    ui.ctx().request_repaint();
+                    let alpha = if zoom_elapsed < 0.6 {
+                        1.0
+                    } else {
+                        ((1.3 - zoom_elapsed) / 0.7).clamp(0.0, 1.0)
+                    };
+
+                    let pct_text = format!("{:.0}%", (self.editor_zoom * 100.0).round());
+                    let hud_font = FontId::monospace(48.0);
+                    let hud_col = Color32::from_rgba_unmultiplied(
+                        self.theme.highlight.r(),
+                        self.theme.highlight.g(),
+                        self.theme.highlight.b(),
+                        (alpha * 240.0) as u8,
+                    );
+                    let galley = painter.layout_no_wrap(pct_text, hud_font, hud_col);
+                    let hud_center = actual_editor_rect.center();
+                    let pill_rect = Rect::from_center_size(hud_center, galley.size() + vec2(44.0, 24.0));
+
+                    let pill_bg = if self.theme.is_light() {
+                        Color32::from_rgba_unmultiplied(255, 255, 255, (alpha * 225.0) as u8)
+                    } else {
+                        Color32::from_rgba_unmultiplied(20, 22, 28, (alpha * 225.0) as u8)
+                    };
+                    let pill_stroke = Color32::from_rgba_unmultiplied(
+                        self.theme.border().r(),
+                        self.theme.border().g(),
+                        self.theme.border().b(),
+                        (alpha * 180.0) as u8,
+                    );
+                    painter.rect(pill_rect, 8.0, pill_bg, Stroke::new(1.0, pill_stroke), egui::StrokeKind::Inside);
+                    painter.galley(hud_center - galley.size() * 0.5, galley, hud_col);
+                }
+
                 // Render Live Markdown Preview side-by-side if active
                 if let Some(p_rect) = preview_rect_opt {
                     let note_text = self.ed.text();
-                    let close_requested = render_markdown_preview(
+                    render_markdown_preview(
                         ui,
                         &painter,
                         p_rect,
@@ -1481,22 +1631,12 @@ impl App {
                         &self.theme,
                         self.font_size,
                     );
-                    if close_requested {
-                        self.preview_open = false;
-                        self.split_ratio = 0.5;
-                        let _ = self.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
-                            key: "preview".into(),
-                            val: "false".into(),
-                        });
-                        self.set_status("Live preview closed", now);
-                        ui.ctx().request_repaint();
-                    }
                 }
 
                 // Floating Keystroke Card (Vim showcmd): large borderless capsule pill — bottom-right of editor
                 if self.editor_input_mode == EditorInputMode::Vim {
                     let card_anchor = pos2(actual_editor_rect.max.x - 16.0, actual_editor_rect.max.y - 20.0);
-                    self.showcmd.render_card(&painter, card_anchor, self.theme.accent, now);
+                    self.showcmd.render_card(&painter, card_anchor, &self.theme, now);
                 }
 
                 if ui.rect_contains_pointer(actual_editor_rect) && ui.input(|i| i.pointer.primary_clicked()) {
@@ -1930,7 +2070,7 @@ impl App {
                 &mut self.search_query,
                 &self.search_results,
                 &mut self.search_selected,
-                self.theme.accent,
+                &self.theme,
                 self.search_just_opened,
             );
             self.search_just_opened = false;
@@ -1952,7 +2092,7 @@ impl App {
                 &painter,
                 bounds,
                 &mut self.rename_input,
-                self.theme.accent,
+                &self.theme,
                 self.rename_just_opened,
             );
             self.rename_just_opened = false;
@@ -1982,6 +2122,7 @@ impl App {
                 &painter,
                 bounds,
                 &note_title,
+                &self.theme,
                 self.delete_just_opened,
             );
             self.delete_just_opened = false;

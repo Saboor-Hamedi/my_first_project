@@ -153,7 +153,7 @@ impl ShowCmdState {
         &self,
         painter: &egui::Painter,
         anchor_bottom_right: Pos2,
-        accent: Color32,
+        theme: &crate::theme::Theme,
         now: f64,
     ) -> Option<Rect> {
         if !self.enabled || self.text.is_empty() {
@@ -178,20 +178,25 @@ impl ShowCmdState {
         };
 
         // ── Per-mode palette ─────────────────────────────────────────────────
+        let is_light = theme.is_light();
         let (badge, badge_color) = match self.kind {
-            ShowCmdKind::Command   => ("CMD",  Color32::from_rgb(100, 210, 255)),
-            ShowCmdKind::Search    => ("FIND", Color32::from_rgb(255, 210, 70)),
-            ShowCmdKind::Visual    => ("VIS",  Color32::from_rgb(200, 140, 255)),
-            ShowCmdKind::Keystroke => ("VIM",  accent),
+            ShowCmdKind::Command   => ("CMD",  if is_light { Color32::from_rgb(0, 120, 215) } else { Color32::from_rgb(100, 210, 255) }),
+            ShowCmdKind::Search    => ("FIND", if is_light { Color32::from_rgb(180, 110, 0) } else { Color32::from_rgb(255, 210, 70) }),
+            ShowCmdKind::Visual    => ("VIS",  if is_light { Color32::from_rgb(130, 50, 200) } else { Color32::from_rgb(200, 140, 255) }),
+            ShowCmdKind::Keystroke => ("VIM",  theme.accent),
         };
 
         let badge_a = Color32::from_rgba_unmultiplied(
             badge_color.r(), badge_color.g(), badge_color.b(), alpha,
         );
         let badge_bg = Color32::from_rgba_unmultiplied(
-            badge_color.r(), badge_color.g(), badge_color.b(), (alpha as f32 * 0.16) as u8,
+            badge_color.r(), badge_color.g(), badge_color.b(), if is_light { (alpha as f32 * 0.18) as u8 } else { (alpha as f32 * 0.16) as u8 },
         );
-        let text_color = Color32::from_rgba_unmultiplied(240, 244, 252, alpha);
+        let text_color = if is_light {
+            Color32::from_rgba_unmultiplied(theme.text.r(), theme.text.g(), theme.text.b(), alpha)
+        } else {
+            Color32::from_rgba_unmultiplied(240, 244, 252, alpha)
+        };
 
         // Pre-layout galleys for crisp rendering
         let font_badge = FontId::monospace(10.5);
@@ -200,7 +205,7 @@ impl ShowCmdState {
         let badge_galley = painter.layout_no_wrap(badge.to_string(), font_badge, badge_a);
         let text_galley = painter.layout_no_wrap(self.text.clone(), font_text, text_color);
 
-        // Generous, comfortable dimensions with 5px corner radius and NO border
+        // Generous, comfortable dimensions with 5px corner radius
         let card_h = 34.0f32;
         let pad_x = 10.0f32;
         let badge_w = badge_galley.size().x + 12.0;
@@ -216,21 +221,32 @@ impl ShowCmdState {
             anchor_bottom_right,
         );
 
-        // 1. Soft dark drop-shadow (5px rounded)
+        // 1. Soft drop-shadow (5px rounded)
+        let shadow_alpha = if is_light { (alpha as f32 * 0.16) as u8 } else { (alpha as f32 * 0.40) as u8 };
         painter.rect(
             card_rect.expand(3.0),
             5.0,
-            Color32::from_rgba_unmultiplied(0, 0, 0, (alpha as f32 * 0.40) as u8),
+            Color32::from_rgba_unmultiplied(0, 0, 0, shadow_alpha),
             Stroke::NONE,
             egui::StrokeKind::Outside,
         );
 
-        // 2. Frosted dark obsidian body — 5px round, ABSOLUTELY NO BORDER
+        // 2. Elevated card body — adapts to theme
+        let body_bg = if is_light {
+            Color32::from_rgba_unmultiplied(theme.surface().r(), theme.surface().g(), theme.surface().b(), (alpha as f32 * 0.98) as u8)
+        } else {
+            Color32::from_rgba_unmultiplied(16, 18, 24, (alpha as f32 * 0.96) as u8)
+        };
+        let body_stroke = if is_light {
+            Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.border().r(), theme.border().g(), theme.border().b(), alpha))
+        } else {
+            Stroke::NONE
+        };
         painter.rect(
             card_rect,
             5.0,
-            Color32::from_rgba_unmultiplied(16, 18, 24, (alpha as f32 * 0.96) as u8),
-            Stroke::NONE,
+            body_bg,
+            body_stroke,
             egui::StrokeKind::Inside,
         );
 
@@ -243,13 +259,13 @@ impl ShowCmdState {
             badge_rect.center().x - badge_galley.size().x * 0.5,
             badge_rect.center().y - badge_galley.size().y * 0.5,
         );
-        painter.galley(badge_text_pos, badge_galley, Color32::WHITE);
+        painter.galley(badge_text_pos, badge_galley, badge_color);
 
         // 4. Render Command Text
         let text_w = text_galley.size().x;
         let text_x = badge_rect.max.x + gap;
         let text_y = card_rect.center().y - text_galley.size().y * 0.5;
-        painter.galley(eframe::egui::pos2(text_x, text_y), text_galley, Color32::WHITE);
+        painter.galley(eframe::egui::pos2(text_x, text_y), text_galley, text_color);
 
         // 5. Breathing pending live dot indicator
         if self.is_pending {

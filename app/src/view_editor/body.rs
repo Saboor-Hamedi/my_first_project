@@ -42,15 +42,18 @@ pub fn render_editor_body(
 
     // Mouse wheel scrolling: prioritize smooth scroll delta, fallback to scaled raw delta
     if !block_scroll {
-        let scroll_delta = ui.input(|i| {
-            if i.raw_scroll_delta.y.abs() > 0.0 {
-                i.raw_scroll_delta.y
-            } else {
-                i.smooth_scroll_delta.y
+        let is_ctrl = ui.input(|i| i.modifiers.ctrl || i.modifiers.command);
+        if !is_ctrl {
+            let scroll_delta = ui.input(|i| {
+                if i.raw_scroll_delta.y.abs() > 0.0 {
+                    i.raw_scroll_delta.y
+                } else {
+                    i.smooth_scroll_delta.y
+                }
+            });
+            if scroll_delta.abs() > 0.0 {
+                *scroll_y = (*scroll_y - scroll_delta).clamp(0.0, max_scroll);
             }
-        });
-        if scroll_delta.abs() > 0.0 {
-            *scroll_y = (*scroll_y - scroll_delta).clamp(0.0, max_scroll);
         }
     }
 

@@ -46,7 +46,7 @@ pub fn render_theme_tab(
     let grid_top = p_origin.y + 56.0;
 
     let rows = ThemeKind::ALL.len().div_ceil(2);
-    let content_h = rows as f32 * (card_h + row_gap) + 28.0;
+    let content_h = rows as f32 * (card_h + row_gap) + 64.0;
     let visible_h = (panel_rect.max.y - grid_top).max(0.0);
     let max_scroll = (content_h - visible_h).max(0.0);
 

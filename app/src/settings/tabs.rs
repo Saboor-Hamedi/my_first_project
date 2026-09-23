@@ -38,13 +38,13 @@ impl SettingTab {
 
     pub fn icon(&self) -> &'static str {
         match self {
-            SettingTab::Carets => "✦",
+            SettingTab::Carets => "✨",
             SettingTab::EditorMode => "⚡",
-            SettingTab::Sounds => "♪",
-            SettingTab::Theme => "◐",
+            SettingTab::Sounds => "🔔",
+            SettingTab::Theme => "🎨",
             SettingTab::Shortcuts => "⌨",
             SettingTab::Backup => "💾",
-            SettingTab::Updates => "⟳",
+            SettingTab::Updates => "🔄",
         }
     }
 }
