@@ -26,13 +26,13 @@ pub fn render_tab_bar(
     tabs: &[TabItem],
     theme: &Theme,
     scroll_offset: &mut f32,
+    active_changed: bool,
 ) -> Option<TabAction> {
     if tabs.is_empty() {
         return None;
     }
 
     let mut action = None;
-    let clip_painter = painter.with_clip_rect(tab_bar_rect);
 
     // Subtle bottom divider line separating tabs from editor/preview split
     painter.line_segment(
@@ -40,7 +40,7 @@ pub fn render_tab_bar(
             pos2(tab_bar_rect.min.x, tab_bar_rect.max.y),
             pos2(tab_bar_rect.max.x, tab_bar_rect.max.y),
         ],
-        Stroke::new(1.0, Color32::from_rgb(28, 30, 38)),
+        Stroke::new(1.0, theme.border()),
     );
 
     let tab_gap = 2.0;
@@ -79,13 +79,28 @@ pub fn render_tab_bar(
         tab_positions.push((current_offset, current_offset + w));
         current_offset += w + tab_gap;
     }
-    let total_content_w = current_offset - tab_gap;
-    let viewport_w = tab_bar_rect.width();
+    let total_content_w = (current_offset - tab_gap).max(0.0);
+
+    let has_overflow = total_content_w > tab_bar_rect.width();
+    let scroll_btn_w = if has_overflow { 48.0 } else { 0.0 };
+    let visible_tab_area = Rect::from_min_max(
+        tab_bar_rect.min,
+        pos2(tab_bar_rect.max.x - scroll_btn_w, tab_bar_rect.max.y),
+    );
+    let viewport_w = visible_tab_area.width().max(1.0);
     let max_scroll = (total_content_w - viewport_w).max(0.0);
 
-    // 2. Mouse wheel scrolling on tab bar
+    let clip_painter = painter.with_clip_rect(visible_tab_area);
+
+    // 2. Fast mouse wheel scrolling across tab bar
     if mouse_in_bar {
-        let raw_scroll = ui.input(|i| i.raw_scroll_delta);
+        let raw_scroll = ui.input(|i| {
+            if i.raw_scroll_delta.x.abs() > 0.1 || i.raw_scroll_delta.y.abs() > 0.1 {
+                i.raw_scroll_delta
+            } else {
+                i.smooth_scroll_delta
+            }
+        });
         let delta = if raw_scroll.x.abs() > 0.1 {
             raw_scroll.x
         } else if raw_scroll.y.abs() > 0.1 {
@@ -94,18 +109,20 @@ pub fn render_tab_bar(
             0.0
         };
         if delta.abs() > 0.1 {
-            *scroll_offset -= delta;
+            *scroll_offset -= delta * 2.0;
         }
     }
 
-    // 3. Auto-scroll to keep active tab fully in view
-    if let Some(active_idx) = tabs.iter().position(|t| t.is_active) {
-        let (active_start, active_end) = tab_positions[active_idx];
-        if active_end > *scroll_offset + viewport_w {
-            *scroll_offset = (active_end - viewport_w + 8.0).min(max_scroll);
-        }
-        if active_start < *scroll_offset {
-            *scroll_offset = active_start.max(0.0);
+    // 3. Auto-scroll ONLY when active tab changed (never snap back during free user scrolling)
+    if active_changed {
+        if let Some(active_idx) = tabs.iter().position(|t| t.is_active) {
+            let (active_start, active_end) = tab_positions[active_idx];
+            if active_end > *scroll_offset + viewport_w {
+                *scroll_offset = (active_end - viewport_w + 12.0).min(max_scroll);
+            }
+            if active_start < *scroll_offset {
+                *scroll_offset = active_start.max(0.0);
+            }
         }
     }
 
@@ -116,7 +133,7 @@ pub fn render_tab_bar(
         let (rel_start, rel_end) = tab_positions[idx];
         let tab_w = rel_end - rel_start;
         // First tab has zero gap from the left edge of the tab bar
-        let tab_x = tab_bar_rect.min.x + rel_start - *scroll_offset;
+        let tab_x = visible_tab_area.min.x + rel_start - *scroll_offset;
 
         let tab_rect = Rect::from_min_size(
             pos2(tab_x, tab_bar_rect.min.y + 1.0),
@@ -124,7 +141,7 @@ pub fn render_tab_bar(
         );
 
         // Skip completely off-screen tabs without breaking the loop
-        if tab_rect.max.x < tab_bar_rect.min.x || tab_rect.min.x > tab_bar_rect.max.x {
+        if tab_rect.max.x < visible_tab_area.min.x || tab_rect.min.x > visible_tab_area.max.x {
             continue;
         }
 
@@ -145,7 +162,7 @@ pub fn render_tab_bar(
             clip_painter.rect_filled(
                 tab_rect,
                 4.0,
-                Color32::from_rgb(20, 22, 28),
+                theme.surface(),
             );
             // Accent bottom indicator line
             clip_painter.line_segment(
@@ -221,7 +238,7 @@ pub fn render_tab_bar(
         // Mouse interaction
         if primary_clicked && mouse_in_bar {
             if let Some(pos) = mouse_pos {
-                if tab_bar_rect.contains(pos) {
+                if visible_tab_area.contains(pos) {
                     if close_rect.contains(pos) && (tabs.len() > 1 || tab.is_dirty) {
                         action = Some(TabAction::Close(idx));
                     } else if tab_rect.contains(pos) {
@@ -237,8 +254,72 @@ pub fn render_tab_bar(
             let tick_mid_y = tab_bar_rect.center().y;
             clip_painter.line_segment(
                 [pos2(tick_x, tick_mid_y - 6.0), pos2(tick_x, tick_mid_y + 6.0)],
-                Stroke::new(1.0, Color32::from_gray(38)),
+                Stroke::new(1.0, theme.border()),
             );
+        }
+    }
+
+    // 5. Overflow chevron scroll navigation buttons — matching exact tab row height with zero gap
+    if has_overflow {
+        let btn_w = 24.0;
+        let left_btn_rect = Rect::from_min_max(
+            pos2(tab_bar_rect.max.x - btn_w * 2.0, tab_bar_rect.min.y),
+            pos2(tab_bar_rect.max.x - btn_w, tab_bar_rect.max.y),
+        );
+        let right_btn_rect = Rect::from_min_max(
+            pos2(tab_bar_rect.max.x - btn_w, tab_bar_rect.min.y),
+            tab_bar_rect.max,
+        );
+
+        let left_hover = mouse_in_bar && ui.rect_contains_pointer(left_btn_rect);
+        let right_hover = mouse_in_bar && ui.rect_contains_pointer(right_btn_rect);
+
+        // Vertical divider separating scroll buttons toolbar from tab strip
+        painter.line_segment(
+            [left_btn_rect.left_top(), left_btn_rect.left_bottom()],
+            Stroke::new(1.0, theme.border()),
+        );
+
+        // Left chevron button (same height as tabs, 0 gap)
+        let left_bg = if left_hover { theme.surface() } else { theme.bg };
+        painter.rect_filled(left_btn_rect, 0.0, left_bg);
+        painter.line_segment(
+            [left_btn_rect.right_top(), left_btn_rect.right_bottom()],
+            Stroke::new(1.0, theme.border()),
+        );
+        painter.text(
+            left_btn_rect.center(),
+            Align2::CENTER_CENTER,
+            "◀",
+            FontId::monospace(10.5),
+            if left_hover { theme.accent } else { theme.muted },
+        );
+
+        // Right chevron button (same height as tabs, 0 gap, matching top-right corner)
+        let right_bg = if right_hover { theme.surface() } else { theme.bg };
+        painter.rect(
+            right_btn_rect,
+            egui::CornerRadius { nw: 0, ne: 4, sw: 0, se: 0 },
+            right_bg,
+            Stroke::NONE,
+            egui::StrokeKind::Inside,
+        );
+        painter.text(
+            right_btn_rect.center(),
+            Align2::CENTER_CENTER,
+            "▶",
+            FontId::monospace(10.5),
+            if right_hover { theme.accent } else { theme.muted },
+        );
+
+        if primary_clicked && mouse_in_bar {
+            if let Some(pos) = mouse_pos {
+                if left_btn_rect.contains(pos) {
+                    *scroll_offset = (*scroll_offset - 160.0).max(0.0);
+                } else if right_btn_rect.contains(pos) {
+                    *scroll_offset = (*scroll_offset + 160.0).min(max_scroll);
+                }
+            }
         }
     }
 

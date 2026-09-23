@@ -97,6 +97,7 @@ pub struct App {
     // Delete confirmation modal (Ctrl+Shift+D or :d)
     pub delete_confirm_open: bool,
     pub delete_just_opened: bool,
+    pub pending_delete_note_id: Option<i64>,
 
     // Guidance & Help modal (:help or F1)
     pub help_open: bool,
@@ -114,8 +115,10 @@ pub struct App {
     // Multi-note & Documentation Tabs
     pub open_notes: Vec<OpenNote>,
     pub active_tab: usize,
+    pub last_active_tab: usize,
     pub open_doc_tabs: Vec<usize>,
     pub active_doc_tab: usize,
+    pub last_active_doc_tab: usize,
     pub tab_scroll_offset: f32,
     pub doc_tab_scroll_offset: f32,
 
@@ -168,6 +171,8 @@ pub struct App {
     pub scan_history_selected: usize,
     pub scan_history_scroll_y: f32,
     pub clipboard_text: Option<String>,
+    pub accent_overrides: crate::accent::AccentOverrides,
+    pub accent_dropdown_open: bool,
 }
 
 impl App {
@@ -213,6 +218,7 @@ impl App {
             rename_just_opened: false,
             delete_confirm_open: false,
             delete_just_opened: false,
+            pending_delete_note_id: None,
             help_open: false,
             help_just_opened: false,
             help_tab: 0,
@@ -224,8 +230,10 @@ impl App {
             total_notes_count: 0,
             open_notes: Vec::new(),
             active_tab: 0,
+            last_active_tab: 0,
             open_doc_tabs: vec![0],
             active_doc_tab: 0,
+            last_active_doc_tab: 0,
             tab_scroll_offset: 0.0,
             doc_tab_scroll_offset: 0.0,
             scroll_y: 0.0,
@@ -266,11 +274,70 @@ impl App {
             scan_history_selected: 0,
             scan_history_scroll_y: 0.0,
             clipboard_text: None,
+            accent_overrides: crate::accent::AccentOverrides::default(),
+            accent_dropdown_open: false,
         };
 
         app.load_settings();
         app.reload_db_state();
-        if app.open_notes.is_empty() {
+
+        let mut restored = false;
+        if let Some(ref db) = app.db {
+            if let Ok(Some(saved_json)) = db.get_setting("open_note_tab_ids") {
+                if let Ok(saved_ids) = serde_json::from_str::<Vec<i64>>(&saved_json) {
+                    if !saved_ids.is_empty() {
+                        for id in saved_ids {
+                            let note_opt = app.notes_list.iter().find(|n| n.id == id).cloned()
+                                .or_else(|| db.get_note(id).ok().flatten());
+                            if let Some(note) = note_opt {
+                                let clean = note.body.replace("\r\n", "\n").replace('\r', "\n");
+                                let mut ed = Editor::new();
+                                ed.set_text(&clean);
+                                let saved_cur = db.get_setting(&format!("note_caret_{}", note.id))
+                                    .ok().flatten()
+                                    .and_then(|s| s.parse::<usize>().ok())
+                                    .unwrap_or(0);
+                                ed.cur = saved_cur.min(ed.buf.len());
+                                let saved_scroll = db.get_setting(&format!("note_scroll_{}", note.id))
+                                    .ok().flatten()
+                                    .and_then(|s| s.parse::<f32>().ok())
+                                    .unwrap_or(0.0);
+
+                                app.open_notes.push(OpenNote {
+                                    id: note.id,
+                                    title: note.topic.clone(),
+                                    editor: ed,
+                                    scroll_y: saved_scroll,
+                                    is_dirty: false,
+                                });
+                            }
+                        }
+                        if !app.open_notes.is_empty() {
+                            restored = true;
+                            let saved_active_idx = db.get_setting("open_note_active_tab")
+                                .ok().flatten()
+                                .and_then(|s| s.parse::<usize>().ok())
+                                .unwrap_or(0);
+
+                            let tab_idx = if let Some(last_id) = app.active_note_id {
+                                app.open_notes.iter().position(|n| n.id == last_id).unwrap_or(saved_active_idx)
+                            } else {
+                                saved_active_idx
+                            };
+                            let active_idx = tab_idx.min(app.open_notes.len() - 1);
+                            app.active_tab = active_idx;
+                            let cur_tab = &app.open_notes[active_idx];
+                            app.active_note_id = Some(cur_tab.id);
+                            app.active_note_title = cur_tab.title.clone();
+                            app.ed = cur_tab.editor.clone();
+                            app.scroll_y = cur_tab.scroll_y;
+                        }
+                    }
+                }
+            }
+        }
+
+        if !restored && app.open_notes.is_empty() {
             for (idx, note) in app.notes_list.iter().take(3).enumerate() {
                 let clean = note.body.replace("\r\n", "\n").replace('\r', "\n");
                 let mut ed = Editor::new();
@@ -313,6 +380,8 @@ impl App {
                     self.theme = Theme::from_kind(kind);
                 }
             }
+            self.accent_overrides = crate::accent::AccentOverrides::load_from_db(db);
+            self.accent_overrides.apply(&mut self.theme);
             if let Ok(Some(s)) = db.get_setting("sound") {
                 if let Some(profile) = SoundProfile::parse(&s) {
                     self.sound.profile = profile;
@@ -397,7 +466,20 @@ impl App {
         }
     }
 
+    pub fn save_open_tabs(&self) {
+        if let Some(ref db) = self.db {
+            let tab_ids: Vec<i64> = self.open_notes.iter()
+                .filter_map(|n| if n.id > 0 { Some(n.id) } else { None })
+                .collect();
+            if let Ok(json) = serde_json::to_string(&tab_ids) {
+                let _ = db.set_setting("open_note_tab_ids", &json);
+            }
+            let _ = db.set_setting("open_note_active_tab", &self.active_tab.to_string());
+        }
+    }
+
     pub fn sync_save_session(&mut self) {
+        let mut created_id = None;
         if let Some(ref db) = self.db {
             let _ = db.set_setting("last_caret_pos", &self.ed.cur.to_string());
             let _ = db.set_setting("last_scroll_y", &self.scroll_y.to_string());
@@ -409,8 +491,26 @@ impl App {
                     let _ = db.update_note(id, &self.ed.text());
                     self.is_dirty = false;
                 }
+            } else if self.is_dirty || !self.ed.text().trim().is_empty() {
+                let topic = if self.active_note_title.trim().is_empty() {
+                    "Untitled Note".to_string()
+                } else {
+                    self.active_note_title.clone()
+                };
+                let dt = Local::now().naive_local();
+                let content = self.ed.text();
+                if let Ok(new_id) = db.add_note(&topic, &content, None, dt) {
+                    created_id = Some(new_id);
+                    let _ = db.set_setting("last_active_note_id", &new_id.to_string());
+                }
             }
         }
+        if let Some(new_id) = created_id {
+            self.active_note_id = Some(new_id);
+            self.is_dirty = false;
+            self.sync_active_tab();
+        }
+        self.save_open_tabs();
     }
 
     pub fn sync_active_tab(&mut self) {
@@ -459,6 +559,7 @@ impl App {
         self.scroll_y = target.scroll_y;
         self.is_dirty = target.is_dirty;
         self.save_active_note_id();
+        self.save_open_tabs();
         self.mode = Mode::Normal;
         self.vim.set_mode(crate::vim::VimSubMode::Normal, &mut self.ed);
         let msg = format!("Switched to {}", self.active_note_title);
@@ -504,6 +605,7 @@ impl App {
             self.is_dirty = target.is_dirty;
             self.save_active_note_id();
         }
+        self.save_open_tabs();
     }
 
     pub fn switch_doc_tab(&mut self, new_idx: usize, now: f64) {
@@ -591,6 +693,7 @@ impl App {
             });
             self.active_tab = self.open_notes.len() - 1;
         }
+        self.save_open_tabs();
         self.set_status("Opened note", now);
     }
 
@@ -836,14 +939,19 @@ impl App {
             Mode::ScanReport | Mode::ScanHistory => ("🌐 Security Scanner".to_string(), false),
         };
 
-        crate::view_editor::render_full_titlebar(
+        let (titlebar_action, accent_anchor_rect) = crate::view_editor::render_full_titlebar(
             ui,
             &painter,
             titlebar_rect,
             &header_title,
             header_dirty,
             &self.theme,
+            self.accent_dropdown_open,
         );
+
+        if let Some(crate::view_editor::TitlebarAction::ToggleAccentDropdown) = titlebar_action {
+            self.accent_dropdown_open = !self.accent_dropdown_open;
+        }
 
         // Sidebar Splitter Divider & Knob (when sidebar is open in Notes or Docs)
         if let (Some(hit_rect), Some(center_x)) = (layout.splitter_hit_rect, layout.splitter_center_x) {
@@ -859,8 +967,15 @@ impl App {
                 if primary_down {
                     ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
                     if let Some(pos) = ui.input(|i| i.pointer.interact_pos().or_else(|| i.pointer.hover_pos())) {
-                        let new_w = (pos.x - bounds.min.x - crate::layout::GAP).clamp(crate::layout::MIN_SIDEBAR_W, crate::layout::MAX_SIDEBAR_W);
-                        self.sidebar_width = new_w;
+                        let drag_x = pos.x - bounds.min.x - crate::layout::GAP;
+                        if drag_x < 70.0 {
+                            self.sidebar_open = false;
+                            self.is_dragging_sidebar_splitter = false;
+                        } else {
+                            let max_sb = (bounds.width() - 200.0).clamp(crate::layout::MIN_SIDEBAR_W, crate::layout::MAX_SIDEBAR_W);
+                            let new_w = drag_x.clamp(crate::layout::MIN_SIDEBAR_W, max_sb);
+                            self.sidebar_width = new_w;
+                        }
                     }
                 } else {
                     self.is_dragging_sidebar_splitter = false;
@@ -926,9 +1041,7 @@ impl App {
                     self.active_doc_idx,
                     self.doc_selected_idx,
                     self.doc_sidebar_focused,
-                    self.theme.accent,
-                    self.theme.text,
-                    self.theme.muted,
+                    &self.theme,
                 ) {
                     match action {
                         crate::docs::DocSidebarAction::SelectDoc(idx) => {
@@ -958,12 +1071,12 @@ impl App {
             }
         }
 
-        // Detached Editor & Preview Panel Surface (subtle card background & border)
+        // Detached Editor & Preview Panel Surface (subtle card background & border derived from theme)
         painter.rect(
             editor_panel_rect,
             5.0,
-            Color32::from_rgb(13, 14, 18),
-            Stroke::new(1.0, Color32::from_rgb(32, 34, 40)),
+            self.theme.bg,
+            Stroke::new(1.0, self.theme.border()),
             egui::StrokeKind::Inside,
         );
 
@@ -986,6 +1099,11 @@ impl App {
                 })
                 .collect();
 
+            let active_changed = self.active_tab != self.last_active_tab;
+            if active_changed {
+                self.last_active_tab = self.active_tab;
+            }
+
             if let Some(action) = crate::view_editor::render_tab_bar(
                 ui,
                 &painter,
@@ -993,6 +1111,7 @@ impl App {
                 &tab_items,
                 &self.theme,
                 &mut self.tab_scroll_offset,
+                active_changed,
             ) {
                 match action {
                     crate::view_editor::TabAction::Select(idx) => {
@@ -1019,6 +1138,11 @@ impl App {
                 })
                 .collect();
 
+            let active_doc_changed = self.active_doc_tab != self.last_active_doc_tab;
+            if active_doc_changed {
+                self.last_active_doc_tab = self.active_doc_tab;
+            }
+
             if let Some(action) = crate::view_editor::render_tab_bar(
                 ui,
                 &painter,
@@ -1026,6 +1150,7 @@ impl App {
                 &tab_items,
                 &self.theme,
                 &mut self.doc_tab_scroll_offset,
+                active_doc_changed,
             ) {
                 match action {
                     crate::view_editor::TabAction::Select(idx) => {
@@ -1054,7 +1179,9 @@ impl App {
         let (actual_editor_rect, preview_rect_opt, divider_rect_opt) = if is_preview_active {
             let total_w = body_rect.width();
             let available_w = (total_w - divider_w).max(200.0);
-            let left_w = (available_w * self.split_ratio).clamp(120.0, available_w - 120.0);
+            let min_w = 120.0f32;
+            let max_w = (available_w - 120.0f32).max(min_w);
+            let left_w = (available_w * self.split_ratio).clamp(min_w, max_w);
 
             let left_rect = Rect::from_min_max(
                 body_rect.min,
@@ -1370,9 +1497,7 @@ impl App {
                     self.sidebar_notes_limit,
                     self.total_notes_count,
                     self.is_dirty,
-                    self.theme.accent,
-                    self.theme.text,
-                    self.theme.muted,
+                    &self.theme,
                     self.sidebar_selected_idx,
                     self.sidebar_focused,
                 );
@@ -1429,21 +1554,13 @@ impl App {
                             is_dirty: false,
                         });
                         self.active_tab = self.open_notes.len() - 1;
+                        self.save_open_tabs();
                         self.set_status("Created new note", now);
                     }
                     SidebarAction::DeleteNote(id) => {
-                        let _ = self.db_tx.send(DbMsg::DeleteNote { id });
-                        if let Some(pos) = self.open_notes.iter().position(|n| n.id == id) {
-                            self.close_tab(pos, now);
-                        } else if self.active_note_id == Some(id) {
-                            self.active_note_id = None;
-                            self.save_active_note_id();
-                            self.active_note_title = "Untitled Note".to_string();
-                            self.ed.clear();
-                            self.is_dirty = false;
-                        }
-                        self.set_status("Deleted", now);
-                        self.reload_db_state();
+                        self.pending_delete_note_id = Some(id);
+                        self.delete_confirm_open = true;
+                        self.delete_just_opened = true;
                     }
                     SidebarAction::ToggleNotesLimit => {
                         self.sidebar_notes_limit = if self.sidebar_notes_limit >= 100 { 50 } else { 100 };
@@ -1596,21 +1713,48 @@ impl App {
             }
         }
 
-        // Delete Confirmation Modal (Ctrl+Shift+D or :d / :delete / :rm)
+        // Delete Confirmation Modal (Ctrl+Shift+D or :d / :delete / :rm or sidebar trash icon)
         if self.delete_confirm_open {
+            let note_title = if let Some(target_id) = self.pending_delete_note_id {
+                self.notes_list
+                    .iter()
+                    .find(|n| n.id == target_id)
+                    .map(|n| n.topic.clone())
+                    .unwrap_or_else(|| self.active_note_title.clone())
+            } else {
+                self.active_note_title.clone()
+            };
+
             let action = render_delete_confirm_modal(
                 ui,
                 &painter,
                 bounds,
-                &self.active_note_title,
+                &note_title,
                 self.delete_just_opened,
             );
             self.delete_just_opened = false;
 
             if action.confirmed {
-                self.delete_active_note(now);
+                if let Some(target_id) = self.pending_delete_note_id.take() {
+                    let _ = self.db_tx.send(DbMsg::DeleteNote { id: target_id });
+                    if let Some(ref db) = self.db {
+                        let _ = db.delete_note(target_id);
+                    }
+                    if let Some(pos) = self.open_notes.iter().position(|n| n.id == target_id) {
+                        self.close_tab(pos, now);
+                    } else if self.active_note_id == Some(target_id) {
+                        self.delete_active_note(now);
+                    } else {
+                        self.notes_list.retain(|n| n.id != target_id);
+                        self.reload_db_state();
+                    }
+                    self.set_status("Deleted note", now);
+                } else {
+                    self.delete_active_note(now);
+                }
                 self.delete_confirm_open = false;
             } else if action.should_close {
+                self.pending_delete_note_id = None;
                 self.delete_confirm_open = false;
             }
         }
@@ -1640,6 +1784,40 @@ impl App {
                 self.help_open = false;
             }
         }
+
+        // Accent Color Customizer Dropdown
+        if self.accent_dropdown_open {
+            let default_theme = Theme::from_kind(self.theme.kind);
+            if let Some(act) = crate::accent::render_accent_dropdown(
+                ui,
+                &painter,
+                accent_anchor_rect,
+                &mut self.accent_overrides,
+                &self.theme,
+                &default_theme,
+            ) {
+                match act {
+                    crate::accent::AccentAction::Changed => {
+                        let mut t = Theme::from_kind(self.theme.kind);
+                        self.accent_overrides.apply(&mut t);
+                        self.theme = t;
+                        if let Some(ref db) = self.db {
+                            self.accent_overrides.save_to_db(db);
+                        }
+                    }
+                    crate::accent::AccentAction::ResetAll => {
+                        self.accent_overrides.clear();
+                        self.theme = Theme::from_kind(self.theme.kind);
+                        if let Some(ref db) = self.db {
+                            self.accent_overrides.save_to_db(db);
+                        }
+                    }
+                    crate::accent::AccentAction::Close => {
+                        self.accent_dropdown_open = false;
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1663,16 +1841,18 @@ impl eframe::App for App {
         let (cw, _) = self.cell_size(ctx);
         let screen_w = ctx.screen_rect().width();
         let left_margin = if self.mode == Mode::Doc || self.sidebar_open {
-            14.0 + 230.0 + 24.0
+            crate::layout::GAP + self.sidebar_width + crate::layout::SPLITTER_BAR_W + crate::layout::GAP
         } else {
-            48.0
+            crate::layout::GAP
         };
-        let editor_w = (screen_w - left_margin - 48.0).max(100.0);
+        let editor_w = (screen_w - left_margin - crate::layout::GAP).max(100.0);
         let is_preview_active = self.preview_open && self.mode == Mode::Normal;
         let effective_editor_w = if is_preview_active {
-            let divider_w = 10.0;
+            let divider_w = 12.0;
             let available_w = (editor_w - divider_w).max(200.0);
-            (available_w * self.split_ratio).clamp(120.0, available_w - 120.0)
+            let min_w = 120.0f32;
+            let max_w = (available_w - 120.0f32).max(min_w);
+            (available_w * self.split_ratio).clamp(min_w, max_w)
         } else {
             editor_w
         };

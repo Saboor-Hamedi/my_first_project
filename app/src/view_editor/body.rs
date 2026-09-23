@@ -4,7 +4,7 @@ use super::ligatures::render_line_with_ligatures;
 use crate::caret::Caret;
 use crate::editor::{Editor, VisualLine};
 use crate::theme::Theme;
-use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, Stroke};
+use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect};
 
 /// Renders the editor body with soft-wrapped visual lines, smooth scrolling, caret animation, and interactive scrollbar.
 pub fn render_editor_body(
@@ -62,14 +62,16 @@ pub fn render_editor_body(
 
     let pad_x = 5.0;
     let pad_y = 8.0;
-    let text_left = editor_rect.min.x + gutter_w + pad_x;
+    let safe_w = editor_rect.width();
+    let effective_gutter_w = if safe_w > gutter_w + 24.0 { gutter_w } else { 0.0 };
+    let text_left = (editor_rect.min.x + effective_gutter_w + pad_x).min(editor_rect.max.x);
     let ed_origin = pos2(text_left, editor_rect.min.y - *scroll_y + pad_y);
 
     // Direct mouse click in editor moves cursor to clicked visual row and col.
     // Restricted strictly to text area (excluding gutter) and blocked when splitter is dragging.
     let text_area_rect = Rect::from_min_max(
         pos2(text_left, editor_rect.min.y),
-        editor_rect.max,
+        pos2(editor_rect.max.x.max(text_left + 1.0), editor_rect.max.y),
     );
     if !block_scroll && ui.rect_contains_pointer(text_area_rect) && ui.input(|i| i.pointer.primary_clicked()) {
         if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
@@ -227,13 +229,6 @@ pub fn render_editor_body(
             pos2(editor_rect.min.x + gutter_w, editor_rect.max.y),
         );
         let gutter_painter = painter.with_clip_rect(gutter_rect);
-
-        // Right divider line separating line numbers from text (gutter shares panel surface)
-        gutter_painter.line_segment(
-            [gutter_rect.right_top(), gutter_rect.right_bottom()],
-            Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 35)),
-        );
-
         let num_font = FontId::monospace(font_size * 0.82);
 
         // Compute physical line number for each visual line

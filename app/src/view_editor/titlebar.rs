@@ -1,7 +1,12 @@
-//! Document title bar and borderless window drag gripper.
+//! Document title bar, color customizer button, and borderless window drag gripper.
 
 use crate::theme::Theme;
 use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, Stroke};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TitlebarAction {
+    ToggleAccentDropdown,
+}
 
 /// Renders the full-width modern titlebar across the entire window top.
 /// Displays Codex icon, MindForge branding, active document title, drag gripper, and window controls.
@@ -12,13 +17,14 @@ pub fn render_full_titlebar(
     active_title: &str,
     is_dirty: bool,
     theme: &Theme,
-) {
-    // 1. Sleek card surface with 5px radius and subtle 1px border
+    accent_dropdown_open: bool,
+) -> (Option<TitlebarAction>, Rect) {
+    // 1. Sleek card surface with 5px radius and subtle 1px border derived from theme
     painter.rect(
         titlebar_rect,
         5.0,
-        Color32::from_rgb(13, 14, 18),
-        Stroke::new(1.0, Color32::from_rgb(32, 34, 40)),
+        theme.surface(),
+        Stroke::new(1.0, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -42,17 +48,21 @@ pub fn render_full_titlebar(
         theme.highlight,
     );
 
-    // 4. Subtle separator
+    // 4. Subtle separator derived from theme
     painter.text(
         pos2(titlebar_rect.min.x + 122.0, center_y),
         Align2::LEFT_CENTER,
         "│",
         FontId::monospace(12.0),
-        Color32::from_gray(55),
+        theme.border(),
     );
 
-    // 5. Active Document / Section Title
-    let max_avail_w = (titlebar_rect.width() - 320.0).max(80.0);
+    // Total width consumed by the 5 right buttons (36px * 5 = 180px)
+    let btn_w = 36.0;
+    let right_zone_w = btn_w * 5.0 + 16.0;
+
+    // 5. Active Document / Section Title — fully styled using theme.text
+    let max_avail_w = (titlebar_rect.width() - right_zone_w - 140.0).max(80.0);
     let max_chars = (max_avail_w / 7.5) as usize;
     let base_title = if active_title.len() > max_chars {
         format!("{}...", &active_title[..max_chars.saturating_sub(3)])
@@ -69,97 +79,142 @@ pub fn render_full_titlebar(
         Align2::LEFT_CENTER,
         display_title,
         FontId::monospace(11.5),
-        Color32::from_gray(190),
+        theme.text,
     );
 
-    // 6. Right side: Drag gripper & Window Controls (Minimize, Maximize/Restore, Close)
-    render_window_controls(ui, painter, titlebar_rect, theme);
+    // 6. Right side: Accent button, Drag gripper, and Window Controls
+    render_window_controls(ui, painter, titlebar_rect, theme, accent_dropdown_open)
 }
 
-
-
-/// Renders modern window controls (Minimize, Maximize/Restore, Close) with drag support.
+/// Renders modern window controls (Accent Picker, Drag Button, Minimize, Maximize/Restore, Close).
+/// All buttons match the exact height of the titlebar, are vertically centered, and use theme colors.
 pub fn render_window_controls(
     ui: &egui::Ui,
     painter: &egui::Painter,
     bounds: Rect,
     theme: &Theme,
-) {
-    let btn_w = 32.0;
-    let btn_h = 24.0;
-    let top_y = bounds.min.y + 7.0;
-    let right_x = bounds.max.x - 6.0;
+    accent_dropdown_open: bool,
+) -> (Option<TitlebarAction>, Rect) {
+    let btn_w = 36.0;
+    let _btn_h = bounds.height();
+    let top_y = bounds.min.y;
+    let bottom_y = bounds.max.y;
+    let right_x = bounds.max.x;
 
-    // 1. Drag gripper immediately to the left of window control buttons
-    let gripper_rect = Rect::from_min_size(
-        pos2(right_x - (btn_w * 3.0) - 22.0, top_y + 1.0),
-        vec2(16.0, btn_h),
+    let mut action = None;
+
+    // 1. Accent Color Customizer Button (🎨) - directly beside the Drag button
+    let accent_rect = Rect::from_min_max(
+        pos2(right_x - btn_w * 5.0, top_y),
+        pos2(right_x - btn_w * 4.0, bottom_y),
     );
-    let is_gripper_hovered = ui.rect_contains_pointer(gripper_rect);
-    if is_gripper_hovered && ui.input(|i| i.pointer.primary_down()) {
+    let is_accent_hovered = ui.rect_contains_pointer(accent_rect);
+    let accent_bg = if accent_dropdown_open {
+        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 50)
+    } else if is_accent_hovered {
+        Color32::from_rgba_unmultiplied(255, 255, 255, 20)
+    } else {
+        Color32::TRANSPARENT
+    };
+    if accent_bg != Color32::TRANSPARENT {
+        painter.rect_filled(accent_rect, 0.0, accent_bg);
+    }
+    if is_accent_hovered && ui.input(|i| i.pointer.primary_clicked()) {
+        action = Some(TitlebarAction::ToggleAccentDropdown);
+    }
+
+    // Palette icon with active accent color dot
+    let c = accent_rect.center();
+    painter.text(
+        pos2(c.x - 2.0, c.y),
+        Align2::CENTER_CENTER,
+        "🎨",
+        FontId::monospace(12.5),
+        if is_accent_hovered || accent_dropdown_open { theme.accent } else { theme.text },
+    );
+    // Indicator dot showing active accent color
+    painter.circle_filled(
+        pos2(accent_rect.max.x - 7.0, accent_rect.max.y - 7.0),
+        2.5,
+        theme.accent,
+    );
+
+    // 2. Drag Button (Gripper) - spans full titlebar height, centered on right side
+    let drag_rect = Rect::from_min_max(
+        pos2(right_x - btn_w * 4.0, top_y),
+        pos2(right_x - btn_w * 3.0, bottom_y),
+    );
+    let is_drag_hovered = ui.rect_contains_pointer(drag_rect);
+    if is_drag_hovered && ui.input(|i| i.pointer.primary_down()) {
         ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
     }
-    let grip_color = if is_gripper_hovered {
-        theme.accent
-    } else {
-        Color32::from_gray(65)
-    };
+    if is_drag_hovered {
+        painter.rect_filled(drag_rect, 0.0, Color32::from_rgba_unmultiplied(255, 255, 255, 16));
+    }
+    let grip_color = if is_drag_hovered { theme.accent } else { theme.muted };
+    let drag_c = drag_rect.center();
     for col in 0..2 {
         for row in 0..3 {
-            let cx = gripper_rect.min.x + 4.0 + col as f32 * 6.5;
-            let cy = gripper_rect.min.y + 4.5 + row as f32 * 5.0;
-            painter.circle_filled(pos2(cx, cy), 1.2, grip_color);
+            let cx = drag_c.x - 3.5 + col as f32 * 7.0;
+            let cy = drag_c.y - 6.0 + row as f32 * 6.0;
+            painter.circle_filled(pos2(cx, cy), 1.3, grip_color);
         }
     }
 
-    // 2. Minimize Button (—)
-    let min_rect = Rect::from_min_size(pos2(right_x - btn_w * 3.0, top_y), vec2(btn_w, btn_h));
+    // 3. Minimize Button (—)
+    let min_rect = Rect::from_min_max(
+        pos2(right_x - btn_w * 3.0, top_y),
+        pos2(right_x - btn_w * 2.0, bottom_y),
+    );
     let min_hovered = ui.rect_contains_pointer(min_rect);
     if min_hovered {
-        painter.rect_filled(min_rect, 4.0, Color32::from_rgba_unmultiplied(255, 255, 255, 24));
+        painter.rect_filled(min_rect, 0.0, Color32::from_rgba_unmultiplied(255, 255, 255, 22));
         if ui.input(|i| i.pointer.primary_clicked()) {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Minimized(true));
         }
     }
-    let min_stroke_color = if min_hovered { theme.text } else { Color32::from_gray(150) };
-    let min_mid_y = (min_rect.min.y + min_rect.max.y) * 0.5 + 2.5;
+    let min_stroke_color = if min_hovered { theme.text } else { theme.muted };
+    let min_c = min_rect.center();
     painter.line_segment(
         [
-            pos2(min_rect.center().x - 5.0, min_mid_y),
-            pos2(min_rect.center().x + 5.0, min_mid_y),
+            pos2(min_c.x - 5.5, min_c.y + 1.0),
+            pos2(min_c.x + 5.5, min_c.y + 1.0),
         ],
         Stroke::new(1.5, min_stroke_color),
     );
 
-    // 3. Maximize / Restore Button (□)
-    let max_rect = Rect::from_min_size(pos2(right_x - btn_w * 2.0, top_y), vec2(btn_w, btn_h));
+    // 4. Maximize / Restore Button (□)
+    let max_rect = Rect::from_min_max(
+        pos2(right_x - btn_w * 2.0, top_y),
+        pos2(right_x - btn_w * 1.0, bottom_y),
+    );
     let max_hovered = ui.rect_contains_pointer(max_rect);
     let is_maximized = ui.input(|i| i.viewport().maximized.unwrap_or(false));
     if max_hovered {
-        painter.rect_filled(max_rect, 4.0, Color32::from_rgba_unmultiplied(255, 255, 255, 24));
+        painter.rect_filled(max_rect, 0.0, Color32::from_rgba_unmultiplied(255, 255, 255, 22));
         if ui.input(|i| i.pointer.primary_clicked()) {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
         }
     }
-    let max_stroke_color = if max_hovered { theme.text } else { Color32::from_gray(150) };
-    let c = max_rect.center();
+    let max_stroke_color = if max_hovered { theme.text } else { theme.muted };
+    let max_c = max_rect.center();
     if is_maximized {
         let s = 4.2;
         // Background window (offset up-right)
         painter.rect_stroke(
-            Rect::from_center_size(pos2(c.x + 1.8, c.y - 1.8), vec2(s * 2.0 - 1.0, s * 2.0 - 1.0)),
+            Rect::from_center_size(pos2(max_c.x + 2.0, max_c.y - 2.0), vec2(s * 2.0 - 1.0, s * 2.0 - 1.0)),
             1.0,
             Stroke::new(1.2, max_stroke_color),
             egui::StrokeKind::Inside,
         );
         // Foreground window mask + stroke
         painter.rect_filled(
-            Rect::from_center_size(pos2(c.x - 1.8, c.y + 1.8), vec2(s * 2.0, s * 2.0)),
+            Rect::from_center_size(pos2(max_c.x - 1.8, max_c.y + 1.8), vec2(s * 2.0, s * 2.0)),
             1.0,
-            theme.bg,
+            theme.surface(),
         );
         painter.rect_stroke(
-            Rect::from_center_size(pos2(c.x - 1.8, c.y + 1.8), vec2(s * 2.0, s * 2.0)),
+            Rect::from_center_size(pos2(max_c.x - 1.8, max_c.y + 1.8), vec2(s * 2.0, s * 2.0)),
             1.0,
             Stroke::new(1.2, max_stroke_color),
             egui::StrokeKind::Inside,
@@ -167,31 +222,42 @@ pub fn render_window_controls(
     } else {
         let s = 4.8;
         painter.rect_stroke(
-            Rect::from_center_size(c, vec2(s * 2.0, s * 2.0)),
+            Rect::from_center_size(max_c, vec2(s * 2.0, s * 2.0)),
             1.0,
             Stroke::new(1.3, max_stroke_color),
             egui::StrokeKind::Inside,
         );
     }
 
-    // 4. Close Button (✕)
-    let close_rect = Rect::from_min_size(pos2(right_x - btn_w, top_y), vec2(btn_w, btn_h));
+    // 5. Close Button (✕) - outer right corner matches 5.0 titlebar radius
+    let close_rect = Rect::from_min_max(
+        pos2(right_x - btn_w, top_y),
+        pos2(right_x, bottom_y),
+    );
     let close_hovered = ui.rect_contains_pointer(close_rect);
     if close_hovered {
-        painter.rect_filled(close_rect, 4.0, Color32::from_rgb(225, 45, 57));
+        painter.rect(
+            close_rect,
+            egui::CornerRadius { nw: 0, ne: 5, sw: 0, se: 5 },
+            Color32::from_rgb(225, 45, 57),
+            Stroke::NONE,
+            egui::StrokeKind::Inside,
+        );
         if ui.input(|i| i.pointer.primary_clicked()) {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
         }
     }
-    let close_stroke_color = if close_hovered { Color32::WHITE } else { Color32::from_gray(150) };
-    let c = close_rect.center();
-    let d = 4.2;
+    let close_stroke_color = if close_hovered { Color32::WHITE } else { theme.muted };
+    let close_c = close_rect.center();
+    let d = 4.4;
     painter.line_segment(
-        [pos2(c.x - d, c.y - d), pos2(c.x + d, c.y + d)],
+        [pos2(close_c.x - d, close_c.y - d), pos2(close_c.x + d, close_c.y + d)],
         Stroke::new(1.5, close_stroke_color),
     );
     painter.line_segment(
-        [pos2(c.x + d, c.y - d), pos2(c.x - d, c.y + d)],
+        [pos2(close_c.x + d, close_c.y - d), pos2(close_c.x - d, close_c.y + d)],
         Stroke::new(1.5, close_stroke_color),
     );
+
+    (action, accent_rect)
 }

@@ -314,18 +314,16 @@ pub fn render_doc_sidebar(
     active_idx: usize,
     selected_idx: usize,
     is_focused: bool,
-    accent: Color32,
-    text_color: Color32,
-    muted_color: Color32,
+    theme: &crate::theme::Theme,
 ) -> Option<DocSidebarAction> {
     let mut action = None;
 
-    // Floating panel background with subtle minimal border
+    // Floating panel background with subtle minimal border derived from theme
     painter.rect(
         rect,
         5.0,
-        Color32::from_rgb(12, 12, 14),
-        Stroke::new(1.0, Color32::from_rgb(32, 34, 40)),
+        theme.sidebar_bg(),
+        Stroke::new(1.0, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -337,7 +335,7 @@ pub fn render_doc_sidebar(
         Align2::LEFT_TOP,
         "MINDFORGE",
         FontId::monospace(15.0),
-        accent,
+        theme.accent,
     );
 
     // Subtitle badge
@@ -368,14 +366,14 @@ pub fn render_doc_sidebar(
         Align2::CENTER_CENTER,
         "◀",
         FontId::monospace(11.0),
-        if collapse_hover { accent } else { Color32::from_gray(130) },
+        if collapse_hover { theme.accent } else { Color32::from_gray(130) },
     );
 
     // Divider under header
     let div_y = origin.y + 44.0;
     painter.line_segment(
         [pos2(rect.min.x + 16.0, div_y), pos2(rect.max.x - 16.0, div_y)],
-        Stroke::new(1.0, Color32::from_rgb(26, 28, 36)),
+        Stroke::new(1.0, theme.border()),
     );
 
     // Navigation items (Body matching sidebar/body.rs)
@@ -394,13 +392,13 @@ pub fn render_doc_sidebar(
 
         if is_active || (is_selected && is_focused) || is_hovered {
             let bg = if is_selected && is_focused && is_active {
-                Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 55)
+                Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 55)
             } else if is_selected && is_focused {
-                Color32::from_rgb(26, 28, 38)
+                theme.surface()
             } else if is_active {
-                Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 40)
+                Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 40)
             } else {
-                Color32::from_rgb(20, 22, 28)
+                Color32::from_rgba_unmultiplied(255, 255, 255, 8)
             };
             painter.rect_filled(item_rect, 4.0, bg);
 
@@ -411,7 +409,7 @@ pub fn render_doc_sidebar(
                     pos2(item_rect.min.x, item_rect.min.y + 3.0),
                     vec2(bar_w, item_rect.height() - 6.0),
                 );
-                painter.rect_filled(bar, 1.5, accent);
+                painter.rect_filled(bar, 1.5, theme.accent);
             }
 
             if is_hovered && ui.input(|i| i.pointer.primary_clicked()) {
@@ -422,11 +420,11 @@ pub fn render_doc_sidebar(
         let icon = doc_icons.get(idx).copied().unwrap_or("📄");
         let label = format!("{} {}", icon, doc.title);
         let label_color = if is_active {
-            accent
+            theme.accent
         } else if is_selected && is_focused {
             Color32::WHITE
         } else {
-            text_color
+            theme.text
         };
 
         painter.text(
@@ -455,12 +453,12 @@ pub fn render_doc_sidebar(
         painter.circle_filled(
             settings_rect.center(),
             icon_size * 0.5,
-            Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 45),
+            Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 45),
         );
         painter.circle_stroke(
             settings_rect.center(),
             icon_size * 0.5,
-            Stroke::new(1.0, accent),
+            Stroke::new(1.0, theme.accent),
         );
         if settings_resp.clicked() || ui.input(|i| i.pointer.primary_clicked()) {
             action = Some(DocSidebarAction::OpenSettings);
@@ -469,12 +467,12 @@ pub fn render_doc_sidebar(
         painter.circle_filled(
             settings_rect.center(),
             icon_size * 0.5,
-            Color32::from_rgb(18, 18, 22),
+            theme.surface(),
         );
         painter.circle_stroke(
             settings_rect.center(),
             icon_size * 0.5,
-            Stroke::new(1.0, Color32::from_rgb(34, 34, 42)),
+            Stroke::new(1.0, theme.border()),
         );
     }
     painter.text(
@@ -482,7 +480,7 @@ pub fn render_doc_sidebar(
         Align2::CENTER_CENTER,
         "⚙",
         FontId::monospace(14.0),
-        if settings_hovered { accent } else { Color32::from_gray(160) },
+        if settings_hovered { theme.accent } else { Color32::from_gray(160) },
     );
 
     // 2. Return to Notes Editor button on bottom right
@@ -496,8 +494,8 @@ pub fn render_doc_sidebar(
     let back_hovered = back_resp.hovered() || ui.rect_contains_pointer(back_rect);
 
     if back_hovered {
-        painter.rect_filled(back_rect, 4.0, Color32::from_rgb(28, 30, 38));
-        painter.rect_stroke(back_rect, 4.0, Stroke::new(1.0, accent), egui::StrokeKind::Inside);
+        painter.rect_filled(back_rect, 4.0, theme.surface());
+        painter.rect_stroke(back_rect, 4.0, Stroke::new(1.0, theme.accent), egui::StrokeKind::Inside);
         if back_resp.clicked() || ui.input(|i| i.pointer.primary_clicked()) {
             action = Some(DocSidebarAction::BackToEditor);
         }
@@ -505,8 +503,8 @@ pub fn render_doc_sidebar(
         painter.rect(
             back_rect,
             4.0,
-            Color32::from_rgb(18, 18, 22),
-            Stroke::new(1.0, Color32::from_rgb(34, 34, 42)),
+            theme.surface(),
+            Stroke::new(1.0, theme.border()),
             egui::StrokeKind::Inside,
         );
     }
@@ -516,7 +514,7 @@ pub fn render_doc_sidebar(
         Align2::CENTER_CENTER,
         "← Notes",
         FontId::monospace(11.5),
-        if back_hovered { accent } else { muted_color },
+        if back_hovered { theme.accent } else { theme.muted },
     );
 
     action

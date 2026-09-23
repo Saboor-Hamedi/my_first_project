@@ -91,6 +91,7 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
     if app.delete_confirm_open {
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             app.delete_confirm_open = false;
+            app.pending_delete_note_id = None;
         }
         return Some(false);
     }
@@ -357,6 +358,7 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
             is_dirty: false,
         });
         app.active_tab = app.open_notes.len() - 1;
+        app.save_open_tabs();
         app.set_status("Created new note", now);
         return Some(false);
     }

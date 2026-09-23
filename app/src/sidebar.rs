@@ -12,7 +12,7 @@ pub use footer::render_sidebar_footer;
 pub use header::render_sidebar_header;
 
 use core::Note;
-use eframe::egui::{self, vec2, Color32, Rect, Stroke};
+use eframe::egui::{self, vec2, Rect, Stroke};
 
 pub enum SidebarAction {
     SwitchMode(usize),
@@ -33,20 +33,18 @@ pub fn render_sidebar(
     notes_limit: usize,
     total_notes_count: usize,
     is_dirty: bool,
-    accent: Color32,
-    text_color: Color32,
-    muted_color: Color32,
+    theme: &crate::theme::Theme,
     sidebar_selected_idx: usize,
     sidebar_focused: bool,
 ) -> Option<SidebarAction> {
     let sidebar_w = sb_rect.width();
 
-    // Floating panel background with subtle minimal border
+    // Floating panel background with subtle minimal border derived from theme
     painter.rect(
         sb_rect,
         5.0,
-        Color32::from_rgb(12, 12, 14),
-        Stroke::new(1.0, Color32::from_rgb(32, 34, 40)),
+        theme.sidebar_bg(),
+        Stroke::new(1.0, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -59,8 +57,8 @@ pub fn render_sidebar(
         sb_origin,
         sidebar_w,
         active_mode_idx,
-        accent,
-        text_color,
+        theme.accent,
+        theme.text,
     );
 
     // 2. Sidebar Body (File explorer / SQLite documents)
@@ -74,8 +72,8 @@ pub fn render_sidebar(
         notes_limit,
         total_notes_count,
         is_dirty,
-        accent,
-        muted_color,
+        theme.accent,
+        theme.muted,
         sidebar_selected_idx,
         sidebar_focused,
     );
@@ -85,8 +83,8 @@ pub fn render_sidebar(
         ui,
         painter,
         sb_rect,
-        accent,
-        muted_color,
+        theme.accent,
+        theme.muted,
     );
 
     header_action.or(body_action).or(footer_action)

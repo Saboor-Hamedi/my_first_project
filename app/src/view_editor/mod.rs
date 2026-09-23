@@ -10,4 +10,4 @@ pub mod tabs;
 pub use body::render_editor_body;
 pub use preview::render_markdown_preview;
 pub use tabs::{render_tab_bar, TabAction, TabItem, TAB_ROW_H};
-pub use titlebar::render_full_titlebar;
+pub use titlebar::{render_full_titlebar, TitlebarAction};

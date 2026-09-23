@@ -19,6 +19,7 @@ pub fn quick_save_active_note(app: &mut App, now: f64) {
             }
             app.save_active_note_id();
             app.sync_active_tab();
+            app.save_open_tabs();
             app.set_status("Saved", now);
         } else {
             let topic = if app.active_note_title.trim().is_empty() {
@@ -44,6 +45,7 @@ pub fn quick_save_active_note(app: &mut App, now: f64) {
                     },
                 );
                 app.sync_active_tab();
+                app.save_open_tabs();
                 app.set_status("Saved", now);
             }
         }
@@ -58,6 +60,20 @@ pub fn delete_active_note(app: &mut App, now: f64) {
         }
         let _ = app.db_tx.send(crate::db_worker::DbMsg::DeleteNote { id });
         app.notes_list.retain(|n| n.id != id);
+        app.open_notes.retain(|n| n.id != id);
+        if app.open_notes.is_empty() {
+            app.open_notes.push(crate::app::OpenNote {
+                id: 0,
+                title: "Untitled Note".to_string(),
+                editor: crate::editor::Editor::new(),
+                scroll_y: 0.0,
+                is_dirty: false,
+            });
+            app.active_tab = 0;
+        } else if app.active_tab >= app.open_notes.len() {
+            app.active_tab = app.open_notes.len() - 1;
+        }
+        app.save_open_tabs();
         app.active_note_id = None;
         app.save_active_note_id();
         app.active_note_title = "Untitled Note".to_string();
@@ -105,6 +121,7 @@ pub fn rename_active_note(app: &mut App, new_title: &str, now: f64) {
             n.topic = trimmed.clone();
         }
         app.sync_active_tab();
+        app.save_open_tabs();
         app.set_status("Renamed", now);
     } else {
         // Active note was newly created (e.g. via Ctrl+N) and not yet stored in SQLite.
@@ -127,6 +144,7 @@ pub fn rename_active_note(app: &mut App, new_title: &str, now: f64) {
                     },
                 );
                 app.sync_active_tab();
+                app.save_open_tabs();
                 app.set_status("Saved note", now);
             }
         }

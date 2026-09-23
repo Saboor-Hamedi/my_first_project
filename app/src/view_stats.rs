@@ -1,5 +1,5 @@
 //! Learning statistics, writing analytics, and daily activity story view.
-//! Responsive, scroll-protected, and bounded to avoid any window overflow.
+//! Responsive, scroll-protected, and bounded with proportional scaling and padding.
 
 use crate::theme::Theme;
 use core::DailyActivity;
@@ -53,34 +53,50 @@ pub fn render_stats(
     today_date: &str,
     yesterday_date: &str,
 ) {
-    // Wrap entire stats view in a bounded vertical ScrollArea so content never offsets out of view
-    ui.allocate_new_ui(egui::UiBuilder::new().max_rect(editor_rect), |ui| {
+    // ── Task 2: Generous padding inset from the panel edges ─────────────────
+    let pad_left = 28.0;
+    let pad_right = 28.0;
+    let pad_top = 26.0;
+
+    let content_rect = Rect::from_min_max(
+        pos2(editor_rect.min.x + pad_left, editor_rect.min.y + pad_top),
+        pos2(editor_rect.max.x - pad_right, editor_rect.max.y),
+    );
+
+    // Task 1: No outer border or background is drawn around the Stats view.
+    // It shares the editor panel's surface.
+    ui.allocate_new_ui(egui::UiBuilder::new().max_rect(content_rect), |ui| {
         egui::ScrollArea::vertical()
             .id_salt("stats_scroll_view")
             .auto_shrink([false; 2])
             .show(ui, |ui| {
                 let avail_w = ui.available_width().max(360.0);
 
+                // ── Task 3: Scale typography and dimensions with available width ──
+                let scale = (avail_w / 900.0).clamp(1.0, 1.35);
+
                 // ── 1. Header Section ─────────────────────────────────────────
-                let (header_rect, _) = ui.allocate_exact_size(vec2(avail_w, 52.0), Sense::hover());
+                let header_h = 56.0 * scale;
+                let (header_rect, _) = ui.allocate_exact_size(vec2(avail_w, header_h), Sense::hover());
                 let p = ui.painter();
 
                 p.text(
                     header_rect.min,
                     Align2::LEFT_TOP,
                     "WRITING STORY & ACTIVITY",
-                    FontId::monospace(19.0),
+                    FontId::monospace(19.0 * scale),
                     theme.highlight,
                 );
                 p.text(
-                    header_rect.min + vec2(0.0, 26.0),
+                    header_rect.min + vec2(0.0, 26.0 * scale),
                     Align2::LEFT_TOP,
                     "A living chronicle of your thoughts, focus, and time in MindForge",
-                    FontId::monospace(11.5),
+                    FontId::monospace(11.5 * scale),
                     theme.muted,
                 );
 
-                ui.add_space(8.0);
+                // Task 4: Breathing room between header and metric cards
+                ui.add_space(16.0 * scale);
 
                 // ── 2. Responsive Hero Summary Cards ─────────────────────────
                 let cards_data = [
@@ -106,9 +122,9 @@ pub fn render_stats(
                     ),
                 ];
 
-                let gap = 12.0;
+                let gap = 12.0 * scale;
                 let is_4_cols = avail_w >= 640.0;
-                let card_h = 72.0;
+                let card_h = 76.0 * scale;
 
                 let section_h = if is_4_cols {
                     card_h
@@ -126,7 +142,7 @@ pub fn render_stats(
                             pos2(cards_rect.min.x + i as f32 * (card_w + gap), cards_rect.min.y),
                             vec2(card_w, card_h),
                         );
-                        draw_metric_card(p, c_rect, label, val, sub, theme);
+                        draw_metric_card(p, c_rect, label, val, sub, theme, scale);
                     }
                 } else {
                     let card_w = ((avail_w - gap) / 2.0).max(100.0);
@@ -140,14 +156,15 @@ pub fn render_stats(
                             ),
                             vec2(card_w, card_h),
                         );
-                        draw_metric_card(p, c_rect, label, val, sub, theme);
+                        draw_metric_card(p, c_rect, label, val, sub, theme, scale);
                     }
                 }
 
-                ui.add_space(20.0);
+                // Task 4: Breathing room between metric cards and chart
+                ui.add_space(28.0 * scale);
 
                 // ── 3. Writing Rhythm (14-Day Activity Bar Chart) ────────────
-                let chart_box_h = 136.0;
+                let chart_box_h = 136.0 * scale;
                 let (chart_container, _) = ui.allocate_exact_size(vec2(avail_w, chart_box_h), Sense::hover());
                 let p = ui.painter();
 
@@ -161,23 +178,23 @@ pub fn render_stats(
                 );
 
                 p.text(
-                    pos2(chart_container.min.x + 14.0, chart_container.min.y + 12.0),
+                    pos2(chart_container.min.x + 16.0 * scale, chart_container.min.y + 14.0 * scale),
                     Align2::LEFT_TOP,
                     "WRITING RHYTHM (RECENT DAYS)",
-                    FontId::monospace(11.5),
+                    FontId::monospace(11.5 * scale),
                     theme.highlight,
                 );
 
                 // Take up to 14 days
                 let display_days: Vec<&DailyActivity> = history.iter().take(14).collect();
                 let num_bars = display_days.len().max(1);
-                let bar_area_w = chart_container.width() - 28.0;
-                let bar_gap = 8.0;
+                let bar_area_w = chart_container.width() - 32.0 * scale;
+                let bar_gap = 8.0 * scale;
                 let bar_w = ((bar_area_w - (num_bars as f32 - 1.0) * bar_gap) / num_bars as f32)
-                    .clamp(14.0, 36.0);
+                    .clamp(14.0 * scale, 36.0 * scale);
 
-                let max_chart_h = 60.0;
-                let chart_base_y = chart_container.min.y + 104.0;
+                let max_chart_h = 60.0 * scale;
+                let chart_base_y = chart_container.min.y + 104.0 * scale;
 
                 let max_secs = display_days
                     .iter()
@@ -187,7 +204,7 @@ pub fn render_stats(
                     .max(60) as f32;
 
                 for (i, act) in display_days.iter().enumerate() {
-                    let bx = chart_container.min.x + 14.0 + i as f32 * (bar_w + bar_gap);
+                    let bx = chart_container.min.x + 16.0 * scale + i as f32 * (bar_w + bar_gap);
                     let h = ((act.active_seconds as f32 / max_secs) * max_chart_h).max(3.0);
                     let bar_rect = Rect::from_min_max(pos2(bx, chart_base_y - h), pos2(bx + bar_w, chart_base_y));
 
@@ -207,10 +224,10 @@ pub fn render_stats(
                     // Minutes badge on top of bar
                     if act.active_seconds >= 60 {
                         p.text(
-                            pos2(bx + bar_w * 0.5, chart_base_y - h - 12.0),
+                            pos2(bx + bar_w * 0.5, chart_base_y - h - 12.0 * scale),
                             Align2::CENTER_TOP,
                             format!("{}m", act.active_seconds / 60),
-                            FontId::monospace(9.0),
+                            FontId::monospace((9.0 * scale).max(9.5)),
                             if is_today { theme.highlight } else { Color32::from_gray(160) },
                         );
                     }
@@ -225,43 +242,51 @@ pub fn render_stats(
                     };
 
                     p.text(
-                        pos2(bx + bar_w * 0.5, chart_base_y + 4.0),
+                        pos2(bx + bar_w * 0.5, chart_base_y + 4.0 * scale),
                         Align2::CENTER_TOP,
                         date_label,
-                        FontId::monospace(9.0),
+                        FontId::monospace((9.0 * scale).max(9.5)),
                         if is_today { theme.accent } else { Color32::from_gray(120) },
                     );
                 }
 
-                ui.add_space(20.0);
+                // Task 4: Breathing room between chart and activity journal
+                ui.add_space(28.0 * scale);
 
                 // ── 4. Chronological Activity Journal Cards ──────────────────
-                let (story_hdr_rect, _) = ui.allocate_exact_size(vec2(avail_w, 24.0), Sense::hover());
+                let journal_hdr_h = 24.0 * scale;
+                let (story_hdr_rect, _) = ui.allocate_exact_size(vec2(avail_w, journal_hdr_h), Sense::hover());
                 ui.painter().text(
                     story_hdr_rect.min,
                     Align2::LEFT_TOP,
                     "ACTIVITY JOURNAL & STORY",
-                    FontId::monospace(12.5),
+                    FontId::monospace(12.5 * scale),
                     theme.highlight,
                 );
 
-                ui.add_space(6.0);
+                // Task 4: Breathing room between journal heading and first row
+                ui.add_space(10.0 * scale);
 
                 if history.is_empty() {
-                    let (empty_rect, _) = ui.allocate_exact_size(vec2(avail_w, 36.0), Sense::hover());
+                    let (empty_rect, _) = ui.allocate_exact_size(vec2(avail_w, 36.0 * scale), Sense::hover());
                     ui.painter().text(
                         empty_rect.min + vec2(10.0, 8.0),
                         Align2::LEFT_TOP,
                         "Start typing your notes to begin your activity story!",
-                        FontId::monospace(12.0),
+                        FontId::monospace(12.0 * scale),
                         theme.muted,
                     );
                 } else {
+                    let row_h = 34.0 * scale;
+                    let left_pad = 16.0 * scale;
+                    let right_pad = 18.0 * scale;
+
                     for act in history {
-                        let (row_rect, _) = ui.allocate_exact_size(vec2(avail_w, 34.0), Sense::hover());
+                        let (row_rect, _) = ui.allocate_exact_size(vec2(avail_w, row_h), Sense::hover());
                         let p = ui.painter();
                         let is_today = act.date == today_date;
 
+                        // Task 5: Row corner radius stays at 4.0, background and border stay the same
                         p.rect(
                             row_rect,
                             4.0,
@@ -270,7 +295,7 @@ pub fn render_stats(
                             egui::StrokeKind::Inside,
                         );
 
-                        // Date tag
+                        // Date tag with increased left padding
                         let display_date = if is_today {
                             format!("★ TODAY ({})", act.date)
                         } else if act.date == yesterday_date {
@@ -280,10 +305,10 @@ pub fn render_stats(
                         };
 
                         p.text(
-                            pos2(row_rect.min.x + 12.0, row_rect.center().y),
+                            pos2(row_rect.min.x + left_pad, row_rect.center().y),
                             Align2::LEFT_CENTER,
                             display_date,
-                            FontId::monospace(11.0),
+                            FontId::monospace((11.0 * scale).max(11.5)),
                             if is_today { theme.accent } else { Color32::from_gray(180) },
                         );
 
@@ -298,7 +323,7 @@ pub fn render_stats(
                                 pos2(col2, row_rect.center().y),
                                 Align2::LEFT_CENTER,
                                 format!("⏱ {}", format_duration(act.active_seconds)),
-                                FontId::monospace(11.0),
+                                FontId::monospace((11.0 * scale).max(11.5)),
                                 Color32::from_gray(190),
                             );
 
@@ -306,7 +331,7 @@ pub fn render_stats(
                                 pos2(col3, row_rect.center().y),
                                 Align2::LEFT_CENTER,
                                 format!("✍ {} words", format_number(act.words_written as u64)),
-                                FontId::monospace(11.0),
+                                FontId::monospace((11.0 * scale).max(11.5)),
                                 theme.highlight,
                             );
 
@@ -314,15 +339,15 @@ pub fn render_stats(
                                 pos2(col4, row_rect.center().y),
                                 Align2::LEFT_CENTER,
                                 format!("⌨ {} keys", format_number(act.keystrokes as u64)),
-                                FontId::monospace(11.0),
+                                FontId::monospace((11.0 * scale).max(11.5)),
                                 Color32::from_gray(160),
                             );
 
                             p.text(
-                                pos2(row_rect.max.x - 14.0, row_rect.center().y),
+                                pos2(row_rect.max.x - right_pad, row_rect.center().y),
                                 Align2::RIGHT_CENTER,
                                 format!("{} created · {} saved", act.notes_created, act.notes_edited),
-                                FontId::monospace(10.5),
+                                FontId::monospace((10.5 * scale).max(11.0)),
                                 theme.muted,
                             );
                         } else {
@@ -334,7 +359,7 @@ pub fn render_stats(
                                 pos2(col2, row_rect.center().y),
                                 Align2::LEFT_CENTER,
                                 format!("⏱ {}", format_duration(act.active_seconds)),
-                                FontId::monospace(10.5),
+                                FontId::monospace((10.5 * scale).max(11.0)),
                                 Color32::from_gray(190),
                             );
 
@@ -342,28 +367,31 @@ pub fn render_stats(
                                 pos2(col3, row_rect.center().y),
                                 Align2::LEFT_CENTER,
                                 format!("✍ {}", format_number(act.words_written as u64)),
-                                FontId::monospace(10.5),
+                                FontId::monospace((10.5 * scale).max(11.0)),
                                 theme.highlight,
                             );
 
                             p.text(
-                                pos2(row_rect.max.x - 10.0, row_rect.center().y),
+                                pos2(row_rect.max.x - (right_pad - 4.0), row_rect.center().y),
                                 Align2::RIGHT_CENTER,
                                 format!("{} saved", act.notes_edited),
-                                FontId::monospace(10.0),
+                                FontId::monospace((10.0 * scale).max(10.5)),
                                 theme.muted,
                             );
                         }
 
-                        ui.add_space(4.0);
+                        // Task 4: Vertical space between journal rows
+                        ui.add_space(6.0 * scale);
                     }
                 }
 
-                ui.add_space(24.0);
+                // Task 4: Final bottom space (at least 32px of scrollable space below last row)
+                ui.add_space(36.0 * scale);
             });
     });
 }
 
+// ── Task 6: Metric card layout & padding ──────────────────────────────────
 fn draw_metric_card(
     p: &eframe::egui::Painter,
     rect: Rect,
@@ -371,6 +399,7 @@ fn draw_metric_card(
     val: &str,
     sub: &str,
     theme: &Theme,
+    scale: f32,
 ) {
     p.rect(
         rect,
@@ -380,34 +409,36 @@ fn draw_metric_card(
         egui::StrokeKind::Inside,
     );
 
-    // Accent line on left edge
+    // Accent line on left edge: width stays at 3.0
     let stripe = Rect::from_min_size(rect.min, vec2(3.0, rect.height()));
     p.rect_filled(stripe, egui::CornerRadius { nw: 5, sw: 5, ne: 0, se: 0 }, theme.accent);
 
+    let left_content_pad = 16.0 * scale;
+
     // Header label
     p.text(
-        pos2(rect.min.x + 12.0, rect.min.y + 10.0),
+        pos2(rect.min.x + left_content_pad, rect.min.y + 14.0 * scale),
         Align2::LEFT_TOP,
         label,
-        FontId::monospace(9.5),
+        FontId::monospace((9.5 * scale).max(10.0)),
         theme.muted,
     );
 
     // Main value
     p.text(
-        pos2(rect.min.x + 12.0, rect.min.y + 26.0),
+        pos2(rect.min.x + left_content_pad, rect.min.y + 32.0 * scale),
         Align2::LEFT_TOP,
         val,
-        FontId::monospace(17.0),
+        FontId::monospace((17.0 * scale).max(18.0)),
         theme.highlight,
     );
 
     // Subtitle
     p.text(
-        pos2(rect.min.x + 12.0, rect.min.y + 50.0),
+        pos2(rect.min.x + left_content_pad, rect.min.y + 58.0 * scale),
         Align2::LEFT_TOP,
         sub,
-        FontId::monospace(10.0),
+        FontId::monospace((10.0 * scale).max(10.5)),
         Color32::from_gray(140),
     );
 }
