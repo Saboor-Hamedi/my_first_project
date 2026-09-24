@@ -86,6 +86,7 @@ impl App {
                 header_dirty,
                 &self.theme,
                 self.accent_dropdown_open,
+                self.opacity,
             );
             (action, anchor)
         } else {
@@ -192,6 +193,7 @@ impl App {
                     self.doc_selected_idx,
                     self.doc_sidebar_focused,
                     &self.theme,
+                    self.opacity,
                 );
                 if let Some(action) = doc_action {
                     match action {
@@ -289,6 +291,7 @@ impl App {
             search_prompt,
             &self.theme,
             is_ai_active,
+            self.opacity,
         );
         if toggle_ai {
             if self.preview_open && self.right_pane_tab == RightPaneTab::AiAgent {
@@ -328,6 +331,7 @@ impl App {
                     &self.theme,
                     self.sidebar_selected_idx,
                     self.sidebar_focused,
+                    self.opacity,
                 );
 
                 if ui.input(|i| i.pointer.primary_clicked()) {

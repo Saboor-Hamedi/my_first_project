@@ -553,7 +553,7 @@ impl App {
                     self.term_pane = crate::terminal_pane::TerminalPane::spawn(ui.ctx(), &self.theme).ok();
                 }
                 if let Some(ref mut pane) = self.term_pane {
-                    let action = pane.ui(ui, editor_panel_rect, &self.theme, self.font_size, true);
+                    let action = pane.ui(ui, editor_panel_rect, &self.theme, self.font_size, true, self.opacity);
                     if action == crate::terminal_pane::TerminalAction::Close {
                         self.mode = self.prev_mode_before_term;
                         self.set_status("Exited terminal", now);

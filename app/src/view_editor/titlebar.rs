@@ -18,13 +18,14 @@ pub fn render_full_titlebar(
     is_dirty: bool,
     theme: &Theme,
     accent_dropdown_open: bool,
+    opacity: f32,
 ) -> (Option<TitlebarAction>, Rect) {
     // 1. Sleek translucent card surface matching desktop backdrop blur
     let title_bg = Color32::from_rgba_unmultiplied(
         theme.surface().r(),
         theme.surface().g(),
         theme.surface().b(),
-        160,
+        (opacity * 255.0) as u8,
     );
     painter.rect(
         titlebar_rect,
@@ -89,7 +90,7 @@ pub fn render_full_titlebar(
     );
 
     // 6. Right side: Accent button, Drag gripper, and Window Controls
-    render_window_controls(ui, painter, titlebar_rect, theme, accent_dropdown_open)
+    render_window_controls(ui, painter, titlebar_rect, theme, accent_dropdown_open, opacity)
 }
 
 /// Renders modern window controls (Accent Picker, Drag Button, Minimize, Maximize/Restore, Close).
@@ -100,6 +101,7 @@ pub fn render_window_controls(
     bounds: Rect,
     theme: &Theme,
     accent_dropdown_open: bool,
+    opacity: f32,
 ) -> (Option<TitlebarAction>, Rect) {
     let btn_w = 36.0;
     let _btn_h = bounds.height();
@@ -115,7 +117,7 @@ pub fn render_window_controls(
         theme.surface().r(),
         theme.surface().g(),
         theme.surface().b(),
-        160,
+        (opacity * 255.0) as u8,
     );
 
     // 1. Accent Color Customizer Button (🎨) - directly beside the Drag button

@@ -417,6 +417,7 @@ impl TerminalPane {
         theme: &Theme,
         font_size: f32,
         is_focused: bool,
+        opacity: f32,
     ) -> TerminalAction {
         let mut action = TerminalAction::None;
         let painter = ui.painter().with_clip_rect(rect);
@@ -453,7 +454,7 @@ impl TerminalPane {
             theme.surface().r(),
             theme.surface().g(),
             theme.surface().b(),
-            160,
+            (opacity * 255.0) as u8,
         );
         painter.rect_filled(term_header_rect, 0.0, term_h_bg);
 
@@ -618,7 +619,7 @@ impl TerminalPane {
             theme.surface().r(),
             theme.surface().g(),
             theme.surface().b(),
-            160,
+            (opacity * 255.0) as u8,
         );
         painter.rect_filled(sessions_rect, 0.0, sessions_bg);
 

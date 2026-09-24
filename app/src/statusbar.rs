@@ -22,17 +22,19 @@ pub fn render_bottom_dock(
     search_prompt: Option<(&str, &str, usize)>,
     theme: &Theme,
     is_ai_open: bool,
+    opacity: f32,
 ) -> bool {
     let mut toggle_ai = false;
     let accent = theme.accent;
     let muted = theme.muted;
 
     // Seamless bottom dock matching the editor canvas (translucent so desktop blur shows through)
+    let dock_alpha = (opacity * 255.0) as u8;
     let dock_bg = Color32::from_rgba_unmultiplied(
         theme.bg.r(),
         theme.bg.g(),
         theme.bg.b(),
-        120,
+        dock_alpha,
     );
     painter.rect(
         dock_rect,

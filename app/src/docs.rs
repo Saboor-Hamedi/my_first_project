@@ -321,6 +321,7 @@ pub fn render_doc_sidebar(
     selected_idx: usize,
     is_focused: bool,
     theme: &crate::theme::Theme,
+    opacity: f32,
 ) -> Option<DocSidebarAction> {
     let mut action = None;
 
@@ -329,7 +330,7 @@ pub fn render_doc_sidebar(
         theme.sidebar_bg().r(),
         theme.sidebar_bg().g(),
         theme.sidebar_bg().b(),
-        160,
+        (opacity * 255.0) as u8,
     );
     painter.rect_filled(rect, 0.0, sb_bg);
 

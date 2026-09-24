@@ -39,6 +39,7 @@ pub fn render_sidebar(
     theme: &crate::theme::Theme,
     sidebar_selected_idx: usize,
     sidebar_focused: bool,
+    opacity: f32,
 ) -> Option<SidebarAction> {
     let sidebar_w = sb_rect.width();
 
@@ -47,7 +48,7 @@ pub fn render_sidebar(
         theme.sidebar_bg().r(),
         theme.sidebar_bg().g(),
         theme.sidebar_bg().b(),
-        160,
+        (opacity * 255.0) as u8,
     );
     painter.rect_filled(sb_rect, 0.0, sb_bg);
 

@@ -91,6 +91,7 @@ impl App {
                         any_modal_open
                             || self.is_dragging_splitter
                             || self.is_dragging_sidebar_splitter,
+                        self.opacity,
                     );
                 }
             }

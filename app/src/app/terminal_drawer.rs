@@ -81,7 +81,7 @@ impl App {
                 self.term_pane = crate::terminal_pane::TerminalPane::spawn(ui.ctx(), &self.theme).ok();
             }
             if let Some(ref mut pane) = self.term_pane {
-                let action = pane.ui(ui, term_rect, &self.theme, self.font_size, self.terminal_focused);
+                let action = pane.ui(ui, term_rect, &self.theme, self.font_size, self.terminal_focused, self.opacity);
                 match action {
                     crate::terminal_pane::TerminalAction::Close => {
                         self.terminal_open = false;

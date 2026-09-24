@@ -17,6 +17,7 @@ pub fn render_ai_pane(
     font_size: f32,
     request_focus: bool,
     _block_scroll: bool,
+    opacity: f32,
 ) {
     // Fill pane background matching workspace surface with translucency
     let base_color = if theme.is_light() {
@@ -28,7 +29,7 @@ pub fn render_ai_pane(
         base_color.r(),
         base_color.g(),
         base_color.b(),
-        160,
+        (opacity * 255.0) as u8,
     );
     painter.rect_filled(rect, 0.0, bg_color);
 
