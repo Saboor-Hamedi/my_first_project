@@ -84,7 +84,7 @@ pub fn table_metrics(base_font_size: f32, is_header: bool, is_separator: bool, i
 /// Returns the pipe delimiter `|` color.
 pub fn pipe_color(theme: &Theme, is_active: bool) -> Color32 {
     if is_active {
-        theme.accent
+        theme.text
     } else {
         Color32::from_rgba_unmultiplied(
             theme.border().r(),
@@ -96,12 +96,8 @@ pub fn pipe_color(theme: &Theme, is_active: bool) -> Color32 {
 }
 
 /// Returns the cell text color.
-pub fn cell_color(theme: &Theme, is_header: bool) -> Color32 {
-    if is_header {
-        theme.accent
-    } else {
-        theme.text
-    }
+pub fn cell_color(theme: &Theme, _is_header: bool) -> Color32 {
+    theme.text
 }
 
 /// Parses column alignments from a markdown separator line (e.g. `| :--- | :---: | ---: |`).
@@ -146,14 +142,14 @@ pub fn render_table_block_decorations(
         StrokeKind::Inside,
     );
 
-    // 2. Header row background pill and accent divider line
+    // 2. Header row background pill (no bottom border line)
     if let Some(h_rect) = header_rect {
         let is_single_row = table_rect.height() <= h_rect.height() + 2.0;
         let header_bg = Color32::from_rgba_unmultiplied(
-            theme.accent.r(),
-            theme.accent.g(),
-            theme.accent.b(),
-            18,
+            theme.text.r(),
+            theme.text.g(),
+            theme.text.b(),
+            14,
         );
         let corner_radius = if is_single_row {
             CornerRadius::same(4)
@@ -161,13 +157,6 @@ pub fn render_table_block_decorations(
             CornerRadius { nw: 4, ne: 4, sw: 0, se: 0 }
         };
         painter.rect_filled(h_rect, corner_radius, header_bg);
-
-        if !is_single_row {
-            painter.line_segment(
-                [h_rect.left_bottom(), h_rect.right_bottom()],
-                Stroke::new(1.5, theme.accent),
-            );
-        }
     }
 }
 

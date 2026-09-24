@@ -127,14 +127,14 @@ pub fn render_inactive_line(
         InlineLineKind::BulletItem => {
             // Render Bullet glyph
             let glyph = bullet_glyph();
-            let fmt = TextFormat::simple(default_font.clone(), theme.accent);
+            let fmt = TextFormat::simple(default_font.clone(), theme.text);
             append_and_map(job, charmap, glyph, char_start, fmt);
             prefix_len
         }
         InlineLineKind::NumberedItem(num) => {
             // Render Numbered item prefix
             let glyph = number_glyph(num);
-            let fmt = TextFormat::simple(default_font.clone(), theme.accent);
+            let fmt = TextFormat::simple(default_font.clone(), theme.text);
             append_and_map(job, charmap, &glyph, char_start, fmt);
             prefix_len
         }
@@ -223,7 +223,7 @@ pub fn render_inactive_line(
                 append_run_and_map(job, charmap, chars, abs_start + 1..abs_end, fmt);
             }
             InlineSpanKind::Code => {
-                let fmt = TextFormat::simple(FontId::monospace(font_size * 0.95), theme.accent);
+                let fmt = TextFormat::simple(FontId::monospace(font_size * 0.95), theme.text);
                 if abs_end >= abs_start + 2 * m {
                     append_run_and_map(job, charmap, chars, abs_start + m..abs_end - m, fmt);
                 }
@@ -267,7 +267,7 @@ pub fn render_inactive_line(
             }
             InlineSpanKind::Image { ref alt, .. } => {
                 // Render image icon + alt text
-                let fmt_icon = TextFormat::simple(default_font.clone(), theme.accent);
+                let fmt_icon = TextFormat::simple(default_font.clone(), theme.text);
                 append_and_map(job, charmap, "🖼 ", abs_start, fmt_icon);
                 let fmt_alt = TextFormat::simple(default_font.clone(), theme.muted);
                 append_and_map(job, charmap, alt, abs_start, fmt_alt);
@@ -278,7 +278,7 @@ pub fn render_inactive_line(
                 append_and_map(job, charmap, url, abs_start + 1, fmt);
             }
             InlineSpanKind::FootnoteRef { ref id } => {
-                let fmt = TextFormat::simple(FontId::monospace(font_size * 0.85), theme.accent);
+                let fmt = TextFormat::simple(FontId::monospace(font_size * 0.85), theme.text);
                 let s = format!("[^{id}]");
                 append_and_map(job, charmap, &s, abs_start, fmt);
             }

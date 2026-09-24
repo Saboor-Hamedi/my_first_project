@@ -6,7 +6,7 @@ use crate::view_editor::inline::elements::{
     code_block_copy_button_rect, render_code_block_card, render_table_block_decorations,
 };
 use crate::view_editor::inline::types::{InlineEditorLayout, InlineLineKind};
-use eframe::egui::{self, pos2, vec2, Align2, FontId, Pos2, Rect};
+use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Pos2, Rect};
 
 /// Renders unified background cards, headers, and interactive copy buttons for multi-line code blocks.
 pub fn render_code_block_containers(
@@ -97,7 +97,7 @@ pub fn render_code_block_containers(
                 }
 
                 let (btn_text, btn_color) = if is_copied {
-                    ("✓ Copied", theme.accent)
+                    ("✓", Color32::from_rgb(60, 200, 110))
                 } else if is_btn_hovered {
                     ("Copy", theme.text)
                 } else {
@@ -108,7 +108,7 @@ pub fn render_code_block_containers(
                     btn_rect.center(),
                     Align2::CENTER_CENTER,
                     btn_text,
-                    FontId::monospace(9.5),
+                    FontId::monospace(if is_copied { 11.5 } else { 9.5 }),
                     btn_color,
                 );
             }

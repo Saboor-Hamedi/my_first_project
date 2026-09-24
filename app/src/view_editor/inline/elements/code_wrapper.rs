@@ -227,7 +227,7 @@ pub fn render_code_block_card(
                 Align2::LEFT_CENTER,
                 lang.to_uppercase(),
                 label_font,
-                theme.accent,
+                theme.text,
             );
         }
     }

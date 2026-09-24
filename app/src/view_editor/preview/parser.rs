@@ -347,7 +347,7 @@ pub fn build_inline_job(
                 let code_end = i + 1 + end_rel;
                 flush_plain(&mut plain_acc, &mut job);
                 let code_text: String = chars[i + 1..code_end].iter().collect();
-                let fmt = TextFormat::simple(FontId::monospace(base_font_size * 0.92), theme.accent);
+                let fmt = TextFormat::simple(FontId::monospace(base_font_size * 0.92), theme.text);
                 job.append(&code_text, 0.0, fmt);
                 i = code_end + 1;
                 continue;

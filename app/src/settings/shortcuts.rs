@@ -32,11 +32,23 @@ pub fn render_shortcuts_tab(
         vec2(search_w, 28.0),
     );
 
+    let edit_id = search_id.with("text_edit");
+    let is_search_focused = ui.memory(|m| m.has_focus(edit_id));
+    let is_search_hover = ui.rect_contains_pointer(search_rect);
+
+    let border_stroke = if is_search_focused {
+        Stroke::new(1.0, theme.accent)
+    } else if is_search_hover {
+        Stroke::new(1.0, theme.border().lerp_to_gamma(theme.accent, 0.35))
+    } else {
+        Stroke::new(1.0, theme.border())
+    };
+
     painter.rect(
         search_rect,
         4.0,
         theme.surface(),
-        Stroke::new(1.0, theme.border()),
+        border_stroke,
         egui::StrokeKind::Inside,
     );
     painter.text(
@@ -47,13 +59,15 @@ pub fn render_shortcuts_tab(
         theme.muted,
     );
 
+    let right_pad = if search_query.is_empty() { 6.0 } else { 24.0 };
     let text_rect = Rect::from_min_max(
-        pos2(search_rect.min.x + 26.0, search_rect.min.y),
-        pos2(search_rect.max.x - 6.0, search_rect.max.y),
+        pos2(search_rect.min.x + 26.0, search_rect.min.y + 4.0),
+        pos2(search_rect.max.x - right_pad, search_rect.max.y - 4.0),
     );
     let mut child_ui = ui.new_child(egui::UiBuilder::new().max_rect(text_rect));
     let edit_resp = child_ui.add(
         egui::TextEdit::singleline(&mut search_query)
+            .id(edit_id)
             .hint_text("Search shortcuts...")
             .frame(false)
             .font(FontId::proportional(12.0))
@@ -61,6 +75,34 @@ pub fn render_shortcuts_tab(
     );
     if edit_resp.changed() {
         ui.ctx().data_mut(|d| d.insert_temp(search_id, search_query.clone()));
+    }
+
+    let search_resp = ui.allocate_rect(search_rect, egui::Sense::click());
+    if search_resp.clicked() && !is_search_focused {
+        ui.memory_mut(|m| m.request_focus(edit_id));
+    }
+
+    if !search_query.is_empty() {
+        let clear_rect = Rect::from_center_size(
+            pos2(search_rect.max.x - 14.0, search_rect.center().y),
+            vec2(16.0, 16.0),
+        );
+        let clear_hover = ui.rect_contains_pointer(clear_rect);
+        if clear_hover {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+            if ui.input(|i| i.pointer.primary_clicked()) {
+                search_query.clear();
+                ui.ctx().data_mut(|d| d.insert_temp(search_id, String::new()));
+                ui.ctx().request_repaint();
+            }
+        }
+        painter.text(
+            clear_rect.center(),
+            Align2::CENTER_CENTER,
+            "×",
+            FontId::proportional(12.0),
+            if clear_hover { theme.text } else { theme.muted },
+        );
     }
 
     // ── 2. Table Headers ─────────────────────────────────────────────────────
@@ -126,6 +168,7 @@ pub fn render_shortcuts_tab(
             ("Ctrl+Shift+W",  "Close window"),
             (":help",         "Command bar reference"),
             (":stats",        "Daily writing statistics"),
+            ("Preferences",   "Caret styles, blinking & animations (:set)"),
         ]),
     ];
 

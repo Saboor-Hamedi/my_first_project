@@ -81,22 +81,22 @@ pub fn render_active_line(
     // 3. Render line-level prefix (if any)
     let content_start = match kind {
         InlineLineKind::CodeFence(_) => {
-            let fmt = TextFormat::simple(syntax_font.clone(), theme.accent);
+            let fmt = TextFormat::simple(syntax_font.clone(), theme.text);
             append_run_and_map(job, charmap, chars, 0..n, fmt);
             return line_h;
         }
         InlineLineKind::SetextUnderline(_) => {
-            let fmt = TextFormat::simple(syntax_font.clone(), theme.accent);
+            let fmt = TextFormat::simple(syntax_font.clone(), theme.text);
             append_run_and_map(job, charmap, chars, 0..n, fmt);
             return line_h;
         }
         InlineLineKind::Rule => {
-            let fmt = TextFormat::simple(syntax_font.clone(), theme.accent);
+            let fmt = TextFormat::simple(syntax_font.clone(), theme.text);
             append_run_and_map(job, charmap, chars, 0..n, fmt);
             return line_h;
         }
         InlineLineKind::TableRow(info) if info.is_separator => {
-            let fmt = TextFormat::simple(syntax_font.clone(), theme.accent);
+            let fmt = TextFormat::simple(syntax_font.clone(), theme.text);
             append_run_and_map(job, charmap, chars, 0..n, fmt);
             return line_h;
         }
@@ -105,7 +105,7 @@ pub fn render_active_line(
         | InlineLineKind::BulletItem
         | InlineLineKind::NumberedItem(_) => {
             if prefix_len > 0 && prefix_len <= n {
-                let fmt = TextFormat::simple(syntax_font.clone(), theme.accent);
+                let fmt = TextFormat::simple(syntax_font.clone(), theme.text);
                 append_run_and_map(job, charmap, chars, 0..prefix_len, fmt);
                 prefix_len
             } else {
@@ -171,7 +171,7 @@ pub fn render_active_line(
             InlineSpanKind::Code => {
                 let m = span.marker_len;
                 let fmt_marker = TextFormat::simple(syntax_font.clone(), syntax_color);
-                let fmt_body = TextFormat::simple(FontId::monospace(font_size * 0.95), theme.accent);
+                let fmt_body = TextFormat::simple(FontId::monospace(font_size * 0.95), theme.text);
 
                 append_run_and_map(job, charmap, chars, abs_start..abs_start + m, fmt_marker.clone());
                 if abs_end >= abs_start + 2 * m {
@@ -237,7 +237,7 @@ pub fn render_active_line(
                 append_run_and_map(job, charmap, chars, abs_start..abs_end, fmt);
             }
             InlineSpanKind::FootnoteRef { .. } => {
-                let fmt = TextFormat::simple(FontId::monospace(font_size * 0.85), theme.accent);
+                let fmt = TextFormat::simple(FontId::monospace(font_size * 0.85), theme.text);
                 append_run_and_map(job, charmap, chars, abs_start..abs_end, fmt);
             }
             InlineSpanKind::Html { .. } => {

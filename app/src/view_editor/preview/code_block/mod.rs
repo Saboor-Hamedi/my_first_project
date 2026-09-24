@@ -115,7 +115,7 @@ pub fn render_preview_code_block(
 
         // Render Copy button text matching editor
         let (btn_text, btn_color) = if is_copied {
-            ("✓ Copied", theme.accent)
+            ("✓", Color32::from_rgb(60, 200, 110))
         } else if is_btn_hovered {
             ("Copy", theme.text)
         } else {
@@ -125,7 +125,7 @@ pub fn render_preview_code_block(
             btn_rect.center(),
             Align2::CENTER_CENTER,
             btn_text,
-            FontId::monospace(9.5),
+            FontId::monospace(if is_copied { 11.5 } else { 9.5 }),
             btn_color,
         );
 
