@@ -111,23 +111,13 @@ pub fn render_sounds_tab(
         let is_sel = sound.profile == profile;
         let s_hovered = ui.rect_contains_pointer(s_rect);
 
-        let bg = if is_sel {
-            if theme.is_light() {
-                Color32::from_rgb(
-                    ((theme.surface().r() as f32) * 0.78 + (theme.accent.r() as f32) * 0.22) as u8,
-                    ((theme.surface().g() as f32) * 0.78 + (theme.accent.g() as f32) * 0.22) as u8,
-                    ((theme.surface().b() as f32) * 0.78 + (theme.accent.b() as f32) * 0.22) as u8,
-                )
-            } else {
-                Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 32)
-            }
-        } else if s_hovered {
-            theme.surface().lerp_to_gamma(theme.accent, 0.08)
+        let bg = if s_hovered {
+            theme.surface().lerp_to_gamma(theme.accent, 0.05)
         } else {
             theme.surface()
         };
         let border_stroke = if is_sel {
-            Stroke::NONE
+            Stroke::new(1.0, theme.accent)
         } else if s_hovered {
             Stroke::new(1.0, theme.border().lerp_to_gamma(theme.accent, 0.4))
         } else {

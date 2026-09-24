@@ -131,9 +131,7 @@ pub fn render_keybindings_tab(
         *capture = None;
     }
     let is_normal = active_mode == KeymapMode::Normal;
-    let normal_bg = if is_normal {
-        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 40)
-    } else if normal_resp.hovered() && !pointer_in_modal {
+    let normal_bg = if normal_resp.hovered() && !pointer_in_modal {
         theme.surface()
     } else {
         theme.bg
@@ -150,7 +148,7 @@ pub fn render_keybindings_tab(
         Align2::CENTER_CENTER,
         "Normal Mode",
         FontId::proportional(12.0),
-        if is_normal { theme.highlight } else { theme.muted },
+        if is_normal { theme.accent } else { theme.muted },
     );
 
     let visual_resp = ui.interact(visual_btn_rect, Id::new("keymap_mode_visual"), Sense::click());
@@ -160,9 +158,7 @@ pub fn render_keybindings_tab(
         *capture = None;
     }
     let is_visual = active_mode == KeymapMode::Visual;
-    let visual_bg = if is_visual {
-        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 40)
-    } else if visual_resp.hovered() && !pointer_in_modal {
+    let visual_bg = if visual_resp.hovered() && !pointer_in_modal {
         theme.surface()
     } else {
         theme.bg
@@ -179,7 +175,7 @@ pub fn render_keybindings_tab(
         Align2::CENTER_CENTER,
         "Visual Mode",
         FontId::proportional(12.0),
-        if is_visual { theme.highlight } else { theme.muted },
+        if is_visual { theme.accent } else { theme.muted },
     );
 
     // ── 6. Search Bar ────────────────────────────────────────────────────────

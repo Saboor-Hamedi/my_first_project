@@ -1,81 +1,139 @@
-# Prompt for coding agent: fix the "AI Agent" tab button styling
+# Prompt for coding agent: AI Agent chat panel — alignment, avatars, input polish
 
-Paste this whole file to the agent. Small, focused fix — applies the same rule
-from the earlier sleek design pass ("accent color on text only, never a
-background fill behind it") to one specific control that was missed: the
-**AI Agent tab button** in the right-panel header (next to "Preview").
+Paste this whole file to the agent. Covers the chat panel specifically. Also
+carries forward two issues flagged in earlier rounds that are still open and
+belong in the same pass since they touch the same panel.
 
-## The problem
+## 1. Message alignment: user messages on the right, assistant on the left
 
-The AI Agent tab currently renders with a filled background box behind the
-`✦ AI Agent` label (and/or icon badge to its left) plus a visible border around
-it — this makes it look like a separate highlighted card sitting inside the
-header row, rather than a tab that matches the "Preview" tab next to it.
-
-## The fix
-
-Locate the render code for this tab (wherever the right-panel header draws
-"Preview" / "AI Agent" as switchable tabs — likely the same function or a
-sibling of whatever draws the main editor's tab bar). Change the AI Agent
-tab's active/selected state to match how the rest of the app now signals
-"this is selected" after the recent design pass:
-
-- **Remove the filled background rect** behind the label and icon entirely.
-- **Remove the border/stroke** around the tab.
-- **Keep only a text-color change** — the label (and icon, if it's drawn as
-  text/glyph rather than a raster image) goes to `theme.accent` when active,
-  `theme.text`/`theme.muted` when inactive. No box, no border, just color.
-- If this tab needs a way to show "currently selected" beyond text color alone
-  (since it sits next to "Preview" and the two need to be visually
-  distinguishable at a glance), use the same underline treatment already
-  applied to the main tab bar in the earlier design pass — a thin
-  accent-colored line under the active tab's label — rather than reintroducing
-  a background fill. This keeps one consistent "active tab" signal across the
-  whole app instead of this button having its own separate treatment.
+**Current bug:** both "You" and "Assistant" messages render left-aligned, which
+reads as a transcript, not a conversation. Standard chat convention (and the
+clearer signal) is user messages right-aligned, assistant messages left-aligned
+— the eye can tell who's speaking from position alone, before even reading the
+role label.
 
 ```rust
-// BEFORE — background box + border behind the tab label/icon
-painter.rect(
-    tab_rect,
-    4.0,
-    Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 40),
-    Stroke::new(1.0, theme.accent),
-    egui::StrokeKind::Inside,
-);
-painter.text(text_pos, Align2::LEFT_CENTER, "✦ AI Agent", font, theme.accent);
-```
+// Locate the message-rendering loop in the AI Agent panel. Each message
+// currently gets the same left-anchored layout regardless of role — split
+// this into two layouts based on role.
 
-```rust
-// AFTER — text color carries the "active" signal, nothing drawn behind it.
-// Optional thin underline only if a distinct active-tab marker is still
-// needed alongside "Preview" — matches the main tab bar's existing pattern.
-let label_color = if is_active { theme.accent } else { theme.muted };
-painter.text(text_pos, Align2::LEFT_CENTER, "✦ AI Agent", font, label_color);
+for msg in &conversation.messages {
+    let bubble_max_width = panel_rect.width() * 0.78; // leave room so it doesn't span edge-to-edge
+    let bubble_width = measure_content_width(&msg.text, font).min(bubble_max_width);
 
-if is_active {
-    painter.line_segment(
-        [pos2(tab_rect.min.x, tab_rect.max.y), pos2(tab_rect.max.x, tab_rect.max.y)],
-        Stroke::new(1.5, theme.accent),
-    );
+    let bubble_rect = match msg.role {
+        Role::User => {
+            // Right-aligned: anchor to the right edge of the panel, avatar sits
+            // to the right of the bubble.
+            Rect::from_min_size(
+                pos2(panel_rect.max.x - pad - bubble_width, cursor_y),
+                vec2(bubble_width, bubble_height),
+            )
+        }
+        Role::Assistant => {
+            // Left-aligned: anchor to the left edge, avatar sits to the left.
+            Rect::from_min_size(
+                pos2(panel_rect.min.x + pad, cursor_y),
+                vec2(bubble_width, bubble_height),
+            )
+        }
+    };
+
+    // draw bubble + avatar using bubble_rect and msg.role, see section 2 for the avatar
+    cursor_y += bubble_height + msg_gap;
 }
 ```
 
+The exact measurement/layout helper names will differ from this sketch —
+adapt to however the real chat loop currently computes bubble size and
+position, the key change is just: **role determines which edge the bubble
+anchors to**, everything else about how a bubble is drawn stays the same.
+
+## 2. Role badges → small round avatars, no border
+
+**Current:** "You" and "Assistant" render as rectangular badges with a filled
+background and visible border — reads as a UI chip, not a person/agent
+identity marker.
+
+**Change to:** a small filled circle, ~25px diameter, no border, with either
+a single-letter/short glyph inside (e.g. "Y" for You, "✦" or "AI" for
+Assistant) or an actual avatar image if the app has one for the user. Standard
+chat-app treatment (iMessage, Slack, Discord all converge on this for exactly
+this reason — a circle reads as "identity," a rectangle reads as "label").
+
+```rust
+fn draw_avatar(painter: &egui::Painter, center: Pos2, role: Role, theme: &Theme) {
+    let radius = 12.5; // ~25px diameter
+    let (fill, glyph, glyph_color) = match role {
+        Role::User => (theme.accent, "Y", Color32::BLACK), // or the user's initial if known
+        Role::Assistant => (theme.surface(), "\u{2726}", theme.accent), // ✦, matches the AI Agent tab's own icon
+    };
+    painter.circle_filled(center, radius, fill);
+    painter.text(
+        center,
+        Align2::CENTER_CENTER,
+        glyph,
+        FontId::proportional(11.0),
+        glyph_color,
+    );
+    // No stroke/border drawn — filled circle only.
+}
+```
+
+Position the avatar just outside the bubble on the side that matches the
+message's alignment (right of the bubble for User, left of the bubble for
+Assistant) so the two together read as one unit, avatar-then-bubble in
+reading order for assistant messages, bubble-then-avatar for user messages.
+
+## 3. Textarea placeholder text is oversized
+
+**Current:** "Ask anything about your notes... (Enter to send, Shift+Enter for
+newline)" renders at what looks like the same size as body text elsewhere,
+making it visually loud for what should be a quiet hint.
+
+**Fix:** drop the placeholder's font size a couple points below the actual
+input text size, and use `theme.muted` rather than `theme.text` for its color
+(placeholders should read as absent content, not as content) — if it's
+currently using the input field's own text color/size for the placeholder
+rather than a dedicated smaller/dimmer style, that's the bug to find. Also
+worth splitting the hint into two lines or shortening it if it's currently
+wrapping awkwardly at the textarea's width — "Ask anything about your notes…"
+as the placeholder, with the keyboard-shortcut hint moved to a small persistent
+label under the textarea instead of packed into the placeholder text itself,
+usually reads cleaner than one long placeholder string.
+
+## 4. Carried forward from earlier rounds — still open, same panel
+
+**Table word-wrap breaking mid-word.** Flagged twice now, not yet fixed:
+document names and other table-cell text break mid-word ("Recipro"/"cal",
+"Documen"/"t") instead of wrapping at word boundaries. Locate wherever table
+cells wrap their content and confirm it's wrapping on whitespace, not just
+truncating at a fixed character/pixel width without checking for a word
+boundary first.
+
+**Chat input box border is too heavy.** The textarea currently has a thick,
+bright accent-colored border, which — combined with the "no background boxes,
+color-only for content" direction from earlier design passes — reads as the
+loudest single element in the panel. Replace with either a much thinner
+(1px) border only on focus, or a subtle background-tint change on focus with
+no border at all, consistent with how focus/active states are being simplified
+elsewhere in the app.
+
 ## Definition of done
 
-- No filled background box behind the AI Agent tab's icon or label, active or
-  inactive.
-- No border/stroke drawn around the tab.
-- Active state reads from text color (plus, if needed, the same thin-underline
-  pattern the main tab bar already uses) — nothing else.
-- Visually consistent with the "Preview" tab next to it — both should look
-  like they belong to the same tab bar, not two different UI styles.
+- User messages align right, assistant messages align left, avatar-then-bubble
+  order correct for each side.
+- Role indicator is a ~25px filled circle with no border, not a rectangular
+  bordered badge.
+- Placeholder text in the chat input is visibly smaller/dimmer than real
+  message text, not the same size.
+- Table cells wrap at word boundaries, never mid-word.
+- Chat input's focus border is thin or replaced with a background-tint change,
+  not the current heavy accent outline.
 
 ## Rules for the agent
 
-- This is a one-control styling fix — don't touch the chat panel's own
-  content styling (the table-wrapping bug and monospace-chat note are separate,
-  already-flagged issues, not part of this task).
-- If the icon (`✦`) is a raster/SVG asset rather than a text glyph, recolor it
-  via tint rather than drawing a background behind it, so the same "text-only"
-  rule still applies to it.
+- This is a chat-panel-scoped pass — don't touch the editor/preview panes.
+- Reuse existing avatar/circle-drawing helpers if this codebase already has one
+  (e.g. from the sidebar or settings panels) rather than writing a new one.
 - After the fix, give a 3-line summary of what changed and what to check.

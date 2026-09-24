@@ -41,10 +41,8 @@ pub fn render_editor_mode_tab(
         on_save_setting("editor_mode", "hybrid");
     }
 
-    let hybrid_bg = if is_hybrid {
-        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 26)
-    } else if hybrid_hover {
-        theme.surface().lerp_to_gamma(theme.accent, 0.08)
+    let hybrid_bg = if hybrid_hover {
+        theme.surface().lerp_to_gamma(theme.accent, 0.04)
     } else {
         theme.surface()
     };
@@ -52,7 +50,7 @@ pub fn render_editor_mode_tab(
         hybrid_card,
         6.0,
         hybrid_bg,
-        Stroke::new(if is_hybrid { 1.5 } else { 1.0 }, if is_hybrid { theme.accent } else if hybrid_hover { theme.border().lerp_to_gamma(theme.accent, 0.4) } else { theme.border() }),
+        Stroke::new(1.0, if is_hybrid { theme.accent } else if hybrid_hover { theme.border().lerp_to_gamma(theme.accent, 0.4) } else { theme.border() }),
         egui::StrokeKind::Inside,
     );
 
@@ -98,10 +96,8 @@ pub fn render_editor_mode_tab(
         on_save_setting("editor_mode", "vim");
     }
 
-    let vim_bg = if is_vim {
-        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 26)
-    } else if vim_hover {
-        theme.surface().lerp_to_gamma(theme.accent, 0.08)
+    let vim_bg = if vim_hover {
+        theme.surface().lerp_to_gamma(theme.accent, 0.04)
     } else {
         theme.surface()
     };
@@ -109,7 +105,7 @@ pub fn render_editor_mode_tab(
         vim_card,
         6.0,
         vim_bg,
-        Stroke::new(if is_vim { 1.5 } else { 1.0 }, if is_vim { theme.accent } else if vim_hover { theme.border().lerp_to_gamma(theme.accent, 0.4) } else { theme.border() }),
+        Stroke::new(1.0, if is_vim { theme.accent } else if vim_hover { theme.border().lerp_to_gamma(theme.accent, 0.4) } else { theme.border() }),
         egui::StrokeKind::Inside,
     );
 

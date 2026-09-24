@@ -350,33 +350,5 @@ pub fn render_editor_body(
         );
     }
 
-    // Interactive scrollbar indicator in the right margin gutter
-    if visible_h > 35.0 && total_content_h > visible_h && max_scroll > 0.0 {
-        let max_thumb = visible_h.max(28.0);
-        let thumb_h = ((visible_h / total_content_h) * visible_h).clamp(28.0, max_thumb);
-        let scroll_ratio = (*scroll_y / max_scroll).clamp(0.0, 1.0);
-        let thumb_y = editor_rect.min.y + scroll_ratio * (visible_h - thumb_h);
-        let track_x = editor_rect.max.x - 8.0;
-        let thumb_rect = Rect::from_min_size(pos2(track_x - 1.5, thumb_y), vec2(3.0, thumb_h));
-        let track_rect = Rect::from_min_max(
-            pos2(track_x - 8.0, editor_rect.min.y),
-            pos2(editor_rect.max.x, editor_rect.max.y),
-        );
-
-        let is_track_hovered = ui.rect_contains_pointer(track_rect);
-        if is_track_hovered && ui.input(|i| i.pointer.primary_down()) {
-            if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
-                let avail_track = (visible_h - thumb_h).max(1.0);
-                let ratio = ((pos.y - editor_rect.min.y - thumb_h * 0.5) / avail_track).clamp(0.0, 1.0);
-                *scroll_y = ratio * max_scroll;
-            }
-        }
-
-        let thumb_color = if is_track_hovered {
-            Color32::from_rgba_unmultiplied(180, 185, 200, 160)
-        } else {
-            Color32::from_rgba_unmultiplied(120, 125, 140, 70)
-        };
-        painter.rect_filled(thumb_rect, 1.5, thumb_color);
-    }
+    // Scrollbar thumb is kept invisible per UI design (mouse wheel and keyboard scrolling remain active).
 }

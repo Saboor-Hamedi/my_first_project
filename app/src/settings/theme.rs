@@ -96,16 +96,14 @@ pub fn render_theme_tab(
             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
         }
 
-        let card_bg = if is_sel {
-            Color32::from_rgba_unmultiplied(t_preset.accent.r(), t_preset.accent.g(), t_preset.accent.b(), 24)
-        } else {
+        let card_bg = {
             let base = theme.surface();
-            let hover_bg = lerp_color(base, t_preset.accent, 0.09);
+            let hover_bg = lerp_color(base, t_preset.accent, 0.05);
             lerp_color(base, hover_bg, hover_t)
         };
 
         let card_stroke = if is_sel {
-            Stroke::new(1.5, t_preset.accent)
+            Stroke::new(1.0, t_preset.accent)
         } else {
             Stroke::new(1.0, lerp_color(theme.border(), t_preset.accent, hover_t * 0.7))
         };

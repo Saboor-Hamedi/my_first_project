@@ -298,6 +298,7 @@ pub fn build_inline_job(
 ) -> LayoutJob {
     let mut job = LayoutJob::default();
     job.wrap.max_width = wrap_width;
+    job.wrap.break_anywhere = false;
 
     let chars: Vec<char> = text.chars().collect();
     let n = chars.len();

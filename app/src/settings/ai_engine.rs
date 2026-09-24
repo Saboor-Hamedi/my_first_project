@@ -231,10 +231,8 @@ pub fn render_ai_tab(
             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
         }
 
-        let bg = if is_sel {
-            Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), if theme.is_light() { 22 } else { 34 })
-        } else if opt_hover {
-            theme.surface().lerp_to_gamma(theme.accent, 0.08)
+        let bg = if opt_hover {
+            theme.surface().lerp_to_gamma(theme.accent, 0.05)
         } else {
             theme.surface()
         };
@@ -243,7 +241,7 @@ pub fn render_ai_tab(
             opt_rect,
             6.0,
             bg,
-            Stroke::new(1.0, if is_sel { theme.accent } else { theme.border() }),
+            Stroke::new(1.0, if is_sel { theme.accent } else if opt_hover { theme.border().lerp_to_gamma(theme.accent, 0.4) } else { theme.border() }),
             egui::StrokeKind::Inside,
         );
 

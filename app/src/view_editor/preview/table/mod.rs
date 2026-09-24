@@ -29,12 +29,13 @@ pub fn render_preview_table(
 ) -> f32 {
     let col_count = headers.len().max(1);
     let table_margin_right = 16.0;
-    let min_table_w = (col_count as f32 * font_size * 5.0).max(300.0);
+    let min_col_w = (font_size * 7.5).max(95.0);
+    let min_table_w = (col_count as f32 * min_col_w).max(300.0);
     let table_w = (max_text_w - table_margin_right).min(min_table_w.max(650.0));
 
     // Cell padding matches editor's exact table slot layout (10.0px horizontal)
     let cell_pad_x = 10.0;
-    let col_w = ((table_w - cell_pad_x * 2.0) / col_count as f32).max(font_size * 4.0);
+    let col_w = ((table_w - cell_pad_x * 2.0) / col_count as f32).max(min_col_w);
 
     // 1. Precompute header galleys and height matching editor table_metrics
     let (_, header_min_h) = table_metrics(font_size, true, false, false);

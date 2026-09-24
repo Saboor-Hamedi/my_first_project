@@ -103,14 +103,8 @@ pub fn render_setting_tabs(
         let is_sel = *active_tab == tab;
         let hovered = ui.rect_contains_pointer(item_rect);
 
-        // Background card
+        // Clean selection: left accent bar only, no filled background card
         if is_sel {
-            painter.rect_filled(
-                item_rect,
-                6.0,
-                Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 26),
-            );
-            // Left accent border bar
             let bar = Rect::from_min_size(
                 pos2(item_rect.min.x + 2.0, item_rect.min.y + 7.0),
                 vec2(3.5, item_rect.height() - 14.0),
@@ -121,9 +115,9 @@ pub fn render_setting_tabs(
                 item_rect,
                 6.0,
                 if theme.is_light() {
-                    Color32::from_rgba_unmultiplied(0, 0, 0, 10)
+                    Color32::from_rgba_unmultiplied(0, 0, 0, 8)
                 } else {
-                    Color32::from_rgba_unmultiplied(255, 255, 255, 12)
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 8)
                 },
             );
         }
@@ -140,35 +134,14 @@ pub fn render_setting_tabs(
             (theme.muted, theme.muted)
         };
 
-        // Icon — larger, in accent color when selected
-        if tab == SettingTab::Ai {
-            let badge_rect = Rect::from_center_size(
-                pos2(item_rect.min.x + 23.0, item_rect.center().y),
-                vec2(21.0, 15.0),
-            );
-            painter.rect(
-                badge_rect,
-                3.0,
-                Color32::from_rgba_unmultiplied(icon_color.r(), icon_color.g(), icon_color.b(), 32),
-                Stroke::new(1.0, icon_color),
-                egui::StrokeKind::Inside,
-            );
-            painter.text(
-                badge_rect.center(),
-                Align2::CENTER_CENTER,
-                "AI",
-                FontId::monospace(9.5),
-                icon_color,
-            );
-        } else {
-            painter.text(
-                pos2(item_rect.min.x + 16.0, item_rect.center().y - 1.0),
-                Align2::LEFT_CENTER,
-                tab.icon(),
-                FontId::proportional(15.0),
-                icon_color,
-            );
-        }
+        // Icon — clean glyph in accent color when selected (no boxes/badges)
+        painter.text(
+            pos2(item_rect.min.x + 16.0, item_rect.center().y - 1.0),
+            Align2::LEFT_CENTER,
+            tab.icon(),
+            FontId::proportional(15.0),
+            icon_color,
+        );
 
         // Label — slightly right of icon
         painter.text(

@@ -51,9 +51,10 @@ impl App {
         // Detached Editor & Preview Panel Surface (subtle card background & border derived from theme)
         let is_preview_active = self.preview_open && self.mode == Mode::Normal;
         let divider_w = 11.0;
-        let available_w = (top_panel_rect.width() - divider_w).max(200.0);
-        let min_w = 140.0f32;
-        let max_w = (available_w - 140.0f32).max(min_w);
+        let available_w = (top_panel_rect.width() - divider_w).max(300.0);
+        let min_w = 150.0f32;
+        let min_right_w = 150.0f32;
+        let max_w = (available_w - min_right_w).max(min_w);
         let left_w = if is_preview_active {
             (available_w * self.split_ratio).clamp(min_w, max_w)
         } else {
@@ -219,9 +220,10 @@ impl App {
         // Split Editor & Preview panes setup inside body_rect
         let (actual_editor_rect, preview_rect_opt, divider_rect_opt) = if is_preview_active {
             let total_w = top_panel_rect.width();
-            let available_w = (total_w - divider_w).max(200.0);
-            let min_w = 140.0f32;
-            let max_w = (available_w - 140.0f32).max(min_w);
+            let available_w = (total_w - divider_w).max(300.0);
+            let min_w = 150.0f32;
+            let min_right_w = 150.0f32;
+            let max_w = (available_w - min_right_w).max(min_w);
             let left_w = (available_w * self.split_ratio).clamp(min_w, max_w);
 
             let left_rect = Rect::from_min_max(
@@ -317,19 +319,9 @@ impl App {
                             ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
                             if let Some(pos) = ui.input(|i| i.pointer.interact_pos().or_else(|| i.pointer.hover_pos())) {
                                 let raw_ratio = (pos.x - top_panel_rect.min.x - divider_w * 0.5) / available_w;
-                                if raw_ratio > 0.90 || raw_ratio < 0.10 {
-                                    self.preview_open = false;
-                                    self.is_dragging_splitter = false;
-                                    self.split_ratio = 0.5;
-                                    let _ = self.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
-                                        key: "preview".into(),
-                                        val: "false".into(),
-                                    });
-                                    self.set_status("Live preview closed", now);
-                                    ui.ctx().request_repaint();
-                                } else {
-                                    self.split_ratio = raw_ratio.clamp(0.15, 0.85);
-                                }
+                                let min_ratio = (150.0f32 / available_w).min(0.45);
+                                let max_ratio = (1.0 - 150.0f32 / available_w).max(min_ratio);
+                                self.split_ratio = raw_ratio.clamp(min_ratio, max_ratio);
                             }
                         } else {
                             self.is_dragging_splitter = false;
