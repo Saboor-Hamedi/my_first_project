@@ -145,6 +145,7 @@ impl App {
             zen_mode: false,
             show_titlebar: true,
             show_tabs: true,
+            workspace_importer: crate::workspace_import::WorkspaceImporter::new(),
         };
 
         app.load_settings();

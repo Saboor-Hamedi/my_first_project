@@ -27,6 +27,31 @@ impl Database {
         Ok(self.conn.last_insert_rowid())
     }
 
+    pub fn add_notes_batch(
+        &mut self,
+        notes: &[(String, String, Option<String>, NaiveDateTime)],
+    ) -> Result<usize> {
+        let tx = self.conn.transaction()?;
+        let mut count = 0;
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO notes (topic, body, struggled_with, created_at)
+                 VALUES (?1, ?2, ?3, ?4)",
+            )?;
+            for (topic, body, struggled_with, created_at) in notes {
+                stmt.execute(params![
+                    topic,
+                    body,
+                    struggled_with.as_deref(),
+                    created_at.format("%Y-%m-%d %H:%M:%S").to_string()
+                ])?;
+                count += 1;
+            }
+        }
+        tx.commit()?;
+        Ok(count)
+    }
+
     pub fn get_notes_count(&self) -> Result<usize> {
         let count: i64 = self.conn.query_row("SELECT COUNT(*) FROM notes", [], |row| row.get(0))?;
         Ok(count as usize)

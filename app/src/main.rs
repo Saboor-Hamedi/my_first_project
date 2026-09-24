@@ -36,6 +36,7 @@ pub mod agent;
 pub mod blur;
 pub mod font_manager;
 pub mod view_dashboard;
+pub mod workspace_import;
 
 pub use types::{snapshot, visual_line};
 

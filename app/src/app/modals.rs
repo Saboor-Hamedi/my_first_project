@@ -253,5 +253,19 @@ impl App {
                 }
             }
         }
+
+        // 6. Workspace / Obsidian Vault Import Modal
+        if self.workspace_importer.is_modal_open {
+            let act = crate::workspace_import::render_import_modal(
+                ui,
+                painter,
+                bounds,
+                &mut self.workspace_importer,
+                &self.theme,
+            );
+            if matches!(act, crate::workspace_import::ImportModalAction::RefreshNotes) {
+                self.reload_db_state();
+            }
+        }
     }
 }

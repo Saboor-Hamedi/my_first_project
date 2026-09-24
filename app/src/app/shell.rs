@@ -415,7 +415,10 @@ impl App {
             now,
         );
 
-        // Render Modal dialogs (Preferences, Search, Rename, Delete, Accent dropdown)
+        // Drag-and-drop hover indicator overlay
+        crate::workspace_import::render_hover_indicator(ui.ctx(), &painter, bounds, &self.theme);
+
+        // Render Modal dialogs (Preferences, Search, Rename, Delete, Accent dropdown, Workspace Import)
         self.render_modals(ui, &painter, bounds, accent_anchor_rect, now);
 
         // Poll DeepSeek background worker for any completed responses

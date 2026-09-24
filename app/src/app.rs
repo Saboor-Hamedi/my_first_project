@@ -209,6 +209,9 @@ pub struct App {
     // Granular UI Surface Visibility (toggleable via commands & shortcuts)
     pub show_titlebar: bool,
     pub show_tabs: bool,
+
+    // Workspace & Obsidian Vault Importer
+    pub workspace_importer: crate::workspace_import::WorkspaceImporter,
 }
 
 impl App {
@@ -351,6 +354,17 @@ impl eframe::App for App {
             }
         }
 
+        // Detect dragged & dropped Obsidian vaults, folders, and markdown files
+        if crate::workspace_import::handle_drag_and_drop(ctx, &mut self.workspace_importer) {
+            self.set_status("Started vault import in background...", now);
+        }
+
+        // Poll whether background workspace import completed
+        if let Some(count) = self.workspace_importer.poll_completion() {
+            self.reload_db_state();
+            self.set_status(&format!("Successfully imported {} notes into MindForge", count), now);
+        }
+
         window_shortcuts(ctx);
 
         egui::CentralPanel::default()
@@ -373,7 +387,9 @@ impl eframe::App for App {
                 || self.help_open
                 || self.rename_open
                 || self.delete_confirm_open
-                || self.accent_dropdown_open)
+                || self.accent_dropdown_open
+                || self.workspace_importer.is_modal_open
+                || self.workspace_importer.is_active())
         {
             ctx.request_repaint_after(Duration::from_millis(16));
         } else {
