@@ -302,7 +302,7 @@ pub fn render_markdown_view_inner(
                         }
                     } else {
                         // Standard bullet or numbered list
-                        let bullet_font = FontId::monospace(font_size * 0.92);
+                        let bullet_font = FontId::proportional(font_size);
                         let b_color = theme.accent;
                         let bullet_w = if bullet.ends_with('.') {
                             (bullet.len() as f32 * font_size * 0.58).max(18.0)

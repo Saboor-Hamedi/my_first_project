@@ -398,11 +398,11 @@ pub fn render_doc_sidebar(
 
         if is_active || (is_selected && is_focused) || is_hovered {
             let bg = if is_selected && is_focused && is_active {
-                Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 55)
+                Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 24)
             } else if is_selected && is_focused {
-                theme.surface()
+                Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 18)
             } else if is_active {
-                Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 40)
+                Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 16)
             } else {
                 Color32::from_rgba_unmultiplied(255, 255, 255, 8)
             };

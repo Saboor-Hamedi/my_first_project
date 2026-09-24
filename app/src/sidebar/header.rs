@@ -16,27 +16,19 @@ pub fn render_sidebar_header(
 ) -> Option<SidebarAction> {
     let mut action = None;
 
-    // 1. Branding Title
+    // 1. Branding Title: Centered horizontally in the sidebar
+    let center_x = sb_origin.x + (sidebar_w - 32.0) * 0.5;
     painter.text(
-        sb_origin,
-        Align2::LEFT_TOP,
+        pos2(center_x, sb_origin.y),
+        Align2::CENTER_TOP,
         "MINDFORGE",
         FontId::proportional(15.0),
         theme.accent,
     );
 
-    // 2. Subtitle: Clean toggle hint (no verbose navigating tags)
-    painter.text(
-        sb_origin + vec2(0.0, 20.0),
-        Align2::LEFT_TOP,
-        "Ctrl+B to toggle",
-        FontId::proportional(11.0),
-        theme.muted,
-    );
-
-    // 3. Navigation: Only 📊 Stats (Notes is handled directly by Documents explorer below)
+    // 2. Navigation: Only 📊 Stats (Notes is handled directly by Documents explorer below)
     let btn_rect = Rect::from_min_size(
-        sb_origin + vec2(0.0, 46.0),
+        sb_origin + vec2(0.0, 28.0),
         vec2(sidebar_w - 32.0, 26.0),
     );
     let is_sel = active_mode_idx == 1;

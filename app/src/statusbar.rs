@@ -37,8 +37,6 @@ pub fn render_bottom_dock(
     );
 
     let cmd_x = dock_rect.min.x + 14.0;
-    let badge_h = 20.0;
-    let badge_y = dock_rect.center().y - badge_h * 0.5;
     let cmd_y = dock_rect.center().y - 8.0;
     let mut text_x = cmd_x;
 
@@ -52,8 +50,8 @@ pub fn render_bottom_dock(
     let stats_pos = pos2(dock_rect.max.x - 34.0, dock_rect.center().y - 7.0);
     let stats_left_x = stats_pos.x - stats_galley.size().x;
 
-    // AI Agent Button on right side
-    let ai_btn_w = 76.0;
+    // AI Agent Button on right side (clean text, no background or border)
+    let ai_btn_w = 70.0;
     let ai_btn_h = 22.0;
     let ai_btn_rect = Rect::from_center_size(
         pos2(stats_left_x - (ai_btn_w * 0.5 + 12.0), dock_rect.center().y),
@@ -67,41 +65,30 @@ pub fn render_bottom_dock(
         toggle_ai = true;
     }
 
-    let ai_bg = if is_ai_open {
-        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), if theme.is_light() { 32 } else { 48 })
-    } else if is_ai_hovered {
-        theme.surface().lerp_to_gamma(theme.accent, 0.12)
+    let ai_color = if is_ai_open || is_ai_hovered {
+        theme.accent
     } else {
-        theme.bg
+        theme.muted
     };
-    painter.rect(
-        ai_btn_rect,
-        4.0,
-        ai_bg,
-        Stroke::new(1.0, if is_ai_open || is_ai_hovered { theme.accent } else { theme.border() }),
-        egui::StrokeKind::Inside,
-    );
     painter.text(
         ai_btn_rect.center(),
         Align2::CENTER_CENTER,
         "AI Agent",
         FontId::monospace(11.0),
-        if is_ai_open || is_ai_hovered { theme.accent } else { theme.text },
+        ai_color,
     );
 
     let max_cmd_x = (ai_btn_rect.min.x - 16.0).max(cmd_x + 120.0);
-    let cmd_input_left = cmd_x + 58.0;
+    let cmd_input_left = cmd_x + 46.0;
 
     if in_command {
-        // [:CMD] badge
-        let badge_rect = Rect::from_min_size(pos2(cmd_x, badge_y), vec2(48.0, badge_h));
-        painter.rect_filled(badge_rect, 4.0, accent);
+        // [:CMD] label (clean text, no background highlight or border)
         painter.text(
-            badge_rect.center(),
-            Align2::CENTER_CENTER,
+            pos2(cmd_x, dock_rect.center().y),
+            Align2::LEFT_CENTER,
             ":CMD",
-            FontId::monospace(10.5),
-            if theme.is_light() { Color32::WHITE } else { theme.bg },
+            FontId::monospace(11.0),
+            accent,
         );
 
         let font = FontId::monospace(14.0);
@@ -169,26 +156,25 @@ pub fn render_bottom_dock(
             );
         }
     } else if let Some((symbol, query, match_count)) = search_prompt {
-        // [SEARCH] badge
+        // [SEARCH] label (clean text, no background highlight or border)
         let badge_label = if symbol == "?" { "? SEARCH" } else { "/ SEARCH" };
-        let badge_rect = Rect::from_min_size(pos2(cmd_x, badge_y), vec2(68.0, badge_h));
-        painter.rect_filled(badge_rect, 4.0, accent);
         painter.text(
-            badge_rect.center(),
-            Align2::CENTER_CENTER,
+            pos2(cmd_x, dock_rect.center().y),
+            Align2::LEFT_CENTER,
             badge_label,
-            FontId::monospace(10.0),
-            if theme.is_light() { Color32::WHITE } else { theme.bg },
+            FontId::monospace(11.0),
+            accent,
         );
 
+        let search_left = cmd_x + 64.0;
         let search_clip_rect = Rect::from_min_max(
-            pos2(cmd_x + 78.0, dock_rect.min.y),
+            pos2(search_left, dock_rect.min.y),
             pos2(max_cmd_x, dock_rect.max.y),
         );
         let search_painter = painter.with_clip_rect(search_clip_rect);
         let query_display = format!("{}{}_", symbol, query);
         search_painter.text(
-            pos2(cmd_x + 78.0, cmd_y),
+            pos2(search_left, cmd_y),
             Align2::LEFT_TOP,
             query_display,
             FontId::monospace(14.0),
@@ -203,7 +189,7 @@ pub fn render_bottom_dock(
             };
             let query_w = (query.len() + 2) as f32 * 8.5;
             search_painter.text(
-                pos2(cmd_x + 82.0 + query_w, cmd_y + 2.0),
+                pos2(search_left + 4.0 + query_w, cmd_y + 2.0),
                 Align2::LEFT_TOP,
                 count_info,
                 FontId::monospace(11.0),
@@ -212,55 +198,24 @@ pub fn render_bottom_dock(
         }
     } else {
         if let Some(badge) = mode_badge {
-            let font = FontId::monospace(10.5);
-            let layout = painter.layout_no_wrap(badge.to_string(), font.clone(), theme.highlight);
-            let badge_w = (layout.size().x + 20.0).max(64.0);
-            let badge_rect = Rect::from_min_size(pos2(cmd_x, badge_y), vec2(badge_w, badge_h));
-
-            let is_insert = badge == "INSERT";
-            let is_visual = badge.starts_with("VISUAL");
-
-            let (pill_bg, pill_stroke, text_color) = if is_insert {
-                (
-                    accent,
-                    Stroke::NONE,
-                    if theme.is_light() { Color32::WHITE } else { theme.bg },
-                )
-            } else if is_visual {
-                (
-                    Color32::from_rgb(224, 108, 117), // coral
-                    Stroke::NONE,
-                    Color32::WHITE,
-                )
-            } else if theme.is_light() {
-                (
-                    theme.surface().lerp_to_gamma(accent, 0.18),
-                    Stroke::new(1.0, Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 120)),
-                    accent,
-                )
+            let font = FontId::monospace(11.0);
+            let text_color = if badge == "INSERT" {
+                accent
+            } else if badge.starts_with("VISUAL") {
+                Color32::from_rgb(224, 108, 117)
             } else {
-                (
-                    Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 38),
-                    Stroke::new(1.0, Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 95)),
-                    accent,
-                )
+                accent
             };
 
-            painter.rect(
-                badge_rect,
-                4.0,
-                pill_bg,
-                pill_stroke,
-                egui::StrokeKind::Inside,
-            );
+            let layout = painter.layout_no_wrap(badge.to_string(), font.clone(), text_color);
             painter.text(
-                badge_rect.center(),
-                Align2::CENTER_CENTER,
+                pos2(cmd_x, dock_rect.center().y),
+                Align2::LEFT_CENTER,
                 badge,
                 font,
                 text_color,
             );
-            text_x = badge_rect.max.x + 12.0;
+            text_x = cmd_x + layout.size().x + 14.0;
         }
 
         if !status_msg.is_empty() && (now - status_time) < 3.0 {

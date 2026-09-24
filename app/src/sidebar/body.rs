@@ -24,7 +24,7 @@ pub fn render_sidebar_body(
     let mut action = None;
 
     // Documents Header
-    let docs_y = sb_origin.y + 80.0;
+    let docs_y = sb_origin.y + 64.0;
     let header_label = if total_notes_count > notes.len() {
         format!("DOCUMENTS ({}/{})", notes.len(), total_notes_count)
     } else {
