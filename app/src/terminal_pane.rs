@@ -449,7 +449,13 @@ impl TerminalPane {
         let term_body_rect = Rect::from_min_max(pos2(term_rect.min.x, term_rect.min.y + header_h), term_rect.max);
 
         // Term header background & bottom divider line
-        painter.rect_filled(term_header_rect, 0.0, theme.surface());
+        let term_h_bg = Color32::from_rgba_unmultiplied(
+            theme.surface().r(),
+            theme.surface().g(),
+            theme.surface().b(),
+            160,
+        );
+        painter.rect_filled(term_header_rect, 0.0, term_h_bg);
 
         // Title on left: Cyberpunk/Hacker aesthetic
         let title_color = if is_focused {
@@ -608,14 +614,20 @@ impl TerminalPane {
             }
 
         // --- 3. RIGHT SIDEBAR: SESSIONS LIST ---
-        painter.rect_filled(sessions_rect, 0.0, theme.surface());
+        let sessions_bg = Color32::from_rgba_unmultiplied(
+            theme.surface().r(),
+            theme.surface().g(),
+            theme.surface().b(),
+            160,
+        );
+        painter.rect_filled(sessions_rect, 0.0, sessions_bg);
 
         // Sidebar Header
         let sessions_header_rect = Rect::from_min_max(
             sessions_rect.min,
             pos2(sessions_rect.max.x, sessions_rect.min.y + header_h),
         );
-        painter.rect_filled(sessions_header_rect, 0.0, theme.surface());
+        painter.rect_filled(sessions_header_rect, 0.0, sessions_bg);
         painter.line_segment(
             [pos2(sessions_header_rect.min.x, sessions_header_rect.max.y), pos2(sessions_header_rect.max.x, sessions_header_rect.max.y)],
             Stroke::new(1.0, theme.border()),

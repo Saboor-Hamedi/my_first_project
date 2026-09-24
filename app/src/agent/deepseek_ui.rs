@@ -18,12 +18,18 @@ pub fn render_ai_pane(
     request_focus: bool,
     _block_scroll: bool,
 ) {
-    // Fill pane background matching workspace surface
-    let bg_color = if theme.is_light() {
+    // Fill pane background matching workspace surface with translucency
+    let base_color = if theme.is_light() {
         theme.bg
     } else {
         theme.surface()
     };
+    let bg_color = Color32::from_rgba_unmultiplied(
+        base_color.r(),
+        base_color.g(),
+        base_color.b(),
+        160,
+    );
     painter.rect_filled(rect, 0.0, bg_color);
 
     // ── Action Bar (Context, Clear, Delete) ──────────────────────────────────

@@ -56,8 +56,14 @@ pub fn render_markdown_view_inner(
             pos2(rect.max.x, rect.min.y + header_h),
         );
 
-        // Header subtle background & bottom border
-        painter.rect_filled(header_rect, 0.0, theme.surface());
+        // Header subtle translucent background & bottom border
+        let header_bg = Color32::from_rgba_unmultiplied(
+            theme.surface().r(),
+            theme.surface().g(),
+            theme.surface().b(),
+            160,
+        );
+        painter.rect_filled(header_rect, 0.0, header_bg);
         painter.line_segment(
             [pos2(header_rect.min.x, header_rect.max.y), pos2(header_rect.max.x, header_rect.max.y)],
             Stroke::new(1.0, theme.border()),

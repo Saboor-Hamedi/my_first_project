@@ -79,7 +79,7 @@ impl App {
                 tab.scroll_y = 0.0;
                 tab.is_dirty = false;
             }
-            self.show_welcome = true;
+            self.show_welcome = false;
             self.save_open_tabs();
             self.set_status("Cleared to new note", now);
             return;

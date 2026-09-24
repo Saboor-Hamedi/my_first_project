@@ -43,7 +43,7 @@ impl App {
             font_size: 16.0,
             selected_font: "JetBrains Mono".to_string(),
             blur_effect: crate::blur::BlurEffect::Acrylic,
-            show_welcome: true,
+            show_welcome: false,
             zoom: crate::zoom::ZoomState::new(),
             right_pane_tab: RightPaneTab::Preview,
             ai_focus_requested: false,
@@ -240,9 +240,7 @@ impl App {
                     });
                     app.active_tab = 0;
                     app.last_active_tab = 0;
-                    if !n.body.trim().is_empty() {
-                        app.show_welcome = false;
-                    }
+                    app.show_welcome = false;
                 } else {
                     app.open_notes.push(OpenNote {
                         id: 0,
@@ -253,7 +251,7 @@ impl App {
                     });
                     app.active_tab = 0;
                     app.last_active_tab = 0;
-                    app.show_welcome = true;
+                    app.show_welcome = false;
                 }
             }
 

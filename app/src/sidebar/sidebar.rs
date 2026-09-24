@@ -15,7 +15,7 @@ pub use footer::render_sidebar_footer;
 pub use header::render_sidebar_header;
 
 use core::Note;
-use eframe::egui::{self, vec2, Rect};
+use eframe::egui::{self, vec2, Color32, Rect};
 
 pub enum SidebarAction {
     SwitchMode(usize),
@@ -42,8 +42,14 @@ pub fn render_sidebar(
 ) -> Option<SidebarAction> {
     let sidebar_w = sb_rect.width();
 
-    // Clean sidebar background without border or rounding
-    painter.rect_filled(sb_rect, 0.0, theme.sidebar_bg());
+    // Translucent sidebar background matching desktop backdrop blur
+    let sb_bg = Color32::from_rgba_unmultiplied(
+        theme.sidebar_bg().r(),
+        theme.sidebar_bg().g(),
+        theme.sidebar_bg().b(),
+        160,
+    );
+    painter.rect_filled(sb_rect, 0.0, sb_bg);
 
     let sb_origin = sb_rect.min + vec2(16.0, 18.0);
 

@@ -324,8 +324,14 @@ pub fn render_doc_sidebar(
 ) -> Option<DocSidebarAction> {
     let mut action = None;
 
-    // Clean sidebar background without border or rounding, exactly matching sidebar.rs
-    painter.rect_filled(rect, 0.0, theme.sidebar_bg());
+    // Translucent sidebar background matching desktop backdrop blur
+    let sb_bg = Color32::from_rgba_unmultiplied(
+        theme.sidebar_bg().r(),
+        theme.sidebar_bg().g(),
+        theme.sidebar_bg().b(),
+        160,
+    );
+    painter.rect_filled(rect, 0.0, sb_bg);
 
     let origin = rect.min + vec2(16.0, 18.0);
 

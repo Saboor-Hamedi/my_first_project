@@ -223,6 +223,14 @@ impl App {
                 &mut self.accent_overrides,
                 &self.theme,
                 &default_theme,
+                &mut self.opacity,
+                &mut self.blur_effect,
+                &mut |key: &str, val: &str| {
+                    let _ = self.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+                        key: key.into(),
+                        val: val.into(),
+                    });
+                },
             );
             if let Some(act) = action {
                 match act {

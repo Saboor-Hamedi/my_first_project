@@ -27,11 +27,17 @@ pub fn render_bottom_dock(
     let accent = theme.accent;
     let muted = theme.muted;
 
-    // Seamless bottom dock matching the editor canvas (theme.bg, no border)
+    // Seamless bottom dock matching the editor canvas (translucent so desktop blur shows through)
+    let dock_bg = Color32::from_rgba_unmultiplied(
+        theme.bg.r(),
+        theme.bg.g(),
+        theme.bg.b(),
+        120,
+    );
     painter.rect(
         dock_rect,
         5.0,
-        theme.bg,
+        dock_bg,
         Stroke::NONE,
         egui::StrokeKind::Inside,
     );

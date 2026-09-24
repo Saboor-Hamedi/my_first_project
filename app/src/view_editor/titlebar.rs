@@ -19,11 +19,17 @@ pub fn render_full_titlebar(
     theme: &Theme,
     accent_dropdown_open: bool,
 ) -> (Option<TitlebarAction>, Rect) {
-    // 1. Sleek card surface with 5px radius and seamless borderless continuity
+    // 1. Sleek translucent card surface matching desktop backdrop blur
+    let title_bg = Color32::from_rgba_unmultiplied(
+        theme.surface().r(),
+        theme.surface().g(),
+        theme.surface().b(),
+        160,
+    );
     painter.rect(
         titlebar_rect,
         5.0,
-        theme.surface(),
+        title_bg,
         Stroke::NONE,
         egui::StrokeKind::Inside,
     );
@@ -102,6 +108,15 @@ pub fn render_window_controls(
     let right_x = bounds.max.x;
 
     let mut action = None;
+
+    // Match the same translucent bg used by render_full_titlebar so the
+    // maximize restore-icon mask doesn't appear as an opaque ghost.
+    let title_bg = Color32::from_rgba_unmultiplied(
+        theme.surface().r(),
+        theme.surface().g(),
+        theme.surface().b(),
+        160,
+    );
 
     // 1. Accent Color Customizer Button (🎨) - directly beside the Drag button
     let accent_rect = Rect::from_min_max(
@@ -207,11 +222,12 @@ pub fn render_window_controls(
             Stroke::new(1.2, max_stroke_color),
             egui::StrokeKind::Inside,
         );
-        // Foreground window mask + stroke
+        // Foreground window mask + stroke — use translucent title_bg so the
+        // mask doesn't appear as an opaque ghost through the transparent titlebar.
         painter.rect_filled(
             Rect::from_center_size(pos2(max_c.x - 1.8, max_c.y + 1.8), vec2(s * 2.0, s * 2.0)),
             1.0,
-            theme.surface(),
+            title_bg,
         );
         painter.rect_stroke(
             Rect::from_center_size(pos2(max_c.x - 1.8, max_c.y + 1.8), vec2(s * 2.0, s * 2.0)),

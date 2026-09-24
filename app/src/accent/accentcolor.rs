@@ -102,11 +102,14 @@ pub fn render_accent_dropdown(
     overrides: &mut AccentOverrides,
     theme: &Theme,
     default_theme: &Theme,
+    opacity: &mut f32,
+    blur_effect: &mut crate::blur::BlurEffect,
+    on_save_setting: &mut dyn FnMut(&str, &str),
 ) -> Option<AccentAction> {
     let mut action = None;
 
     let dropdown_w = 320.0;
-    let dropdown_h = 296.0;
+    let dropdown_h = 394.0;
     let min_x = (anchor_rect.max.x - dropdown_w).max(8.0);
     let min_y = anchor_rect.max.y + 4.0;
     let dropdown_rect = Rect::from_min_size(pos2(min_x, min_y), vec2(dropdown_w, dropdown_h));
@@ -167,14 +170,14 @@ pub fn render_accent_dropdown(
     painter.text(
         pos2(header_rect.min.x + 14.0, header_rect.min.y + 13.0),
         Align2::LEFT_CENTER,
-        "Color Customizer",
+        "Color & Backdrop Customizer",
         FontId::monospace(13.0),
         theme.highlight.gamma_multiply(open_t),
     );
     painter.text(
         pos2(header_rect.min.x + 14.0, header_rect.min.y + 30.0),
         Align2::LEFT_CENTER,
-        "accent and editor text colors",
+        "accent, text, opacity & desktop blur",
         FontId::monospace(10.0),
         theme.muted.gamma_multiply(open_t),
     );
@@ -221,6 +224,129 @@ pub fn render_accent_dropdown(
         cur_y += section_h + section_gap;
     }
 
+    // --- Window Blur & Opacity Section ---
+    let backdrop_card_rect = Rect::from_min_size(pos2(inner_rect.min.x, cur_y), vec2(inner_rect.width(), 84.0));
+    // Clean transparent section with subtle divider — ZERO background fill
+    painter.line_segment(
+        [backdrop_card_rect.left_top(), backdrop_card_rect.right_top()],
+        Stroke::new(1.0, theme.border().gamma_multiply(open_t)),
+    );
+
+    // Row 1: Blur Effect Pills (ZERO background, ZERO border)
+    let row1_y = backdrop_card_rect.min.y + 18.0;
+    painter.text(
+        pos2(backdrop_card_rect.min.x + 4.0, row1_y),
+        Align2::LEFT_CENTER,
+        "Blur Effect",
+        FontId::monospace(11.5),
+        theme.muted.gamma_multiply(open_t),
+    );
+
+    let effect_pills = [
+        ("None", crate::blur::BlurEffect::None),
+        ("Mica", crate::blur::BlurEffect::Mica),
+        ("Acrylic", crate::blur::BlurEffect::Acrylic),
+    ];
+    let pill_w = 58.0;
+    let pill_h = 22.0;
+    let pill_gap = 6.0;
+    let pills_total_w = 3.0 * pill_w + 2.0 * pill_gap;
+    let pills_start_x = backdrop_card_rect.max.x - 4.0 - pills_total_w;
+
+    for (p_idx, &(p_label, p_eff)) in effect_pills.iter().enumerate() {
+        let p_rect = Rect::from_min_size(
+            pos2(pills_start_x + p_idx as f32 * (pill_w + pill_gap), row1_y - 11.0),
+            vec2(pill_w, pill_h),
+        );
+        let is_sel = *blur_effect == p_eff;
+        let p_resp = ui.interact(p_rect, ui.id().with(("blur_pill", p_idx)), Sense::click());
+        let p_hover = p_resp.hovered();
+
+        if p_hover {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+
+        // Clean solid text: ZERO background, ZERO border
+        painter.text(
+            p_rect.center(),
+            Align2::CENTER_CENTER,
+            p_label,
+            FontId::monospace(12.0),
+            if is_sel {
+                theme.accent
+            } else if p_hover {
+                theme.text
+            } else {
+                theme.muted
+            },
+        );
+
+        // Minimalist active indicator: 2px bottom accent bar (NO background fill)
+        if is_sel {
+            let active_bar = Rect::from_center_size(
+                pos2(p_rect.center().x, p_rect.max.y - 1.0),
+                vec2(pill_w - 14.0, 2.0),
+            );
+            painter.rect_filled(active_bar, 1.0, theme.accent);
+        }
+
+        if p_resp.clicked() {
+            *blur_effect = p_eff;
+            if (p_eff == crate::blur::BlurEffect::Acrylic || p_eff == crate::blur::BlurEffect::Mica) && *opacity > 0.95 {
+                *opacity = 0.88;
+                on_save_setting("opacity", "0.88");
+            }
+            crate::blur::apply_window_blur(p_eff);
+            on_save_setting("blur", p_eff.name().to_lowercase().as_str());
+            changed = true;
+        }
+    }
+
+    // Row 2: Opacity Slider
+    let row2_y = backdrop_card_rect.min.y + 54.0;
+    painter.text(
+        pos2(backdrop_card_rect.min.x + 4.0, row2_y),
+        Align2::LEFT_CENTER,
+        "Opacity",
+        FontId::monospace(11.5),
+        theme.muted.gamma_multiply(open_t),
+    );
+
+    let slider_w = 120.0;
+    let slider_x = backdrop_card_rect.max.x - 4.0 - slider_w - 42.0;
+    let slider_rect = Rect::from_min_size(pos2(slider_x, row2_y - 9.0), vec2(slider_w, 18.0));
+    let slider_resp = ui.interact(slider_rect, ui.id().with("accent_opacity_slider"), Sense::click_and_drag());
+    let slider_hover = slider_resp.hovered() || slider_resp.dragged();
+
+    if slider_resp.dragged() || slider_resp.clicked() {
+        if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+            let t = ((pos.x - slider_rect.min.x) / slider_rect.width()).clamp(0.0, 1.0);
+            let new_op = (0.4 + t * 0.6).clamp(0.4, 1.0);
+            let rounded_op = (new_op * 100.0).round() / 100.0;
+            if (*opacity - rounded_op).abs() > 0.005 {
+                *opacity = rounded_op;
+                on_save_setting("opacity", &format!("{:.2}", *opacity));
+                changed = true;
+            }
+        }
+    }
+
+    let track_y = slider_rect.center().y;
+    painter.rect_filled(Rect::from_min_size(pos2(slider_x, track_y - 2.0), vec2(slider_w, 4.0)), 2.0, theme.border());
+    let active_w = slider_w * ((*opacity - 0.4) / 0.6).clamp(0.0, 1.0);
+    if active_w > 0.0 {
+        painter.rect_filled(Rect::from_min_size(pos2(slider_x, track_y - 2.0), vec2(active_w, 4.0)), 2.0, theme.accent);
+    }
+    let thumb_x = slider_x + active_w;
+    painter.circle_filled(pos2(thumb_x, track_y), if slider_hover { 6.0 } else { 5.0 }, theme.accent);
+    painter.text(
+        pos2(slider_rect.max.x + 8.0, track_y),
+        Align2::LEFT_CENTER,
+        format!("{:.0}%", *opacity * 100.0),
+        FontId::monospace(10.5),
+        theme.accent,
+    );
+
     // --- Footer: reset ---
     let footer_rect = Rect::from_min_max(
         pos2(dropdown_rect.min.x + 10.0, dropdown_rect.max.y - 36.0),
@@ -249,6 +375,11 @@ pub fn render_accent_dropdown(
     );
     if reset_resp.clicked() {
         overrides.clear();
+        *opacity = 0.88;
+        *blur_effect = crate::blur::BlurEffect::Acrylic;
+        crate::blur::apply_window_blur(crate::blur::BlurEffect::Acrylic);
+        on_save_setting("opacity", "0.88");
+        on_save_setting("blur", "acrylic");
         action = Some(AccentAction::ResetAll);
     }
 

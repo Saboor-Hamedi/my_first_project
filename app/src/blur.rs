@@ -119,36 +119,41 @@ pub fn apply_window_blur(effect: BlurEffect) {
     unsafe {
         use win32::*;
 
-        // Find window handle (mindforge title, or active/foreground window)
-        let window_title = b"mindforge\0";
-        let mut hwnd = FindWindowA(std::ptr::null(), window_title.as_ptr() as LPCSTR);
-        if hwnd.is_null() {
-            hwnd = GetForegroundWindow();
-        }
+        // Find window handle for our process first
+        let current_pid = GetCurrentProcessId();
+        FOUND_HWND = std::ptr::null_mut();
+        EnumWindows(Some(enum_window_callback), current_pid as isize);
+        let mut hwnd = FOUND_HWND;
         if hwnd.is_null() {
             hwnd = GetActiveWindow();
         }
         if hwnd.is_null() {
-            let current_pid = GetCurrentProcessId();
-            FOUND_HWND = std::ptr::null_mut();
-            EnumWindows(Some(enum_window_callback), current_pid as isize);
-            hwnd = FOUND_HWND;
+            hwnd = GetForegroundWindow();
+        }
+        if hwnd.is_null() {
+            let window_title = b"mindforge\0";
+            hwnd = FindWindowA(std::ptr::null(), window_title.as_ptr() as LPCSTR);
         }
         if hwnd.is_null() {
             return;
         }
 
+        let mut dwm_success = false;
         let dwmapi = LoadLibraryA(b"dwmapi.dll\0".as_ptr() as LPCSTR);
         if !dwmapi.is_null() {
             // 1. Extend frame into client area so DWM backdrop renders across client rect
             let extend_proc = GetProcAddress(dwmapi, b"DwmExtendFrameIntoClientArea\0".as_ptr() as LPCSTR);
             if !extend_proc.is_null() {
                 let extend_frame: FnDwmExtendFrameIntoClientArea = std::mem::transmute(extend_proc);
+                // Use zero margins on a decorations=false window.
+                // Margins of -1 (sheet-of-glass) cause DWM to render its own
+                // native NC caption buttons through any translucent titlebar,
+                // creating ghost duplicates behind our custom buttons.
                 let margins = MARGINS {
-                    cxLeftWidth: -1,
-                    cxRightWidth: -1,
-                    cyTopHeight: -1,
-                    cyBottomHeight: -1,
+                    cxLeftWidth: 0,
+                    cxRightWidth: 0,
+                    cyTopHeight: 0,
+                    cyBottomHeight: 0,
                 };
                 let _ = extend_frame(hwnd, &margins);
             }
@@ -167,79 +172,88 @@ pub fn apply_window_blur(effect: BlurEffect) {
                     std::mem::size_of::<BOOL>() as DWORD,
                 );
 
-                match effect {
+                let hr = match effect {
                     BlurEffect::Acrylic => {
                         let backdrop_type: u32 = DWMSBT_TRANSIENTWINDOW;
-                        let hr = set_attr(
+                        let r = set_attr(
                             hwnd,
                             DWMWA_SYSTEMBACKDROP_TYPE,
                             &backdrop_type as *const u32 as LPCVOID,
                             std::mem::size_of::<u32>() as DWORD,
                         );
-                        if hr != 0 {
+                        if r != 0 {
                             let mica: BOOL = 1;
-                            let _ = set_attr(
+                            set_attr(
                                 hwnd,
                                 DWMWA_MICA_EFFECT,
                                 &mica as *const BOOL as LPCVOID,
                                 std::mem::size_of::<BOOL>() as DWORD,
-                            );
+                            )
+                        } else {
+                            0
                         }
                     }
                     BlurEffect::Mica => {
                         let backdrop_type: u32 = DWMSBT_MAINWINDOW;
-                        let hr = set_attr(
+                        let r = set_attr(
                             hwnd,
                             DWMWA_SYSTEMBACKDROP_TYPE,
                             &backdrop_type as *const u32 as LPCVOID,
                             std::mem::size_of::<u32>() as DWORD,
                         );
-                        if hr != 0 {
+                        if r != 0 {
                             let mica: BOOL = 1;
-                            let _ = set_attr(
+                            set_attr(
                                 hwnd,
                                 DWMWA_MICA_EFFECT,
                                 &mica as *const BOOL as LPCVOID,
                                 std::mem::size_of::<BOOL>() as DWORD,
-                            );
+                            )
+                        } else {
+                            0
                         }
                     }
                     BlurEffect::None => {
                         let backdrop_type: u32 = DWMSBT_NONE;
-                        let _ = set_attr(
+                        set_attr(
                             hwnd,
                             DWMWA_SYSTEMBACKDROP_TYPE,
                             &backdrop_type as *const u32 as LPCVOID,
                             std::mem::size_of::<u32>() as DWORD,
-                        );
+                        )
                     }
+                };
+                if hr == 0 {
+                    dwm_success = true;
                 }
             }
         }
 
-        // 3. Fallback for Windows 10: SetWindowCompositionAttribute AccentPolicy
-        let user32 = LoadLibraryA(b"user32.dll\0".as_ptr() as LPCSTR);
-        if !user32.is_null() {
-            let set_comp_proc = GetProcAddress(user32, b"SetWindowCompositionAttribute\0".as_ptr() as LPCSTR);
-            if !set_comp_proc.is_null() {
-                let set_comp: FnSetWindowCompositionAttribute = std::mem::transmute(set_comp_proc);
-                let (accent_state, gradient_color) = match effect {
-                    BlurEffect::Acrylic => (ACCENT_ENABLE_ACRYLICBLURBEHIND, 0x99181818),
-                    BlurEffect::Mica => (ACCENT_ENABLE_BLURBEHIND, 0),
-                    BlurEffect::None => (ACCENT_DISABLED, 0),
-                };
-                let mut policy = AccentPolicy {
-                    AccentState: accent_state,
-                    AccentFlags: 2,
-                    GradientColor: gradient_color,
-                    AnimationId: 0,
-                };
-                let mut data = WindowCompositionAttributeData {
-                    Attribute: 19, // WCA_ACCENT_POLICY
-                    Data: &mut policy as *mut _ as *mut c_void,
-                    SizeOfData: std::mem::size_of::<AccentPolicy>(),
-                };
-                let _ = set_comp(hwnd, &mut data);
+        // 3. Fallback for Windows 10 only if DWM modern system backdrop is unsupported
+        if !dwm_success {
+            let user32 = LoadLibraryA(b"user32.dll\0".as_ptr() as LPCSTR);
+            if !user32.is_null() {
+                let set_comp_proc = GetProcAddress(user32, b"SetWindowCompositionAttribute\0".as_ptr() as LPCSTR);
+                if !set_comp_proc.is_null() {
+                    let set_comp: FnSetWindowCompositionAttribute = std::mem::transmute(set_comp_proc);
+                    let (accent_state, gradient_color) = match effect {
+                        BlurEffect::Acrylic => (ACCENT_ENABLE_ACRYLICBLURBEHIND, 0x01181818),
+                        BlurEffect::Mica => (ACCENT_ENABLE_BLURBEHIND, 0),
+                        BlurEffect::None => (ACCENT_DISABLED, 0),
+                    };
+                    let mut policy = AccentPolicy {
+                        AccentState: accent_state,
+                        AccentFlags: 2,
+                        GradientColor: gradient_color,
+                        AnimationId: 0,
+                    };
+                    let mut data = WindowCompositionAttributeData {
+                        Attribute: 19, // WCA_ACCENT_POLICY
+                        Data: &mut policy as *mut _ as *mut c_void,
+                        SizeOfData: std::mem::size_of::<AccentPolicy>(),
+                    };
+                    let _ = set_comp(hwnd, &mut data);
+                }
             }
         }
     }

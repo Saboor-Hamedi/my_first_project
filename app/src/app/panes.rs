@@ -74,10 +74,16 @@ impl App {
             None
         };
 
-        // Draw card surfaces: subtle background-value contrast instead of hard borders
-        painter.rect(ed_card_rect, 5.0, self.theme.bg, Stroke::NONE, egui::StrokeKind::Inside);
+        // Draw card surfaces: preserve desktop blur & window opacity across editor and preview
         if let Some(p_card) = preview_card_rect {
-            painter.rect(p_card, 5.0, self.theme.surface(), Stroke::NONE, egui::StrokeKind::Inside);
+            let p_alpha = ((self.opacity * 255.0) as u8).saturating_sub(15).max(30);
+            let p_bg = Color32::from_rgba_unmultiplied(
+                self.theme.surface().r(),
+                self.theme.surface().g(),
+                self.theme.surface().b(),
+                p_alpha,
+            );
+            painter.rect(p_card, 5.0, p_bg, Stroke::NONE, egui::StrokeKind::Inside);
         }
 
         // Tab strip on the editor card
@@ -264,9 +270,7 @@ impl App {
             }
         }
 
-        let is_empty_buffer = self.open_notes.is_empty()
-            || (self.open_notes.len() == 1 && self.open_notes[0].id == 0 && self.open_notes[0].editor.is_empty());
-        let show_dashboard = self.mode == Mode::Normal && (self.show_welcome || is_empty_buffer);
+        let show_dashboard = self.mode == Mode::Normal && self.show_welcome;
 
         let (ed_font_size, ed_cw, ed_lh) = self.zoom.editor_metrics(self.font_size, ui.ctx());
 
