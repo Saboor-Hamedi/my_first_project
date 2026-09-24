@@ -125,6 +125,7 @@ pub fn render_ai_pane(
         egui::ScrollArea::vertical()
             .id_salt("ai_agent_chat_scroll")
             .auto_shrink([false; 2])
+            .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
             .show(ui, |ui| {
                 ui.style_mut().interaction.selectable_labels = true;
                 ui.set_max_width(avail_content_w);
@@ -467,6 +468,7 @@ pub fn render_ai_pane(
                 .id_salt("ai_textarea_internal_scroll")
                 .max_height(inner_rect.height())
                 .auto_shrink([false, false])
+                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
                 .show(ui, |ui| {
                     let edit_w = (inner_rect.width() - 6.0).max(60.0);
                     let resp = ui.add(
@@ -616,7 +618,7 @@ fn render_chat_markdown(ui: &mut egui::Ui, text: &str, theme: &Theme, block_seed
                 }
                 ui.add_space(5.0);
             }
-            MdBlock::Quote(text) => {
+            MdBlock::Quote { depth: _, text } => {
                 let inner_w = (max_text_w - 24.0).max(40.0);
                 let job = crate::view_editor::preview::build_inline_job(
                     &text,

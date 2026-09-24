@@ -12,6 +12,7 @@ impl App {
         painter: &Painter,
         preview_rect_opt: Option<Rect>,
         any_modal_open: bool,
+        ed_font_size: f32,
     ) {
         if let Some(p_rect) = preview_rect_opt {
             let r_header_h = crate::view_editor::TAB_ROW_H;
@@ -61,7 +62,7 @@ impl App {
                         &note_text,
                         &mut self.preview_scroll_y,
                         &self.theme,
-                        self.font_size,
+                        ed_font_size,
                         any_modal_open
                             || self.is_dragging_splitter
                             || self.is_dragging_sidebar_splitter,

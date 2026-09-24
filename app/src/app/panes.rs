@@ -442,7 +442,7 @@ impl App {
                 self.zoom.render_hud(ui, painter, actual_editor_rect, &self.theme, now);
 
                 // Render Right Pane (Markdown Preview or AI Agent tab) side-by-side if active
-                self.render_right_pane_tabs(ui, painter, preview_rect_opt, any_modal_open);
+                self.render_right_pane_tabs(ui, painter, preview_rect_opt, any_modal_open, ed_font_size);
 
                 // Floating Keystroke Card (Vim showcmd)
                 if self.editor_input_mode == EditorInputMode::Vim {

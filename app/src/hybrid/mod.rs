@@ -80,12 +80,21 @@ impl HybridEngine {
                     ed.indent_line();
                     return true;
                 }
+                Key::Enter => {
+                    if !ed.exit_block_or_table() {
+                        ed.insert_line_below();
+                    }
+                    return true;
+                }
                 _ => {}
             }
         }
 
         // ── Tab / Shift+Tab indentation ───────────────────────────────────────
         if key == Key::Tab && !ctrl && !alt {
+            if ed.table_nav_tab(!shift) {
+                return true;
+            }
             if shift {
                 ed.dedent();
             } else {

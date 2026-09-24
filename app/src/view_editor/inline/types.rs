@@ -17,6 +17,7 @@ pub struct TableRowInfo {
     pub is_header: bool,
     pub is_separator: bool,
     pub aligns: Vec<TableAlign>,
+    pub col_count: usize,
 }
 
 /// Classification of a markdown line.

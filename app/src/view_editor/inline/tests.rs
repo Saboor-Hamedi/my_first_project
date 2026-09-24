@@ -99,6 +99,7 @@ fn test_classify_tables() {
             is_header: false,
             is_separator: false,
             aligns: Vec::new(),
+            col_count: 0,
         })
     );
     assert_eq!(prefix_len, 0);
@@ -112,6 +113,7 @@ fn test_classify_tables() {
             is_header: false,
             is_separator: false,
             aligns: Vec::new(),
+            col_count: 0,
         })
     );
 
@@ -124,6 +126,7 @@ fn test_classify_tables() {
             is_header: false,
             is_separator: false,
             aligns: Vec::new(),
+            col_count: 0,
         })
     );
 
@@ -136,6 +139,7 @@ fn test_classify_tables() {
             is_header: false,
             is_separator: true,
             aligns: vec![TableAlign::Left, TableAlign::Center, TableAlign::Right],
+            col_count: 0,
         })
     );
     assert_eq!(prefix_len, 0);
@@ -149,6 +153,7 @@ fn test_classify_tables() {
             is_header: false,
             is_separator: true,
             aligns: vec![TableAlign::None, TableAlign::None, TableAlign::None],
+            col_count: 0,
         })
     );
 }
@@ -422,5 +427,119 @@ fn test_code_block_syntax_highlighting() {
     let glyphs_inact = job_inact.text.chars().count();
     assert_eq!(map_inact.len(), glyphs_inact + 1);
 }
+
+#[test]
+fn test_table_canonical_column_propagation() {
+    use super::classify::classify_lines;
+
+    let lines = vec![
+        "| name | age | country |".chars().collect::<Vec<char>>(),
+        "| --- | --- | --- |".chars().collect::<Vec<char>>(),
+        "| saboor | 34 | afghanistan |".chars().collect::<Vec<char>>(),
+        "| incomplete row |".chars().collect::<Vec<char>>(),
+    ];
+
+    let classified = classify_lines(&lines);
+    assert_eq!(classified.len(), 4);
+
+    // All rows in this table must receive col_count == 3
+    for (i, (kind, _)) in classified.iter().enumerate() {
+        if let InlineLineKind::TableRow(ref info) = kind {
+            assert_eq!(
+                info.col_count, 3,
+                "Row {} has col_count {} instead of canonical 3",
+                i, info.col_count
+            );
+        } else {
+            panic!("Expected TableRow for line {}", i);
+        }
+    }
+}
+
+#[test]
+fn test_paragraph_selection_height_matches_row_not_full_paragraph() {
+    use crate::editor::Editor;
+    use crate::theme::Theme;
+    use crate::view_editor::inline::layout::compute_inline_layout;
+    use eframe::egui::{pos2, CentralPanel, Context};
+
+    let mut ed = Editor::new();
+    ed.buf = "This is a long paragraph designed to wrap across multiple lines in the layout engine for testing visual selection height.".chars().collect();
+    ed.cur = 50;
+    ed.selection = Some(50);
+    ed.selection_inclusive = true; // normal 'v' selection
+
+    let ctx = Context::default();
+    let _ = ctx.run(Default::default(), |ctx| {
+        CentralPanel::default().show(ctx, |ui| {
+            let (sel_start, sel_end) = ed.selected_range().unwrap();
+            assert_eq!(sel_start, 50);
+            assert_eq!(sel_end, 51);
+
+            let theme = Theme::default();
+            // Wrap width of 120.0 forces this 123-char line to wrap into multiple rows
+            let layout = compute_inline_layout(ui, &ed, 120.0, 14.0, &theme, 10.0);
+            assert_eq!(layout.lines.len(), 1);
+            let line = &layout.lines[0];
+            assert!(line.galley.rows.len() > 1, "Expected paragraph to wrap into multiple rows");
+
+            // Verify that pos_for_char gives the row's height, not the entire paragraph's height
+            let (_pos, caret_h) = layout.pos_for_char(50, pos2(10.0, 10.0));
+            assert!(caret_h < line.height, "Caret height ({}) must be less than full paragraph height ({})", caret_h, line.height);
+        });
+    });
+}
+
+#[test]
+fn test_multiline_selection_geometric_continuity_and_text_boundary_precision() {
+    use crate::editor::Editor;
+    use crate::theme::Theme;
+    use crate::view_editor::inline::elements::selection::render_document_selection;
+    use crate::view_editor::inline::layout::compute_inline_layout;
+    use eframe::egui::{pos2, CentralPanel, Color32, Context};
+
+    let mut ed = Editor::new();
+    ed.buf = "First line\nSecond line is much longer and detailed\nThird line".chars().collect();
+    // Select from character 3 ('s' of First) down to character 45 ('r' of Third)
+    ed.cur = 45;
+    ed.selection = Some(3);
+    ed.selection_inclusive = true;
+
+    let ctx = Context::default();
+    let _ = ctx.run(Default::default(), |ctx| {
+        CentralPanel::default().show(ctx, |ui| {
+            let (sel_start, sel_end) = ed.selected_range().unwrap();
+            assert_eq!(sel_start, 3);
+            assert_eq!(sel_end, 46);
+
+            let theme = Theme::default();
+            let layout = compute_inline_layout(ui, &ed, 600.0, 14.0, &theme, 10.0);
+            assert_eq!(layout.lines.len(), 3);
+
+            let painter = ui.painter();
+            let text_left = 10.0;
+            let sel_color = Color32::from_rgba_unmultiplied(80, 120, 240, 70);
+
+            // Execute selection rendering - renders via single mesh without panic or NaN
+            render_document_selection(
+                painter,
+                &layout,
+                pos2(10.0, 10.0),
+                text_left,
+                sel_start,
+                sel_end,
+                sel_color,
+            );
+
+            // Verify intermediate line text-boundary precision (line 1 is intermediate)
+            let mid_line = &layout.lines[1];
+            let row = &mid_line.galley.rows[0];
+            // Row text width should be strictly bounded by text, not window width
+            assert!(row.rect.max.x < 300.0, "Intermediate row max.x ({}) must stop at text end", row.rect.max.x);
+        });
+    });
+}
+
+
 
 

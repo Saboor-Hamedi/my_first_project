@@ -27,9 +27,9 @@ pub fn quote_color(theme: &Theme) -> Color32 {
     }
 }
 
-/// Returns soft indent spaces proportional to nesting depth inside the quote card (capped at 4).
+/// Returns soft indent spaces proportional to nesting depth inside the quote card.
 pub fn quote_indent(depth: usize) -> String {
-    " ".repeat(depth.min(4))
+    " ".repeat(depth.saturating_sub(1).min(5) * 2 + 1)
 }
 
 /// Renders the blockquote card wrapper (background + left accent bar(s)) for one inline line.
@@ -46,8 +46,8 @@ pub fn render_block_quote_wrapper(
     is_last: bool,
 ) {
     let effective_depth = depth.clamp(1, 5);
-    let bar_w = 3.0;
-    let bar_pitch = 5.0; // pitch between multiple nested bars stepping inward to the right
+    let bar_w = 2.5;
+    let bar_pitch = 7.0; // pitch between multiple nested bars stepping inward to the right (4.5px gap between > > >)
     let bar_gap = 2.0;
 
     // The left edge of the card is strictly pinned relative to text_left.

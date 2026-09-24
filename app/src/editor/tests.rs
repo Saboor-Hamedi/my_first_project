@@ -616,3 +616,104 @@ fn test_select_word_at() {
     assert_eq!(ed.cur, 15);
     assert_eq!(ed.selection, Some(4));
 }
+
+#[test]
+fn test_table_tab_navigation() {
+    let mut ed = Editor::new();
+    ed.insert_str("| A | B |\n| --- | --- |\n| 1 | 2 |");
+    ed.cur = 2; // inside "A"
+    assert!(ed.table_nav_tab(true)); // jump to cell "B"
+    assert_eq!(ed.cur, 6);
+    assert!(ed.table_nav_tab(true)); // jump to cell "1" (skipping separator row)
+    assert_eq!(ed.cur, 26);
+    assert!(ed.table_nav_tab(false)); // Shift+Tab backward jumps to "B" (skipping separator row)
+    assert_eq!(ed.cur, 6);
+}
+
+#[test]
+fn test_table_tab_appends_row_at_end() {
+    let mut ed = Editor::new();
+    ed.insert_str("| A | B |\n| --- | --- |\n| 1 | 2 |");
+    ed.cur = 30; // inside "2"
+    assert!(ed.table_nav_tab(true)); // at last cell: auto-appends row!
+    assert!(ed.text().contains("| 1 | 2 |\n|  |  |"));
+}
+
+#[test]
+fn test_table_backspace_deletes_empty_row() {
+    let mut ed = Editor::new();
+    ed.insert_str("| A | B |\n|  |  |");
+    ed.cur = 13; // inside "|  |  |"
+    ed.backspace();
+    assert_eq!(ed.text(), "| A | B |");
+}
+
+#[test]
+fn test_table_header_tab_creates_separator_and_row() {
+    let mut ed = Editor::new();
+    ed.insert_str("| name | age | country |");
+    ed.cur = 20; // inside "country"
+    assert!(ed.table_nav_tab(true)); // Tab at end of header creates separator + body row!
+    assert_eq!(
+        ed.text(),
+        "| name | age | country |\n| --- | --- | --- |\n|  |  |  |"
+    );
+    // Cursor is inside first cell of new body row (between spaces: "|  |")
+    assert_eq!(ed.cur, 47);
+}
+
+#[test]
+fn test_table_header_enter_creates_separator_and_row() {
+    let mut ed = Editor::new();
+    ed.insert_str("| name | age | country |");
+    ed.cur = 10; // cursor in "age"
+    ed.handle_enter();
+    assert_eq!(
+        ed.text(),
+        "| name | age | country |\n| --- | --- | --- |\n|  |  |  |"
+    );
+    // Row was NOT split, and cursor is in first cell of data row
+    assert_eq!(ed.cur, 47);
+}
+
+#[test]
+fn test_table_body_enter_appends_row_without_splitting() {
+    let mut ed = Editor::new();
+    ed.insert_str("| name | age | country |\n| --- | --- | --- |\n| John | 30 | USA |");
+    ed.cur = 53; // inside "John"
+    ed.handle_enter();
+    assert_eq!(
+        ed.text(),
+        "| name | age | country |\n| --- | --- | --- |\n| John | 30 | USA |\n|  |  |  |"
+    );
+    // Appended row has exactly 3 columns matching header
+    assert_eq!(ed.cur, 67);
+}
+
+#[test]
+fn test_exit_code_block_via_ctrl_enter() {
+    let mut ed = Editor::new();
+    ed.insert_str("```python\ndef foo():\n    return 42\n```\nMore text");
+    // Place cursor inside code block: on "return 42"
+    ed.cur = 25;
+    assert!(ed.exit_block_or_table());
+    // Cursor should now be after "```\n", outside the code block
+    let text = ed.text();
+    let code_fence_end = text.find("```\n").unwrap() + 4;
+    assert_eq!(ed.cur, code_fence_end);
+}
+
+#[test]
+fn test_exit_table_via_ctrl_enter() {
+    let mut ed = Editor::new();
+    ed.insert_str("| A | B |\n| --- | --- |\n| 1 | 2 |\nNext paragraph");
+    // Place cursor inside first row
+    ed.cur = 3;
+    assert!(ed.exit_block_or_table());
+    // Cursor should now be below the table
+    let text = ed.text();
+    let table_end = text.find("| 1 | 2 |\n").unwrap() + 10;
+    assert_eq!(ed.cur, table_end);
+}
+
+

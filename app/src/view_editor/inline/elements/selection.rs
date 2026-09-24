@@ -1,14 +1,29 @@
 //! Pixel-perfect, continuous multi-line selection rendering (The Lumina Standard).
 //!
 //! Provides:
-//! 1. Unified continuous geometry across line breaks without gaps or stacked disjoint blocks.
-//! 2. Glyph-boundary precision with zero bleed into gutter or margins.
-//! 3. Sub-pixel overlap (0.5px–1.0px) between connected rows to eliminate anti-aliasing seams.
-//! 4. Seamless multi-line flow when navigating with Vim motions (v, j, k).
+//! 1. Seamless vertical fusion: consecutive visual rows meet with zero horizontal gaps or seams.
+//! 2. Text-boundary precision: highlights stop strictly at the actual text content of each row,
+//!    with zero bleed into whitespace or margins.
+//! 3. Single-mesh rasterization: renders all row quads in a unified GPU `Mesh` to prevent
+//!    anti-aliasing seams and double-alpha blending artifacts.
+//! 4. Cursor integration: guarantees the selection highlight extends completely under the cursor
+//!    character on both visual forward and backward motions.
 
 use super::super::types::InlineEditorLayout;
 use eframe::egui::text::CCursor;
-use eframe::egui::{pos2, Color32, Painter, Pos2, Rect};
+use eframe::egui::{pos2, Color32, Mesh, Painter, Pos2, Rect, Shape};
+
+/// Internal representation of a single visual row's selection metrics.
+#[derive(Clone, Copy, Debug)]
+struct RowHighlight {
+    line_idx: usize,
+    x_min: f32,
+    x_max: f32,
+    raw_top: f32,
+    raw_bottom: f32,
+    line_top: f32,
+    line_bottom: f32,
+}
 
 /// Renders continuous, unified selection highlights across all lines in the document.
 pub fn render_document_selection(
@@ -24,29 +39,41 @@ pub fn render_document_selection(
         return;
     }
 
-    for line in &layout.lines {
-        // Skip lines completely outside selection
-        if sel_start > line.char_end || sel_end < line.char_start {
+    let mut raw_highlights: Vec<RowHighlight> = Vec::new();
+
+    for (line_idx, line) in layout.lines.iter().enumerate() {
+        // Skip lines completely outside selection (half-open range [sel_start, sel_end))
+        if sel_start > line.char_end || sel_end <= line.char_start {
             continue;
         }
 
-        let line_y = ed_origin.y + line.y_offset;
-        let is_sel_first_line = sel_start >= line.char_start && sel_start <= line.char_end;
-        let is_sel_last_line = sel_end >= line.char_start && sel_end <= line.char_end + 1;
+        let line_top = (ed_origin.y + line.y_offset).round();
+        let line_bottom = (line_top + line.height).round();
+        let galley_y_pad = ((line.height - line.galley.size().y) * 0.5).round().max(0.0);
+        let galley_top = line_top + galley_y_pad;
+        let char_w = (line.base_font_size * 0.6).round().max(8.0);
 
-        let start_b = sel_start.max(line.char_start);
-        let end_b = sel_end.min(line.char_end);
+        let is_first_line = sel_start >= line.char_start && sel_start <= line.char_end;
+        let is_last_line = sel_end >= line.char_start && sel_end <= line.char_end + 1;
 
         if line.char_map.is_empty() {
-            // Empty line selected
-            let top = if is_sel_first_line { line_y } else { line_y - 0.5 };
-            let bottom = if is_sel_last_line { line_y + line.height } else { line_y + line.height + 0.5 };
-            let empty_rect = Rect::from_min_max(pos2(text_left, top), pos2(text_left + 12.0, bottom));
-            painter.rect_filled(empty_rect, 0.0, sel_color);
+            // Empty line selected (represents newline character)
+            raw_highlights.push(RowHighlight {
+                line_idx,
+                x_min: text_left,
+                x_max: text_left + char_w,
+                raw_top: line_top,
+                raw_bottom: line_bottom,
+                line_top,
+                line_bottom,
+            });
             continue;
         }
 
         // Map buffer indices to galley character indices
+        let start_b = sel_start.max(line.char_start);
+        let end_b = sel_end.min(line.char_end);
+
         let mut start_g = 0;
         let mut end_g = line.char_map.len().saturating_sub(1);
 
@@ -65,127 +92,125 @@ pub fn render_document_selection(
         let r1 = line.galley.pos_from_cursor(&c1);
         let r2 = line.galley.pos_from_cursor(&c2);
 
-        let row1 = c1.rcursor.row.min(line.galley.rows.len().saturating_sub(1));
-        let row2 = c2.rcursor.row.min(line.galley.rows.len().saturating_sub(1));
+        let num_rows = line.galley.rows.len();
+        let row_start = if is_first_line {
+            c1.rcursor.row.min(num_rows.saturating_sub(1))
+        } else {
+            0
+        };
+        let row_end = if is_last_line {
+            c2.rcursor.row.min(num_rows.saturating_sub(1))
+        } else {
+            num_rows.saturating_sub(1)
+        };
 
-        // SCENARIO 1: Selection is entirely within this single line
-        if is_sel_first_line && is_sel_last_line {
-            if row1 == row2 {
-                // Single row — fill the entire line slot so selection height matches the caret.
-                let top = line_y;
-                let bottom = line_y + line.height;
-                let x_min = (text_left + r1.min.x.min(r2.min.x)).max(text_left);
-                let x_max = (text_left + r1.max.x.max(r2.max.x)).max(x_min + 4.0);
+        for r_idx in row_start..=row_end {
+            let Some(row) = line.galley.rows.get(r_idx) else { continue };
 
-                let sel_rect = Rect::from_min_max(pos2(x_min, top), pos2(x_max, bottom));
-                painter.rect_filled(sel_rect, 0.0, sel_color);
+            let is_start_row = is_first_line && r_idx == row_start;
+            let is_end_row = is_last_line && r_idx == row_end;
+
+            let (mut x_min, mut x_max) = if is_start_row && is_end_row {
+                // Single row selection
+                let min_x = (text_left + r1.min.x.min(r2.min.x)).max(text_left);
+                let max_x = text_left + r1.max.x.max(r2.max.x);
+                (min_x, max_x)
+            } else if is_start_row {
+                // First row of a multi-row selection: starts at r1, extends to exact row text edge
+                let min_x = (text_left + r1.min.x).max(text_left);
+                let max_x = text_left + row.rect.max.x;
+                (min_x, max_x)
+            } else if is_end_row {
+                // Last row of a multi-row selection: starts at beginning of row, ends at r2
+                let min_x = text_left + row.rect.min.x.max(0.0);
+                let max_x = text_left + r2.max.x;
+                (min_x, max_x)
             } else {
-                // Multi-row within the same paragraph/line
-                if let Some(first_row) = line.galley.rows.get(row1) {
-                    let top = line_y + r1.min.y;
-                    let bottom = line_y + first_row.rect.max.y + 0.5;
-                    let x_min = (text_left + r1.min.x).max(text_left);
-                    let x_max = text_left + first_row.rect.max.x + 4.0;
-                    painter.rect_filled(Rect::from_min_max(pos2(x_min, top), pos2(x_max, bottom)), 0.0, sel_color);
-                }
-                for r_idx in (row1 + 1)..row2 {
-                    if let Some(mid_row) = line.galley.rows.get(r_idx) {
-                        let top = line_y + mid_row.rect.min.y - 0.5;
-                        let bottom = line_y + mid_row.rect.max.y + 0.5;
-                        let x_min = text_left + mid_row.rect.min.x.max(0.0);
-                        let x_max = text_left + mid_row.rect.max.x + 4.0;
-                        painter.rect_filled(Rect::from_min_max(pos2(x_min, top), pos2(x_max, bottom)), 0.0, sel_color);
-                    }
-                }
-                if let Some(last_row) = line.galley.rows.get(row2) {
-                    let top = line_y + last_row.rect.min.y - 0.5;
-                    let bottom = top + r2.height().max(16.0);
-                    let x_min = text_left + last_row.rect.min.x.max(0.0);
-                    let x_max = (text_left + r2.max.x).max(x_min + 4.0);
-                    painter.rect_filled(Rect::from_min_max(pos2(x_min, top), pos2(x_max, bottom)), 0.0, sel_color);
+                // Intermediate fully-selected row: strictly matches actual text bounds
+                let min_x = text_left + row.rect.min.x.max(0.0);
+                let max_x = text_left + row.rect.max.x;
+                (min_x, max_x)
+            };
+
+            if x_max <= x_min + 1.0 {
+                x_max = x_min + char_w;
+            }
+
+            // Cursor Integration: ensure character under cursor at both selection ends is fully covered
+            if is_start_row {
+                let (cur_pos, _) = layout.pos_for_char(sel_start, ed_origin);
+                x_min = x_min.min(cur_pos.x);
+                if is_end_row {
+                    x_max = x_max.max(cur_pos.x + char_w);
                 }
             }
-            continue;
-        }
-
-        // SCENARIO 2: First line of a multi-line selection (selection continues downward)
-        if is_sel_first_line {
-            let row_count = line.galley.rows.len();
-            if row1 >= row_count.saturating_sub(1) {
-                // Starts on the last (or only) row of this line
-                let top = line_y + r1.min.y;
-                // Extend seamlessly to the next line with 0.5px sub-pixel overlap
-                let bottom = line_y + line.height + 0.5;
-                let x_min = (text_left + r1.min.x).max(text_left);
-                let x_max = text_left + line.galley.size().x.max(r1.max.x + 8.0) + 6.0;
-                painter.rect_filled(Rect::from_min_max(pos2(x_min, top), pos2(x_max, bottom)), 0.0, sel_color);
-            } else {
-                // Starts on an earlier row of this multi-row line
-                if let Some(first_row) = line.galley.rows.get(row1) {
-                    let top = line_y + r1.min.y;
-                    let bottom = line_y + first_row.rect.max.y + 0.5;
-                    let x_min = (text_left + r1.min.x).max(text_left);
-                    let x_max = text_left + first_row.rect.max.x + 4.0;
-                    painter.rect_filled(Rect::from_min_max(pos2(x_min, top), pos2(x_max, bottom)), 0.0, sel_color);
-                }
-                for r_idx in (row1 + 1)..row_count.saturating_sub(1) {
-                    if let Some(mid_row) = line.galley.rows.get(r_idx) {
-                        let top = line_y + mid_row.rect.min.y - 0.5;
-                        let bottom = line_y + mid_row.rect.max.y + 0.5;
-                        let x_min = text_left + mid_row.rect.min.x.max(0.0);
-                        let x_max = text_left + mid_row.rect.max.x + 4.0;
-                        painter.rect_filled(Rect::from_min_max(pos2(x_min, top), pos2(x_max, bottom)), 0.0, sel_color);
-                    }
-                }
-                // Last row of this line connects downward to next line
-                if let Some(last_row) = line.galley.rows.last() {
-                    let top = line_y + last_row.rect.min.y - 0.5;
-                    let bottom = line_y + line.height + 0.5;
-                    let x_min = text_left + last_row.rect.min.x.max(0.0);
-                    let x_max = text_left + last_row.rect.max.x + 8.0;
-                    painter.rect_filled(Rect::from_min_max(pos2(x_min, top), pos2(x_max, bottom)), 0.0, sel_color);
-                }
+            if is_end_row {
+                let (cur_pos, _) = layout.pos_for_char(sel_end.saturating_sub(1), ed_origin);
+                x_max = x_max.max(cur_pos.x + char_w);
             }
-            continue;
-        }
 
-        // SCENARIO 3: Middle line of a multi-line selection (fully selected)
-        if !is_sel_first_line && !is_sel_last_line {
-            let top = line_y - 0.5;
-            let bottom = line_y + line.height + 0.5;
-            let x_min = text_left;
-            let x_max = text_left + line.galley.size().x.max(24.0) + 8.0;
-            painter.rect_filled(Rect::from_min_max(pos2(x_min, top), pos2(x_max, bottom)), 0.0, sel_color);
-            continue;
-        }
+            let raw_top = (galley_top + row.rect.min.y).round();
+            let raw_bottom = (galley_top + row.rect.max.y).round();
 
-        // SCENARIO 4: Last line of a multi-line selection (selection ends here)
-        if is_sel_last_line {
-            if row2 == 0 {
-                // Ends on the first row of this line
-                let top = line_y - 0.5;
-                let bottom = line_y + r2.min.y + r2.height().max(16.0);
-                let x_min = text_left;
-                let x_max = (text_left + r2.max.x).max(text_left + 4.0);
-                painter.rect_filled(Rect::from_min_max(pos2(x_min, top), pos2(x_max, bottom)), 0.0, sel_color);
-            } else {
-                // Spans earlier rows of this line before ending on row2
-                for r_idx in 0..row2 {
-                    if let Some(prev_row) = line.galley.rows.get(r_idx) {
-                        let top = if r_idx == 0 { line_y - 0.5 } else { line_y + prev_row.rect.min.y - 0.5 };
-                        let bottom = line_y + prev_row.rect.max.y + 0.5;
-                        let x_min = text_left;
-                        let x_max = text_left + prev_row.rect.max.x + 4.0;
-                        painter.rect_filled(Rect::from_min_max(pos2(x_min, top), pos2(x_max, bottom)), 0.0, sel_color);
-                    }
-                }
-                // Ending row
-                let top = line_y + line.galley.rows[row2].rect.min.y - 0.5;
-                let bottom = line_y + r2.min.y + r2.height().max(16.0);
-                let x_min = text_left;
-                let x_max = (text_left + r2.max.x).max(text_left + 4.0);
-                painter.rect_filled(Rect::from_min_max(pos2(x_min, top), pos2(x_max, bottom)), 0.0, sel_color);
-            }
+            raw_highlights.push(RowHighlight {
+                line_idx,
+                x_min,
+                x_max,
+                raw_top,
+                raw_bottom,
+                line_top,
+                line_bottom,
+            });
         }
     }
+
+    let n = raw_highlights.len();
+    if n == 0 {
+        return;
+    }
+
+    let mut mesh = Mesh::default();
+
+    if n == 1 {
+        // Single visual row selection: match row/caret height precisely
+        let h = &raw_highlights[0];
+        let rect = Rect::from_min_max(pos2(h.x_min, h.raw_top), pos2(h.x_max, h.raw_bottom));
+        mesh.add_colored_rect(rect, sel_color);
+        painter.add(Shape::mesh(mesh));
+        return;
+    }
+
+    // Multi-row selection: build seamlessly fused geometric shape with zero horizontal gaps
+    for i in 0..n {
+        let h = &raw_highlights[i];
+
+        // Top boundary: first row starts at text top; subsequent rows seamlessly connect to preceding row
+        let top = if i == 0 {
+            h.raw_top
+        } else {
+            let prev = &raw_highlights[i - 1];
+            if prev.line_idx == h.line_idx {
+                prev.raw_bottom
+            } else {
+                h.line_top
+            }
+        };
+
+        // Bottom boundary: last row ends at text bottom; preceding rows seamlessly connect to following row
+        let bottom = if i + 1 == n {
+            h.raw_bottom
+        } else {
+            let next = &raw_highlights[i + 1];
+            if next.line_idx == h.line_idx {
+                h.raw_bottom
+            } else {
+                h.line_bottom
+            }
+        };
+
+        let rect = Rect::from_min_max(pos2(h.x_min, top), pos2(h.x_max, bottom));
+        mesh.add_colored_rect(rect, sel_color);
+    }
+
+    painter.add(Shape::mesh(mesh));
 }

@@ -133,7 +133,7 @@ pub fn compute_inline_layout(
             prefix_len,
             in_code_block && !matches!(kind, InlineLineKind::CodeFence(_)),
             current_code_lang.as_deref(),
-            Some((wrap_width - 8.0).max(120.0).min(650.0)),
+            Some((wrap_width - 8.0).max(120.0).min((base_font_size * 25.0).max(650.0))),
         );
 
         job.wrap.max_width = wrap_width.max(100.0);

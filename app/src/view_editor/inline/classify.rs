@@ -1,6 +1,6 @@
 //! Line classification and multi-line markdown structure promotion (Setext headings, table headers).
 
-use super::elements::parse_aligns;
+use super::elements::{parse_aligns, split_table_cells};
 use super::types::{InlineLineKind, TableRowInfo};
 
 /// Scans a single line's characters and classifies its markdown role.
@@ -120,6 +120,7 @@ pub fn classify_line(chars: &[char]) -> (InlineLineKind, usize) {
                     is_header: false,
                     is_separator: true,
                     aligns,
+                    col_count: 0,
                 }),
                 0,
             );
@@ -129,6 +130,7 @@ pub fn classify_line(chars: &[char]) -> (InlineLineKind, usize) {
                     is_header: false,
                     is_separator: false,
                     aligns: Vec::new(),
+                    col_count: 0,
                 }),
                 0,
             );
@@ -143,6 +145,7 @@ pub fn classify_line(chars: &[char]) -> (InlineLineKind, usize) {
 /// 2. Promotes lines followed by `---` to `SetextHeading(2)`.
 /// 3. Promotes table rows followed by table separators to `is_header = true` and propagates `aligns`.
 /// 4. Converts newly created tables directly, promoting the first row to a header even before a separator is typed.
+/// 5. Propagates canonical table column count to ALL rows in the table for strictly aligned grid rendering.
 pub fn classify_lines(lines: &[Vec<char>]) -> Vec<(InlineLineKind, usize)> {
     let mut results: Vec<(InlineLineKind, usize)> = lines.iter().map(|l| classify_line(l)).collect();
     let n = results.len();
@@ -171,7 +174,7 @@ pub fn classify_lines(lines: &[Vec<char>]) -> Vec<(InlineLineKind, usize)> {
         }
     }
 
-    // Pass 3: Table Header Promotion & Alignment Propagation
+    // Pass 3: Table Header Promotion, Canonical Column Count & Alignment Propagation
     let mut i = 0;
     while i < n {
         if matches!(results[i].0, InlineLineKind::TableRow(_)) {
@@ -192,31 +195,34 @@ pub fn classify_lines(lines: &[Vec<char>]) -> Vec<(InlineLineKind, usize)> {
                 }
             }
 
-            if let Some(s_idx) = sep_idx {
-                let header_idx = if s_idx > start { s_idx - 1 } else { start };
-                let aligns = if let InlineLineKind::TableRow(ref s_info) = results[s_idx].0 {
+            let header_idx = if let Some(s_idx) = sep_idx {
+                if s_idx > start { s_idx - 1 } else { start }
+            } else {
+                start
+            };
+
+            let sep_aligns = if let Some(s_idx) = sep_idx {
+                if let InlineLineKind::TableRow(ref s_info) = results[s_idx].0 {
                     s_info.aligns.clone()
                 } else {
                     Vec::new()
-                };
-
-                for k in start..=end {
-                    if k == s_idx {
-                        continue;
-                    }
-                    let is_h = k == header_idx;
-                    results[k].0 = InlineLineKind::TableRow(TableRowInfo {
-                        is_header: is_h,
-                        is_separator: false,
-                        aligns: aligns.clone(),
-                    });
                 }
             } else {
-                // When a table is first created, promote first row to header directly
-                results[start].0 = InlineLineKind::TableRow(TableRowInfo {
-                    is_header: true,
-                    is_separator: false,
-                    aligns: Vec::new(),
+                Vec::new()
+            };
+
+            let header_cells = split_table_cells(&lines[header_idx]);
+            // Canonical table column count is anchored to the header row / separator
+            let table_cols = header_cells.len().max(sep_aligns.len()).max(1);
+
+            for k in start..=end {
+                let is_sep = sep_idx == Some(k);
+                let is_h = !is_sep && (k == header_idx || (sep_idx.is_none() && k == start));
+                results[k].0 = InlineLineKind::TableRow(TableRowInfo {
+                    is_header: is_h,
+                    is_separator: is_sep,
+                    aligns: sep_aligns.clone(),
+                    col_count: table_cols,
                 });
             }
 

@@ -101,6 +101,34 @@ impl Editor {
                 return;
             }
 
+            // 4. If current line is an empty table row (e.g. "|  |  |" with only pipes and spaces):
+            // Cleanly delete the whole row and move cursor to the end of the previous line
+            let mut line_end = self.cur;
+            while line_end < self.buf.len() && self.buf[line_end] != '\n' {
+                line_end += 1;
+            }
+            let full_line: String = self.buf[line_start..line_end].iter().collect();
+            let trimmed_full = full_line.trim();
+            if trimmed_full.starts_with('|') && trimmed_full.ends_with('|')
+                && trimmed_full.len() >= 2
+                && trimmed_full.chars().all(|c| c == '|' || c == ' ')
+            {
+                let del_start = if line_start > 0 && self.buf[line_start - 1] == '\n' {
+                    line_start - 1
+                } else {
+                    line_start
+                };
+                let del_end = if line_start == 0 && line_end < self.buf.len() && self.buf[line_end] == '\n' {
+                    line_end + 1
+                } else {
+                    line_end
+                };
+                self.buf.drain(del_start..del_end);
+                self.cur = del_start;
+                self.selection = None;
+                return;
+            }
+
             // Normal single-character backspace
             self.cur -= 1;
             self.buf.remove(self.cur);
@@ -314,6 +342,78 @@ impl Editor {
         }
     }
 
+    /// Returns (line_start, line_end) for the line containing `pos`.
+    pub fn line_bounds(&self, pos: usize) -> (usize, usize) {
+        let mut line_start = pos.min(self.buf.len());
+        while line_start > 0 && self.buf[line_start - 1] != '\n' {
+            line_start -= 1;
+        }
+        let mut line_end = pos.min(self.buf.len());
+        while line_end < self.buf.len() && self.buf[line_end] != '\n' {
+            line_end += 1;
+        }
+        (line_start, line_end)
+    }
+
+    /// Returns the canonical column count, indentation, and whether a separator exists
+    /// for the table containing `pos`. Scans upwards to the table header.
+    pub fn table_canonical_info(&self, pos: usize) -> (usize, String, bool) {
+        let (line_start, line_end) = self.line_bounds(pos);
+        let mut curr_start = line_start;
+        let mut header_start = line_start;
+        let mut header_end = line_end;
+        let mut has_sep = false;
+
+        // Scan backwards through contiguous table lines to locate the header row
+        while curr_start > 0 {
+            let mut prev_start = curr_start - 1;
+            while prev_start > 0 && self.buf[prev_start - 1] != '\n' {
+                prev_start -= 1;
+            }
+            let prev_str: String = self.buf[prev_start..curr_start - 1].iter().collect();
+            let pt = prev_str.trim();
+            if pt.contains('|') && (pt.starts_with('|') || pt.ends_with('|') || pt.split('|').filter(|p| !p.trim().is_empty()).count() >= 2) {
+                let is_sep_line = pt.contains('-') && pt.chars().all(|c| c == '|' || c == '-' || c == ':' || c == ' ');
+                if is_sep_line {
+                    has_sep = true;
+                } else if !has_sep {
+                    header_start = prev_start;
+                    header_end = curr_start - 1;
+                }
+                curr_start = prev_start;
+            } else {
+                break;
+            }
+        }
+
+        // Check if current line is separator
+        let cur_str: String = self.buf[line_start..line_end].iter().collect();
+        let cur_trim = cur_str.trim();
+        if cur_trim.contains('-') && cur_trim.chars().all(|c| c == '|' || c == '-' || c == ':' || c == ' ') {
+            has_sep = true;
+        }
+
+        // Check if line below is separator
+        if line_end < self.buf.len() {
+            let mut next_end = line_end + 1;
+            while next_end < self.buf.len() && self.buf[next_end] != '\n' {
+                next_end += 1;
+            }
+            let next_str: String = self.buf[line_end + 1..next_end].iter().collect();
+            let nt = next_str.trim();
+            if nt.contains('-') && nt.chars().all(|c| c == '|' || c == '-' || c == ':' || c == ' ') {
+                has_sep = true;
+            }
+        }
+
+        let header_str: String = self.buf[header_start..header_end].iter().collect();
+        let indent: String = header_str.chars().take_while(|&c| c == ' ' || c == '\t').collect();
+        let h_trim = header_str.trim();
+        let col_count = h_trim.trim_matches('|').split('|').count().max(1);
+
+        (col_count, indent, has_sep)
+    }
+
     /// Handles Enter key in insert mode:
     /// - If there is an active selection, replaces it with a simple newline without auto-indent.
     /// - Preserves exact leading whitespace (spaces and tabs) of current line.
@@ -329,15 +429,7 @@ impl Editor {
 
         self.save_undo_snapshot();
 
-        let mut line_start = self.cur;
-        while line_start > 0 && self.buf[line_start - 1] != '\n' {
-            line_start -= 1;
-        }
-        let mut line_end = self.cur;
-        while line_end < self.buf.len() && self.buf[line_end] != '\n' {
-            line_end += 1;
-        }
-
+        let (line_start, line_end) = self.line_bounds(self.cur);
         let line_str: String = self.buf[line_start..line_end].iter().collect();
 
         // 1. Extract leading whitespace (spaces and tabs)
@@ -410,21 +502,21 @@ impl Editor {
         }
 
         // 3. Check for list / quote / table continuation
-        let (next_prefix, cursor_offset) = if is_task {
-            (format!("\n{}- [ ] ", indent), None)
+        let (next_prefix, cursor_offset, insert_at_end) = if is_task {
+            (format!("\n{}- [ ] ", indent), None, false)
         } else if let Some(qp) = quote_prefix {
             if qp.ends_with(' ') {
-                (format!("\n{}{}", indent, qp), None)
+                (format!("\n{}{}", indent, qp), None, false)
             } else {
-                (format!("\n{}{} ", indent, qp), None)
+                (format!("\n{}{} ", indent, qp), None, false)
             }
         } else if let Some(num) = parse_numbered_list(rest) {
-            (format!("\n{}{}. ", indent, num.saturating_add(1)), None)
+            (format!("\n{}{}. ", indent, num.saturating_add(1)), None, false)
         } else if let Some(bullet) = parse_bullet_list(rest) {
-            (format!("\n{}{} ", indent, bullet), None)
+            (format!("\n{}{} ", indent, bullet), None, false)
         } else if is_table_row {
-            let cols: Vec<&str> = rest_trim.trim_matches('|').split('|').collect();
-            let col_count = cols.len().max(1);
+            let (canonical_cols, tbl_indent, _) = self.table_canonical_info(self.cur);
+            let row_indent = if !tbl_indent.is_empty() { &tbl_indent } else { indent };
 
             let has_sep_above = {
                 let mut prev_line_start = line_start;
@@ -465,38 +557,423 @@ impl Editor {
 
             if !is_table_sep && !has_sep_above && !next_line_is_sep {
                 // If creating a table header without a separator, auto-generate separator and first row
-                let mut s = format!("\n{}|", indent);
-                for _ in 0..col_count {
+                let mut s = format!("\n{}|", row_indent);
+                for _ in 0..canonical_cols {
                     s.push_str(" --- |");
                 }
-                s.push_str(&format!("\n{}|", indent));
-                for _ in 0..col_count {
+                s.push_str(&format!("\n{}|", row_indent));
+                for _ in 0..canonical_cols {
                     s.push_str("  |");
                 }
-                let first_cell_offset = 1 + indent.len() + 6 * col_count + 1 + 1 + indent.len() + 2;
-                (s, Some(first_cell_offset))
+                let first_cell_offset = if let Some(last_newline) = s.rfind('\n') {
+                    last_newline + 1 + row_indent.chars().count() + 2
+                } else {
+                    s.chars().count()
+                };
+                (s, Some(first_cell_offset), true)
             } else {
-                let mut s = format!("\n{}|", indent);
-                for _ in 0..col_count {
+                let mut s = format!("\n{}|", row_indent);
+                for _ in 0..canonical_cols {
                     s.push_str("  |");
                 }
-                let first_cell_offset = 1 + indent.len() + 2;
-                (s, Some(first_cell_offset))
+                let first_cell_offset = if let Some(last_newline) = s.rfind('\n') {
+                    last_newline + 1 + row_indent.chars().count() + 2
+                } else {
+                    s.chars().count()
+                };
+                (s, Some(first_cell_offset), true)
             }
         } else {
             // Preserve exact leading whitespace
-            (format!("\n{}", indent), None)
+            (format!("\n{}", indent), None, false)
         };
 
+        let insert_pos = if insert_at_end { line_end } else { self.cur };
         for (idx, ch) in next_prefix.chars().enumerate() {
-            self.buf.insert(self.cur + idx, ch);
+            self.buf.insert(insert_pos + idx, ch);
         }
         if let Some(offset) = cursor_offset {
-            self.cur += offset.min(next_prefix.chars().count());
+            self.cur = insert_pos + offset.min(next_prefix.chars().count());
         } else {
-            self.cur += next_prefix.chars().count();
+            self.cur = insert_pos + next_prefix.chars().count();
         }
         self.selection = None;
+    }
+
+    /// Exits a code block wrapper (```...```) or markdown table when Ctrl+Enter is pressed,
+    /// placing the cursor on a clean new line underneath the block.
+    /// Returns true if handled, false if not inside a block or table.
+    pub fn exit_block_or_table(&mut self) -> bool {
+        if self.buf.is_empty() {
+            return false;
+        }
+
+        // 1. Check if inside a table
+        let (cur_line_start, cur_line_end) = self.line_bounds(self.cur);
+        let cur_line: String = self.buf[cur_line_start..cur_line_end].iter().collect();
+        let cur_trim = cur_line.trim();
+        let is_cur_table = cur_trim.contains('|')
+            && (cur_trim.starts_with('|') || cur_trim.ends_with('|') || cur_trim.split('|').filter(|p| !p.trim().is_empty()).count() >= 2);
+
+        if is_cur_table {
+            // Find the end of this table block by scanning forward
+            let mut scan_start = cur_line_start;
+            let mut last_table_end = cur_line_end;
+
+            while scan_start < self.buf.len() {
+                let mut scan_end = scan_start;
+                while scan_end < self.buf.len() && self.buf[scan_end] != '\n' {
+                    scan_end += 1;
+                }
+                let line_str: String = self.buf[scan_start..scan_end].iter().collect();
+                let lt = line_str.trim();
+                let is_tbl = lt.contains('|') && (lt.starts_with('|') || lt.ends_with('|') || lt.split('|').filter(|p| !p.trim().is_empty()).count() >= 2);
+                if is_tbl {
+                    last_table_end = scan_end;
+                    if scan_end < self.buf.len() {
+                        scan_start = scan_end + 1;
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+
+            self.save_undo_snapshot();
+            if last_table_end == self.buf.len() {
+                self.buf.insert(last_table_end, '\n');
+                self.cur = last_table_end + 1;
+            } else {
+                let next_start = last_table_end + 1;
+                if next_start < self.buf.len() && self.buf[next_start] == '\n' {
+                    self.cur = next_start;
+                } else {
+                    self.buf.insert(last_table_end + 1, '\n');
+                    self.cur = last_table_end + 1;
+                }
+            }
+            self.selection = None;
+            return true;
+        }
+
+        // 2. Check if inside a code block (between ```/~~~ fences)
+        let mut in_code = false;
+        let mut open_fence_start = None;
+        let mut cur_in_code = false;
+        let mut line_s = 0;
+
+        while line_s <= self.buf.len() {
+            let mut line_e = line_s;
+            while line_e < self.buf.len() && self.buf[line_e] != '\n' {
+                line_e += 1;
+            }
+            let line_chars: Vec<char> = self.buf[line_s..line_e].to_vec();
+            let is_fence = line_chars.starts_with(&['`', '`', '`']) || line_chars.starts_with(&['~', '~', '~']);
+            let line_contains_cur = self.cur >= line_s && (self.cur <= line_e || (line_e == self.buf.len() && self.cur == line_e));
+
+            if is_fence {
+                if !in_code {
+                    in_code = true;
+                    open_fence_start = Some(line_s);
+                    if line_contains_cur {
+                        cur_in_code = true;
+                    }
+                } else {
+                    in_code = false;
+                    if line_contains_cur {
+                        cur_in_code = true;
+                    }
+                }
+            } else if in_code && line_contains_cur {
+                cur_in_code = true;
+            }
+
+            if line_e < self.buf.len() {
+                line_s = line_e + 1;
+            } else {
+                break;
+            }
+        }
+
+        if cur_in_code {
+            self.save_undo_snapshot();
+            let scan_from = open_fence_start.unwrap_or(self.cur);
+            let mut s = scan_from;
+            let mut found_closing_fence = None;
+            let mut first_fence_skipped = false;
+
+            while s <= self.buf.len() {
+                let mut e = s;
+                while e < self.buf.len() && self.buf[e] != '\n' {
+                    e += 1;
+                }
+                let line_chars: Vec<char> = self.buf[s..e].to_vec();
+                let is_fence = line_chars.starts_with(&['`', '`', '`']) || line_chars.starts_with(&['~', '~', '~']);
+
+                if is_fence {
+                    if !first_fence_skipped {
+                        first_fence_skipped = true;
+                    } else {
+                        found_closing_fence = Some((s, e));
+                        break;
+                    }
+                }
+
+                if e < self.buf.len() {
+                    s = e + 1;
+                } else {
+                    break;
+                }
+            }
+
+            if let Some((_cf_start, cf_end)) = found_closing_fence {
+                if cf_end == self.buf.len() {
+                    self.buf.insert(cf_end, '\n');
+                    self.cur = cf_end + 1;
+                } else {
+                    let next_start = cf_end + 1;
+                    if next_start < self.buf.len() && self.buf[next_start] == '\n' {
+                        self.cur = next_start;
+                    } else {
+                        self.buf.insert(cf_end + 1, '\n');
+                        self.cur = cf_end + 1;
+                    }
+                }
+            } else {
+                let (_, c_end) = self.line_bounds(self.cur);
+                let close_str = "\n```\n";
+                for (i, ch) in close_str.chars().enumerate() {
+                    self.buf.insert(c_end + i, ch);
+                }
+                self.cur = c_end + close_str.chars().count();
+            }
+            self.selection = None;
+            return true;
+        }
+
+        false
+    }
+
+    /// Navigates cell-by-cell in markdown tables via Tab / Shift+Tab.
+    /// If at the end of the table on Tab, automatically appends a new row and places caret inside its first cell.
+    /// Returns true if handled, false if not in a table.
+    pub fn table_nav_tab(&mut self, forward: bool) -> bool {
+        if self.buf.is_empty() {
+            return false;
+        }
+
+        let (line_start, line_end) = self.line_bounds(self.cur);
+        let line_str: String = self.buf[line_start..line_end].iter().collect();
+        let trimmed = line_str.trim();
+
+        if !trimmed.contains('|') || trimmed.len() < 2 {
+            return false;
+        }
+
+        let indent: String = self.buf[line_start..line_end]
+            .iter()
+            .take_while(|&&c| c == ' ' || c == '\t')
+            .collect();
+
+        // Collect all pipe positions on the current line
+        let pipes: Vec<usize> = self.buf[line_start..line_end]
+            .iter()
+            .enumerate()
+            .filter(|(_, &c)| c == '|')
+            .map(|(i, _)| line_start + i)
+            .collect();
+
+        if pipes.len() < 2 {
+            return false;
+        }
+
+        self.save_undo_snapshot();
+
+        if forward {
+            // Find next pipe after self.cur
+            let next_pipe_idx = pipes.iter().position(|&p| p > self.cur);
+            if let Some(p_idx) = next_pipe_idx {
+                // If there is another cell after this pipe on the same line
+                if p_idx + 1 < pipes.len() {
+                    let cell_start = pipes[p_idx];
+                    let target = if cell_start + 1 < self.buf.len() && self.buf[cell_start + 1] == ' ' {
+                        (cell_start + 2).min(pipes[p_idx + 1])
+                    } else {
+                        (cell_start + 1).min(pipes[p_idx + 1])
+                    };
+                    self.cur = target;
+                    self.selection = None;
+                    return true;
+                }
+            }
+
+            // If we reached the end of the current row, jump to next row
+            if line_end < self.buf.len() {
+                let next_start = line_end + 1;
+                let mut next_end = next_start;
+                while next_end < self.buf.len() && self.buf[next_end] != '\n' {
+                    next_end += 1;
+                }
+                let next_str: String = self.buf[next_start..next_end].iter().collect();
+                let next_trim = next_str.trim();
+
+                if next_trim.contains('|') && (next_trim.starts_with('|') || next_trim.ends_with('|') || next_trim.split('|').filter(|p| !p.trim().is_empty()).count() >= 2) {
+                    let is_sep = next_trim.contains('-') && next_trim.chars().all(|c| c == '|' || c == '-' || c == ':' || c == ' ');
+                    if is_sep {
+                        // Skip separator row to the data row beneath it
+                        if next_end < self.buf.len() {
+                            let data_start = next_end + 1;
+                            let mut data_end = data_start;
+                            while data_end < self.buf.len() && self.buf[data_end] != '\n' {
+                                data_end += 1;
+                            }
+                            let data_str: String = self.buf[data_start..data_end].iter().collect();
+                            let data_trim = data_str.trim();
+                            if data_trim.contains('|') {
+                                if let Some(first_pipe) = self.buf[data_start..data_end].iter().position(|&c| c == '|') {
+                                    let abs_pipe = data_start + first_pipe;
+                                    let target = if abs_pipe + 1 < self.buf.len() && self.buf[abs_pipe + 1] == ' ' {
+                                        abs_pipe + 2
+                                    } else {
+                                        abs_pipe + 1
+                                    };
+                                    self.cur = target.min(data_end);
+                                    self.selection = None;
+                                    return true;
+                                }
+                            }
+                        }
+                    } else {
+                        // Regular next row
+                        if let Some(first_pipe) = self.buf[next_start..next_end].iter().position(|&c| c == '|') {
+                            let abs_pipe = next_start + first_pipe;
+                            let target = if abs_pipe + 1 < self.buf.len() && self.buf[abs_pipe + 1] == ' ' {
+                                abs_pipe + 2
+                            } else {
+                                abs_pipe + 1
+                            };
+                            self.cur = target.min(next_end);
+                            self.selection = None;
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            // At the end of the table (or on header without separator):
+            let (canonical_cols, tbl_indent, has_sep) = self.table_canonical_info(self.cur);
+            let row_indent = if !tbl_indent.is_empty() { &tbl_indent } else { &indent };
+            let is_sep_line = trimmed.contains('-') && trimmed.chars().all(|c| c == '|' || c == '-' || c == ':' || c == ' ');
+
+            if !is_sep_line && !has_sep {
+                // If pressing Tab on header row without a separator, auto-generate separator and first row!
+                let mut new_block = format!("\n{}|", row_indent);
+                for _ in 0..canonical_cols {
+                    new_block.push_str(" --- |");
+                }
+                new_block.push_str(&format!("\n{}|", row_indent));
+                for _ in 0..canonical_cols {
+                    new_block.push_str("  |");
+                }
+                for (i, ch) in new_block.chars().enumerate() {
+                    self.buf.insert(line_end + i, ch);
+                }
+                let first_cell_offset = if let Some(last_newline) = new_block.rfind('\n') {
+                    last_newline + 1 + row_indent.chars().count() + 2
+                } else {
+                    new_block.chars().count()
+                };
+                self.cur = (line_end + first_cell_offset).min(self.buf.len());
+                self.selection = None;
+                return true;
+            } else {
+                let mut new_row = format!("\n{}|", row_indent);
+                for _ in 0..canonical_cols {
+                    new_row.push_str("  |");
+                }
+                for (i, ch) in new_row.chars().enumerate() {
+                    self.buf.insert(line_end + i, ch);
+                }
+                let first_cell_offset = if let Some(last_newline) = new_row.rfind('\n') {
+                    last_newline + 1 + row_indent.chars().count() + 2
+                } else {
+                    new_row.chars().count()
+                };
+                self.cur = (line_end + first_cell_offset).min(self.buf.len());
+                self.selection = None;
+                return true;
+            }
+        } else {
+            // Backward: Shift+Tab
+            let cur_pipe_idx = pipes.iter().rposition(|&p| p <= self.cur);
+            if let Some(p_idx) = cur_pipe_idx {
+                if p_idx > 1 {
+                    // Jump to previous cell on the same line
+                    let target_pipe = pipes[p_idx - 1];
+                    let target = if target_pipe + 1 < self.buf.len() && self.buf[target_pipe + 1] == ' ' {
+                        target_pipe + 2
+                    } else {
+                        target_pipe + 1
+                    };
+                    self.cur = target.min(pipes[p_idx]);
+                    self.selection = None;
+                    return true;
+                } else if p_idx == 1 && self.cur > pipes[0] + 2 {
+                    // Jump to start of first cell
+                    self.cur = pipes[0] + if pipes[0] + 1 < self.buf.len() && self.buf[pipes[0] + 1] == ' ' { 2 } else { 1 };
+                    self.selection = None;
+                    return true;
+                }
+            }
+
+            // Jump to previous row's last cell
+            if line_start > 0 {
+                let mut prev_start = line_start - 1;
+                while prev_start > 0 && self.buf[prev_start - 1] != '\n' {
+                    prev_start -= 1;
+                }
+                let prev_end = line_start - 1;
+                let prev_str: String = self.buf[prev_start..prev_end].iter().collect();
+                let prev_trim = prev_str.trim();
+
+                if prev_trim.contains('|') {
+                    let is_sep = prev_trim.contains('-') && prev_trim.chars().all(|c| c == '|' || c == '-' || c == ':' || c == ' ');
+                    let (target_start, target_end) = if is_sep && prev_start > 0 {
+                        // Skip separator to header row above it
+                        let mut h_start = prev_start - 1;
+                        while h_start > 0 && self.buf[h_start - 1] != '\n' {
+                            h_start -= 1;
+                        }
+                        (h_start, prev_start - 1)
+                    } else {
+                        (prev_start, prev_end)
+                    };
+
+                    let target_chars = &self.buf[target_start..target_end];
+                    let prev_pipes: Vec<usize> = target_chars
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, &c)| c == '|')
+                        .map(|(i, _)| target_start + i)
+                        .collect();
+
+                    if prev_pipes.len() >= 2 {
+                        let last_cell_pipe = prev_pipes[prev_pipes.len() - 2];
+                        let target = if last_cell_pipe + 1 < self.buf.len() && self.buf[last_cell_pipe + 1] == ' ' {
+                            last_cell_pipe + 2
+                        } else {
+                            last_cell_pipe + 1
+                        };
+                        self.cur = target.min(prev_pipes[prev_pipes.len() - 1]);
+                        self.selection = None;
+                        return true;
+                    }
+                }
+            }
+
+            false
+        }
     }
 }
 

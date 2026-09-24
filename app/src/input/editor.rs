@@ -186,9 +186,11 @@ pub fn handle_editor_key(app: &mut App, key: Key, modifiers: Modifiers, now: f64
 
     use Key::*;
     match key {
-        Enter if modifiers.ctrl => {
+        Enter if modifiers.ctrl || modifiers.command => {
             if !is_doc {
-                target_ed.insert_line_below();
+                if !target_ed.exit_block_or_table() {
+                    target_ed.insert_line_below();
+                }
                 app.is_dirty = true;
                 app.sound.play();
                 app.last_char_time = now;

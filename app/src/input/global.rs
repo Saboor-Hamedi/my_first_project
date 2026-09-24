@@ -254,7 +254,9 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
             } else {
                 egui::Modifiers::default()
             };
-            if app.editor_input_mode == EditorInputMode::Vim {
+            if app.ed.table_nav_tab(!shift_tab_pressed) {
+                // Navigated table cell or appended row
+            } else if app.editor_input_mode == EditorInputMode::Vim {
                 app.vim.handle_key(&mut app.ed, &app.visual_lines, egui::Key::Tab, modifiers);
             } else if app.editor_input_mode == EditorInputMode::Hybrid {
                 app.hybrid.handle_key(&mut app.ed, egui::Key::Tab, modifiers);

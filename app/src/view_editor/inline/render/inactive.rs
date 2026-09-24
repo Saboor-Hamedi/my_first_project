@@ -145,10 +145,15 @@ pub fn render_inactive_line(
             return line_h;
         }
 
-        let col_count = info.aligns.len().max(cells.len()).max(1);
-        let table_w = table_width.unwrap_or(600.0).min(650.0);
+        let col_count = if info.col_count > 0 {
+            info.col_count
+        } else {
+            info.aligns.len().max(cells.len()).max(1)
+        };
+        let min_table_w = (col_count as f32 * font_size * 5.0).max(300.0);
+        let table_w = table_width.unwrap_or(600.0).max(min_table_w);
         let cell_pad_x = 14.0;
-        let col_w = ((table_w - cell_pad_x * 2.0) / col_count as f32).max(60.0);
+        let col_w = ((table_w - cell_pad_x * 2.0) / col_count as f32).max(font_size * 4.0);
 
         let mut cursor_x = 0.0f32;
         for (c_idx, cell) in cells.iter().enumerate() {

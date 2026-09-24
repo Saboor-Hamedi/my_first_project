@@ -35,6 +35,9 @@ impl VimEngine {
             self.pending_keys.clear();
             match self.mode {
                 VimSubMode::Insert => {
+                    if ed.table_nav_tab(!modifiers.shift) {
+                        return true;
+                    }
                     if modifiers.shift {
                         ed.dedent();
                     } else {

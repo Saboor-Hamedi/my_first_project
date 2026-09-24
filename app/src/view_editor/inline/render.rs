@@ -1,9 +1,10 @@
 pub mod active;
+pub mod decorations;
 pub mod inactive;
 
 use super::elements::{
-    code_block_copy_button_rect, render_block_quote_wrapper, render_code_block_card,
-    render_document_selection, render_horizontal_rule, render_table_block_decorations,
+    code_block_copy_button_rect, render_block_quote_wrapper,
+    render_document_selection, render_horizontal_rule,
     render_table_row_decorations, render_task_checkbox,
 };
 use super::interaction::handle_inline_mouse_interaction;
@@ -88,7 +89,8 @@ pub fn render_inline_editor(
     let content_right = (editor_rect.max.x - right_pad).max(text_left + 100.0);
     let table_margin_right = 32.0;
     let table_avail_w = (editor_rect.max.x - text_left - table_margin_right).max(120.0);
-    let table_w = table_avail_w.min(650.0);
+    let min_table_w_for_font = (font_size * 25.0).max(400.0);
+    let table_w = table_avail_w.min(min_table_w_for_font.max(650.0));
 
     // 1. Intercept Copy Button clicks so clicking Copy never shifts caret or expands raw code fences
     let mut clicked_copy_button = false;
@@ -190,157 +192,34 @@ pub fn render_inline_editor(
         )
     };
 
-    // 2. Render Continuous Unified Selection Layer (The Lumina Standard)
-    if let Some((sel_start, sel_end)) = sel_range {
-        render_document_selection(
-            &editor_painter,
-            &layout,
-            ed_origin,
-            text_left,
-            sel_start,
-            sel_end,
-            sel_color,
-        );
-    }
-
     let mouse_pos = ui.input(|i| i.pointer.interact_pos());
 
-    // 3. Render Unified Code Block Container Cards (matching preview elevated surface, no broken line strips)
-    let mut blk_idx = 0;
-    while blk_idx < layout.lines.len() {
-        if matches!(layout.lines[blk_idx].kind, InlineLineKind::CodeFence(_) | InlineLineKind::CodeLine) {
-            let start_idx = blk_idx;
-            let mut end_idx = blk_idx;
-            let mut fence_lang: Option<String> = None;
+    // ── Layer 1: Unified Container Cards & Background Decorations ────────────
+    // Render Unified Code Block Container Cards (matching preview elevated surface, no broken line strips)
+    decorations::render_code_block_containers(
+        ui,
+        &editor_painter,
+        &layout,
+        ed,
+        ed_origin,
+        editor_rect,
+        text_left,
+        content_right,
+        theme,
+    );
 
-            if let InlineLineKind::CodeFence(ref l) = layout.lines[blk_idx].kind {
-                if !l.is_empty() {
-                    fence_lang = Some(l.clone());
-                }
-            }
+    // Render Unified Table Container Cards (sleek, matching preview.rs)
+    decorations::render_table_containers(
+        &editor_painter,
+        &layout,
+        ed_origin,
+        editor_rect,
+        text_left,
+        table_w,
+        theme,
+    );
 
-            while end_idx + 1 < layout.lines.len()
-                && matches!(layout.lines[end_idx + 1].kind, InlineLineKind::CodeFence(_) | InlineLineKind::CodeLine)
-            {
-                end_idx += 1;
-                if matches!(layout.lines[end_idx].kind, InlineLineKind::CodeFence(_)) {
-                    break;
-                }
-            }
-
-            let top_y = ed_origin.y + layout.lines[start_idx].y_offset;
-            let bottom_y = ed_origin.y + layout.lines[end_idx].y_offset + layout.lines[end_idx].height;
-
-            if bottom_y >= editor_rect.min.y && top_y <= editor_rect.max.y {
-                render_code_block_card(
-                    &editor_painter,
-                    top_y,
-                    bottom_y,
-                    text_left,
-                    content_right,
-                    theme,
-                    fence_lang.as_deref(),
-                );
-
-                // Code block copy button: zero background, zero border matching preview.rs
-                let copy_id = ui.id().with(("inline_code_block_copy", start_idx));
-                let current_time = ui.input(|i| i.time);
-                let last_copied: Option<f64> = ui.data(|d| d.get_temp(copy_id));
-                let is_copied = last_copied.map_or(false, |t| current_time - t < 1.0);
-
-                let btn_rect = code_block_copy_button_rect(content_right, top_y);
-
-                let is_btn_hovered = ui.rect_contains_pointer(btn_rect.expand(3.0));
-                if is_btn_hovered {
-                    ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-                }
-                if is_btn_hovered && ui.input(|i| i.pointer.primary_clicked()) {
-                    let mut code_text = String::new();
-                    for k in (start_idx + 1)..end_idx {
-                        let l_chars = &layout.lines[k];
-                        let raw_line: String = ed.buf[l_chars.char_start..l_chars.char_end].iter().collect();
-                        code_text.push_str(&raw_line);
-                        code_text.push('\n');
-                    }
-                    ui.ctx().copy_text(code_text);
-                    ui.data_mut(|d| d.insert_temp(copy_id, current_time));
-                    ui.ctx().request_repaint();
-                }
-                if is_copied {
-                    let elapsed = current_time - last_copied.unwrap();
-                    let remaining = 1.0 - elapsed;
-                    if remaining > 0.0 {
-                        ui.ctx().request_repaint_after(std::time::Duration::from_millis((remaining * 1000.0) as u64 + 20));
-                    }
-                }
-
-                let (btn_text, btn_color) = if is_copied {
-                    ("✓ Copied", theme.accent)
-                } else if is_btn_hovered {
-                    ("Copy", theme.text)
-                } else {
-                    ("Copy", theme.muted)
-                };
-
-                editor_painter.text(
-                    btn_rect.center(),
-                    Align2::CENTER_CENTER,
-                    btn_text,
-                    FontId::monospace(9.5),
-                    btn_color,
-                );
-            }
-
-            blk_idx = end_idx + 1;
-        } else {
-            blk_idx += 1;
-        }
-    }
-
-    // 4. Render Unified Table Container Cards (sleek, matching preview.rs)
-    let mut tbl_idx = 0;
-    while tbl_idx < layout.lines.len() {
-        if matches!(layout.lines[tbl_idx].kind, InlineLineKind::TableRow(_)) {
-            let start_idx = tbl_idx;
-            let mut end_idx = tbl_idx;
-            while end_idx + 1 < layout.lines.len()
-                && matches!(layout.lines[end_idx + 1].kind, InlineLineKind::TableRow(_))
-            {
-                end_idx += 1;
-            }
-
-            let top_y = ed_origin.y + layout.lines[start_idx].y_offset;
-            let bottom_y = ed_origin.y + layout.lines[end_idx].y_offset + layout.lines[end_idx].height;
-
-            if bottom_y >= editor_rect.min.y && top_y <= editor_rect.max.y {
-                let table_rect = Rect::from_min_max(
-                    pos2(text_left, top_y),
-                    pos2(text_left + table_w, bottom_y),
-                );
-
-                let mut header_rect = None;
-                if let InlineLineKind::TableRow(ref info) = layout.lines[start_idx].kind {
-                    if info.is_header {
-                        let h_h = layout.lines[start_idx].height;
-                        header_rect = Some(Rect::from_min_size(pos2(text_left, top_y), vec2(table_w, h_h)));
-                    }
-                }
-
-                render_table_block_decorations(
-                    &editor_painter,
-                    table_rect,
-                    header_rect,
-                    theme,
-                );
-            }
-
-            tbl_idx = end_idx + 1;
-        } else {
-            tbl_idx += 1;
-        }
-    }
-
-    // Frustum culling: render only lines intersecting visible viewport
+    // Render line-level card backgrounds (Blockquote callout cards & table row alternating tints)
     for (line_idx, line) in layout.lines.iter().enumerate() {
         let line_y = ed_origin.y + line.y_offset;
 
@@ -350,7 +229,7 @@ pub fn render_inline_editor(
 
         let is_line_active = ed.cur >= line.char_start && ed.cur <= line.char_end;
 
-        // 1. Render Blockquote modern wrapper card (without harsh left stripe, continuous across multi-lines)
+        // Blockquote modern wrapper card (without harsh left stripe, continuous across multi-lines)
         if let InlineLineKind::Quote(depth) = line.kind {
             let is_first = line_idx == 0 || !matches!(layout.lines[line_idx - 1].kind, InlineLineKind::Quote(d) if d == depth);
             let is_last = line_idx + 1 >= layout.lines.len() || !matches!(layout.lines[line_idx + 1].kind, InlineLineKind::Quote(d) if d == depth);
@@ -368,7 +247,7 @@ pub fn render_inline_editor(
             );
         }
 
-        // 3. Render Markdown Table Row decorations (alternating tint and subtle dividers for data rows)
+        // Markdown Table Row decorations (alternating tint and subtle dividers for data rows)
         if let InlineLineKind::TableRow(ref info) = line.kind {
             if !info.is_header && !info.is_separator && !is_line_active {
                 let mut row_idx = 0;
@@ -393,6 +272,31 @@ pub fn render_inline_editor(
                 );
             }
         }
+    }
+
+    // ── Layer 2: Continuous Unified Selection Layer (The Lumina Standard) ────
+    // Renders ON TOP of card backgrounds so selection is never hidden under cards or table rows
+    if let Some((sel_start, sel_end)) = sel_range {
+        render_document_selection(
+            &editor_painter,
+            &layout,
+            ed_origin,
+            text_left,
+            sel_start,
+            sel_end,
+            sel_color,
+        );
+    }
+
+    // ── Layer 3: Foreground Text, Interactive Widgets, Rules & Search Highlights ──
+    for line in &layout.lines {
+        let line_y = ed_origin.y + line.y_offset;
+
+        if line_y + line.height < editor_rect.min.y || line_y > editor_rect.max.y {
+            continue;
+        }
+
+        let is_line_active = ed.cur >= line.char_start && ed.cur <= line.char_end;
 
         // 4. Render Horizontal Rule
         if let InlineLineKind::Rule = line.kind {
@@ -466,9 +370,15 @@ pub fn render_inline_editor(
             }
         }
 
-        // 7. Render Text Galley (vertically centered in line slot)
+        // 7. Render Text Galley (vertically centered in line slot, clipped for table rows)
         let galley_y_pad = ((line.height - line.galley.size().y) * 0.5).round().max(0.0);
-        editor_painter.galley(pos2(text_left, line_y + galley_y_pad), line.galley.clone(), theme.text);
+        if let InlineLineKind::TableRow(_) = line.kind {
+            let row_clip = Rect::from_min_size(pos2(text_left, line_y), vec2(table_w, line.height)).expand(1.0);
+            let clipped_painter = editor_painter.with_clip_rect(row_clip);
+            clipped_painter.galley(pos2(text_left, line_y + galley_y_pad), line.galley.clone(), theme.text);
+        } else {
+            editor_painter.galley(pos2(text_left, line_y + galley_y_pad), line.galley.clone(), theme.text);
+        }
     }
 
     // 8. Render Caret Overlay (Strict Layer Priority: Always renders ON TOP of selection and text)
@@ -488,7 +398,7 @@ pub fn render_inline_editor(
             pos2(editor_rect.min.x + gutter_w, editor_rect.max.y),
         );
         let gutter_painter = painter.with_clip_rect(gutter_rect);
-        let num_font = FontId::monospace(font_size * 0.8);
+        let num_font = FontId::monospace((font_size * 0.82).round().max(9.0));
 
         let active_line_idx = layout.line_for_char(ed.cur);
 
@@ -505,9 +415,10 @@ pub fn render_inline_editor(
                     Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 100)
                 };
 
+                // Pinned to top of row (matching body.rs and standard IDEs) so heading line height changes never jump
                 gutter_painter.text(
-                    pos2(gutter_rect.max.x - 6.0, line_y + (line.height * 0.5)),
-                    Align2::RIGHT_CENTER,
+                    pos2(gutter_rect.max.x - 6.0, line_y + 3.0),
+                    Align2::RIGHT_TOP,
                     num_str,
                     num_font.clone(),
                     color,
