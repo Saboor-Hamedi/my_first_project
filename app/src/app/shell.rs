@@ -270,6 +270,7 @@ impl App {
             }
         }
 
+
         // Sleek Sidebar (Ctrl+B)
         if self.sidebar_open && self.mode != Mode::Doc {
             if let Some(sb_rect) = layout.sidebar_rect {
@@ -363,6 +364,7 @@ impl App {
                 }
             }
         }
+
 
         // Render Modal dialogs (Preferences, Search, Rename, Delete, Accent dropdown)
         self.render_modals(ui, &painter, bounds, accent_anchor_rect, now);

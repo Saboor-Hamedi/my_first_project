@@ -185,6 +185,15 @@ impl VimEngine {
                     self.count_accumulator = Some(count);
                 }
             }
+            VimAction::ToggleTaskCheckbox => {
+                let (row, _) = ed.row_col();
+                ed.save_undo_snapshot();
+                if toggle_task_checkbox_on_line(ed, row) {
+                    self.last_completed_action = Some("ToggleTaskCheckbox".into());
+                } else {
+                    ed.undo_stack.pop();
+                }
+            }
             VimAction::Cancel => {
                 self.set_mode(crate::vim::types::VimSubMode::Normal, ed);
             }
@@ -198,3 +207,41 @@ impl VimEngine {
         }
     }
 }
+
+/// Flips `- [ ]`/`* [ ]` <-> `- [x]`/`* [x]` (case-insensitive `x`) on one
+/// line, if that line is actually a task item. Returns whether it changed
+/// anything — lines that aren't task items are left alone rather than having
+/// checkbox syntax invented on them.
+pub fn toggle_task_checkbox_on_line(ed: &mut Editor, row: usize) -> bool {
+    let (start, end) = ed.line_char_range(row);
+    if start >= end || end > ed.buf.len() {
+        return false;
+    }
+    let line: Vec<char> = ed.buf[start..end].to_vec();
+
+    let indent = line.iter().take_while(|&&c| c == ' ' || c == '\t').count();
+    let rest = &line[indent..];
+    let is_task = |c0: char, c1: char| (c0 == '-' || c0 == '*') && c1 == ' ';
+    if rest.len() < 6 || !is_task(rest[0], rest[1]) || rest[2] != '[' || rest[4] != ']' || rest[5] != ' ' {
+        return false;
+    }
+
+    let checked = rest[3] == 'x' || rest[3] == 'X';
+    let new_char = if checked { ' ' } else { 'x' };
+    ed.buf[start + indent + 3] = new_char;
+    true
+}
+
+/// Returns the inclusive range of line numbers selected in the editor.
+pub fn selected_line_range(ed: &Editor) -> std::ops::RangeInclusive<usize> {
+    if let Some((start, end)) = ed.selected_range() {
+        let (start_row, _) = ed.row_col_of(start);
+        let end_idx = if end > start { end.saturating_sub(1) } else { start };
+        let (end_row, _) = ed.row_col_of(end_idx);
+        start_row.min(end_row)..=start_row.max(end_row)
+    } else {
+        let (row, _) = ed.row_col();
+        row..=row
+    }
+}
+

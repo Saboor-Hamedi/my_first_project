@@ -69,4 +69,34 @@ impl Editor {
         }
         (row, col)
     }
+
+    /// Returns the (start, end) char indices of the line at 0-based `row`, excluding trailing newline.
+    pub fn line_char_range(&self, row: usize) -> (usize, usize) {
+        let mut cur_row = 0;
+        let mut start = 0;
+        for (i, &c) in self.buf.iter().enumerate() {
+            if cur_row == row {
+                let mut end = i;
+                while end < self.buf.len() && self.buf[end] != '\n' {
+                    end += 1;
+                }
+                return (i, end);
+            }
+            if c == '\n' {
+                cur_row += 1;
+                start = i + 1;
+            }
+        }
+        if cur_row == row {
+            return (start, self.buf.len());
+        }
+        (self.buf.len(), self.buf.len())
+    }
+
+    /// Returns the text content of the line at 0-based `row`, excluding trailing newline.
+    #[allow(dead_code)]
+    pub fn line_text(&self, row: usize) -> String {
+        let (s, e) = self.line_char_range(row);
+        self.buf[s..e].iter().collect()
+    }
 }

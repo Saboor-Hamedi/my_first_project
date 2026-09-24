@@ -105,6 +105,22 @@ impl VimEngine {
                 ed.delete_selection();
                 self.set_mode(VimSubMode::Insert, ed);
             }
+            VimAction::ToggleTaskCheckbox => {
+                let range = crate::vim::normal::selected_line_range(ed);
+                ed.save_undo_snapshot();
+                let mut changed = false;
+                for row in range {
+                    if crate::vim::normal::toggle_task_checkbox_on_line(ed, row) {
+                        changed = true;
+                    }
+                }
+                if changed {
+                    self.last_completed_action = Some("ToggleTaskCheckbox".into());
+                } else {
+                    ed.undo_stack.pop();
+                }
+                self.set_mode(VimSubMode::Normal, ed);
+            }
             _ => {}
         }
     }

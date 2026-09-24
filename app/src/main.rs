@@ -4,7 +4,7 @@ mod app;
 pub mod accent;
 mod statusbar;
 mod caret;
-mod commands;
+pub mod command;
 mod db_worker;
 mod editor;
 mod fuzzy;

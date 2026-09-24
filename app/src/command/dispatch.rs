@@ -7,8 +7,49 @@ use crate::mode::Mode;
 use crate::sound::SoundProfile;
 use crate::theme::{Theme, ThemeKind};
 
+#[derive(Clone, Copy, Debug)]
+pub struct CommandInfo {
+    pub name: &'static str,
+    pub desc: &'static str,
+}
+
+pub const COMMAND_CATALOG: &[CommandInfo] = &[
+    CommandInfo { name: "w", desc: "Save active note" },
+    CommandInfo { name: "help", desc: "Open documentation & shortcuts" },
+    CommandInfo { name: "set", desc: "Change settings (:set nu, :set preview)" },
+    CommandInfo { name: "nu", desc: "Toggle line numbers" },
+    CommandInfo { name: "nonu", desc: "Hide line numbers" },
+    CommandInfo { name: "preview", desc: "Toggle Markdown live preview" },
+    CommandInfo { name: "nopreview", desc: "Close Markdown live preview" },
+    CommandInfo { name: "live", desc: "Switch to inline WYSIWYG editor" },
+    CommandInfo { name: "raw", desc: "Switch to raw markdown editor" },
+    CommandInfo { name: "noh", desc: "Clear search highlight matches" },
+    CommandInfo { name: "vim", desc: "Toggle Vim modal engine" },
+    CommandInfo { name: "mode", desc: "Switch mode (:mode vim / hybrid)" },
+    CommandInfo { name: "r", desc: "Rename the active note" },
+    CommandInfo { name: "d", desc: "Delete the active note" },
+    CommandInfo { name: "export", desc: "Export note to Markdown file" },
+    CommandInfo { name: "import", desc: "Import text or markdown file" },
+    CommandInfo { name: "sound", desc: "Configure typing sound effects" },
+    CommandInfo { name: "caret", desc: "Change cursor animation style" },
+    CommandInfo { name: "theme", desc: "Switch color theme" },
+    CommandInfo { name: "stats", desc: "Open productivity statistics" },
+    CommandInfo { name: "term", desc: "Toggle embedded terminal" },
+    CommandInfo { name: "clear", desc: "Clear active editor buffer" },
+    CommandInfo { name: "backup", desc: "Create a SQLite backup" },
+    CommandInfo { name: "doc", desc: "Open reference documentation" },
+    CommandInfo { name: "edit", desc: "Return to note editor" },
+    CommandInfo { name: "scan", desc: "Run web security scan" },
+    CommandInfo { name: "scans", desc: "View web security scan history" },
+    CommandInfo { name: "quit", desc: "Quit or close view" },
+];
+
 pub fn execute_command(app: &mut App, raw: &str, now: f64) {
     let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+    let trimmed = trimmed.strip_prefix(':').unwrap_or(trimmed).trim();
     if trimmed.is_empty() {
         return;
     }

@@ -1,7 +1,7 @@
 //! Command bar (`:`) input handling (typing, navigation, backspace, and execution).
 
 use crate::app::App;
-use crate::commands::execute_command;
+use crate::command::dispatch::execute_command;
 use eframe::egui::{Key, Modifiers};
 
 pub fn handle_command_paste(app: &mut App, s: &str, now: f64) {
@@ -104,5 +104,36 @@ pub fn handle_command_key(app: &mut App, key: Key, modifiers: Modifiers, now: f6
             }
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_command_text_and_backspace() {
+        let mut app = App::new();
+        app.in_command = true;
+        handle_command_text(&mut app, "set nu", 0.0);
+        assert_eq!(app.cmd_ed.text(), "set nu");
+        assert_eq!(app.showcmd.text, ":set nu");
+
+        handle_command_key(&mut app, Key::Backspace, Modifiers::NONE, 0.0);
+        assert_eq!(app.cmd_ed.text(), "set n");
+
+        handle_command_key(&mut app, Key::Escape, Modifiers::NONE, 0.0);
+        assert_eq!(app.in_command, false);
+        assert_eq!(app.cmd_ed.text(), "");
+    }
+
+    #[test]
+    fn test_command_colon_input_no_freeze() {
+        let mut app = App::new();
+        app.in_command = true;
+        handle_command_text(&mut app, ":", 0.0);
+        assert_eq!(app.cmd_ed.text(), ":");
+        handle_command_text(&mut app, "w", 0.0);
+        assert_eq!(app.cmd_ed.text(), ":w");
     }
 }

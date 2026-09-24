@@ -14,12 +14,24 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum KeyStroke {
     Char(char),
-    Key { key: Key, ctrl: bool },
+    Key { key: Key, ctrl: bool, shift: bool, alt: bool },
 }
 
 impl From<char> for KeyStroke {
     fn from(c: char) -> Self {
         KeyStroke::Char(c)
+    }
+}
+
+impl KeyStroke {
+    /// Builds a `KeyStroke` from an egui key event plus its modifiers.
+    pub fn from_key(key: Key, modifiers: eframe::egui::Modifiers) -> Self {
+        KeyStroke::Key {
+            key,
+            ctrl: modifiers.ctrl || modifiers.command,
+            shift: modifiers.shift,
+            alt: modifiers.alt,
+        }
     }
 }
 
@@ -63,26 +75,30 @@ impl VimKeymap {
         normal.insert(' '.into(), VimAction::Motion(VimMotion::Right));
 
         // Arrow and control keys in Normal mode
-        normal.insert(KeyStroke::Key { key: Key::ArrowLeft, ctrl: false }, VimAction::Motion(VimMotion::Left));
-        normal.insert(KeyStroke::Key { key: Key::ArrowRight, ctrl: false }, VimAction::Motion(VimMotion::Right));
-        normal.insert(KeyStroke::Key { key: Key::ArrowUp, ctrl: false }, VimAction::Motion(VimMotion::UpVisual));
-        normal.insert(KeyStroke::Key { key: Key::ArrowDown, ctrl: false }, VimAction::Motion(VimMotion::DownVisual));
-        normal.insert(KeyStroke::Key { key: Key::Home, ctrl: false }, VimAction::Motion(VimMotion::LineStart));
-        normal.insert(KeyStroke::Key { key: Key::End, ctrl: false }, VimAction::Motion(VimMotion::LineEnd));
-        normal.insert(KeyStroke::Key { key: Key::ArrowLeft, ctrl: true }, VimAction::Motion(VimMotion::WordBackward));
-        normal.insert(KeyStroke::Key { key: Key::ArrowRight, ctrl: true }, VimAction::Motion(VimMotion::WordForward));
-        normal.insert(KeyStroke::Key { key: Key::Enter, ctrl: false }, VimAction::Motion(VimMotion::DownVisual));
-        normal.insert(KeyStroke::Key { key: Key::Backspace, ctrl: false }, VimAction::Motion(VimMotion::Left));
-        normal.insert(KeyStroke::Key { key: Key::Delete, ctrl: false }, VimAction::DeleteChar);
-        normal.insert(KeyStroke::Key { key: Key::Space, ctrl: false }, VimAction::Motion(VimMotion::Right));
+        normal.insert(KeyStroke::Key { key: Key::ArrowLeft, ctrl: false, shift: false, alt: false }, VimAction::Motion(VimMotion::Left));
+        normal.insert(KeyStroke::Key { key: Key::ArrowRight, ctrl: false, shift: false, alt: false }, VimAction::Motion(VimMotion::Right));
+        normal.insert(KeyStroke::Key { key: Key::ArrowUp, ctrl: false, shift: false, alt: false }, VimAction::Motion(VimMotion::UpVisual));
+        normal.insert(KeyStroke::Key { key: Key::ArrowDown, ctrl: false, shift: false, alt: false }, VimAction::Motion(VimMotion::DownVisual));
+        normal.insert(KeyStroke::Key { key: Key::Home, ctrl: false, shift: false, alt: false }, VimAction::Motion(VimMotion::LineStart));
+        normal.insert(KeyStroke::Key { key: Key::End, ctrl: false, shift: false, alt: false }, VimAction::Motion(VimMotion::LineEnd));
+        normal.insert(KeyStroke::Key { key: Key::ArrowLeft, ctrl: true, shift: false, alt: false }, VimAction::Motion(VimMotion::WordBackward));
+        normal.insert(KeyStroke::Key { key: Key::ArrowRight, ctrl: true, shift: false, alt: false }, VimAction::Motion(VimMotion::WordForward));
+        normal.insert(KeyStroke::Key { key: Key::Enter, ctrl: false, shift: false, alt: false }, VimAction::Motion(VimMotion::DownVisual));
+        normal.insert(KeyStroke::Key { key: Key::Backspace, ctrl: false, shift: false, alt: false }, VimAction::Motion(VimMotion::Left));
+        normal.insert(KeyStroke::Key { key: Key::Delete, ctrl: false, shift: false, alt: false }, VimAction::DeleteChar);
+        normal.insert(KeyStroke::Key { key: Key::Space, ctrl: false, shift: false, alt: false }, VimAction::Motion(VimMotion::Right));
 
         // ── Normal Mode Verbs & Editing ──────────────────────────────────────
         normal.insert('x'.into(), VimAction::DeleteChar);
         normal.insert('u'.into(), VimAction::Undo);
-        normal.insert(KeyStroke::Key { key: Key::R, ctrl: true }, VimAction::Redo);
+        normal.insert(KeyStroke::Key { key: Key::R, ctrl: true, shift: false, alt: false }, VimAction::Redo);
         normal.insert('p'.into(), VimAction::Paste { before: false });
         normal.insert('P'.into(), VimAction::Paste { before: true });
-        normal.insert(KeyStroke::Key { key: Key::D, ctrl: true }, VimAction::DuplicateLine);
+        normal.insert(KeyStroke::Key { key: Key::D, ctrl: true, shift: false, alt: false }, VimAction::DuplicateLine);
+        normal.insert(
+            KeyStroke::Key { key: Key::X, ctrl: true, shift: true, alt: false },
+            VimAction::ToggleTaskCheckbox,
+        );
 
         // ── Mode Transitions ─────────────────────────────────────────────────
         normal.insert('i'.into(), VimAction::EnterInsert(InsertPosition::AtCursor));
@@ -127,21 +143,25 @@ impl VimKeymap {
         visual.insert('G'.into(), VimAction::Motion(VimMotion::BufferEnd));
         visual.insert(' '.into(), VimAction::Motion(VimMotion::Right));
 
-        visual.insert(KeyStroke::Key { key: Key::ArrowLeft, ctrl: false }, VimAction::Motion(VimMotion::Left));
-        visual.insert(KeyStroke::Key { key: Key::ArrowRight, ctrl: false }, VimAction::Motion(VimMotion::Right));
-        visual.insert(KeyStroke::Key { key: Key::ArrowUp, ctrl: false }, VimAction::Motion(VimMotion::UpVisual));
-        visual.insert(KeyStroke::Key { key: Key::ArrowDown, ctrl: false }, VimAction::Motion(VimMotion::DownVisual));
-        visual.insert(KeyStroke::Key { key: Key::Enter, ctrl: false }, VimAction::Motion(VimMotion::DownVisual));
-        visual.insert(KeyStroke::Key { key: Key::Backspace, ctrl: false }, VimAction::Motion(VimMotion::Left));
-        visual.insert(KeyStroke::Key { key: Key::Delete, ctrl: false }, VimAction::Operator(VimOperator::Delete));
-        visual.insert(KeyStroke::Key { key: Key::Space, ctrl: false }, VimAction::Motion(VimMotion::Right));
+        visual.insert(KeyStroke::Key { key: Key::ArrowLeft, ctrl: false, shift: false, alt: false }, VimAction::Motion(VimMotion::Left));
+        visual.insert(KeyStroke::Key { key: Key::ArrowRight, ctrl: false, shift: false, alt: false }, VimAction::Motion(VimMotion::Right));
+        visual.insert(KeyStroke::Key { key: Key::ArrowUp, ctrl: false, shift: false, alt: false }, VimAction::Motion(VimMotion::UpVisual));
+        visual.insert(KeyStroke::Key { key: Key::ArrowDown, ctrl: false, shift: false, alt: false }, VimAction::Motion(VimMotion::DownVisual));
+        visual.insert(KeyStroke::Key { key: Key::Enter, ctrl: false, shift: false, alt: false }, VimAction::Motion(VimMotion::DownVisual));
+        visual.insert(KeyStroke::Key { key: Key::Backspace, ctrl: false, shift: false, alt: false }, VimAction::Motion(VimMotion::Left));
+        visual.insert(KeyStroke::Key { key: Key::Delete, ctrl: false, shift: false, alt: false }, VimAction::Operator(VimOperator::Delete));
+        visual.insert(KeyStroke::Key { key: Key::Space, ctrl: false, shift: false, alt: false }, VimAction::Motion(VimMotion::Right));
 
         visual.insert('y'.into(), VimAction::Operator(VimOperator::Yank));
         visual.insert('Y'.into(), VimAction::Operator(VimOperator::Yank));
         visual.insert('d'.into(), VimAction::Operator(VimOperator::Delete));
         visual.insert('x'.into(), VimAction::Operator(VimOperator::Delete));
         visual.insert('c'.into(), VimAction::Operator(VimOperator::Change));
-        visual.insert(KeyStroke::Key { key: Key::C, ctrl: true }, VimAction::Operator(VimOperator::Yank));
+        visual.insert(KeyStroke::Key { key: Key::C, ctrl: true, shift: false, alt: false }, VimAction::Operator(VimOperator::Yank));
+        visual.insert(
+            KeyStroke::Key { key: Key::X, ctrl: true, shift: true, alt: false },
+            VimAction::ToggleTaskCheckbox,
+        );
 
         combinations.insert(('g', 'g'), VimAction::Motion(VimMotion::BufferStart));
 
@@ -230,6 +250,60 @@ impl VimKeymap {
 
         keymap
     }
+
+    /// Saves current keybindings to `keymap.json`.
+    pub fn save_to_file(&self) -> std::io::Result<()> {
+        let path = Self::get_keymap_path();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let cfg = KeymapConfigFile {
+            description: Some("MindForge Vim Keybindings. Edit this file to customize your keys, or use Settings > Keybindings in the app.".into()),
+            normal: self.normal.iter().map(|(k, v)| (key_stroke_to_string(k), action_to_string(v))).collect(),
+            visual: self.visual.iter().map(|(k, v)| (key_stroke_to_string(k), action_to_string(v))).collect(),
+        };
+        let json = serde_json::to_string_pretty(&cfg)?;
+        std::fs::write(&path, json)
+    }
+
+    /// Rebinds one action's key in the given mode and immediately persists.
+    pub fn rebind(&mut self, mode: KeymapMode, old: Option<&KeyStroke>, new: KeyStroke, action: VimAction) {
+        let map = match mode {
+            KeymapMode::Normal => &mut self.normal,
+            KeymapMode::Visual => &mut self.visual,
+        };
+        if let Some(old) = old {
+            map.remove(old);
+        }
+        map.insert(new, action);
+        let _ = self.save_to_file();
+    }
+
+    /// Unbinds a key stroke in the given mode and immediately persists.
+    pub fn unbind(&mut self, mode: KeymapMode, stroke: &KeyStroke) {
+        let map = match mode {
+            KeymapMode::Normal => &mut self.normal,
+            KeymapMode::Visual => &mut self.visual,
+        };
+        map.remove(stroke);
+        let _ = self.save_to_file();
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum KeymapMode {
+    Normal,
+    Visual,
+}
+
+/// Which row (if any) is currently waiting for a keypress to bind.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeybindCapture {
+    pub mode: KeymapMode,
+    pub action: VimAction,
+    pub action_label: String,
+    pub old_stroke: Option<KeyStroke>,
+    pub staged_stroke: Option<KeyStroke>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
@@ -242,29 +316,141 @@ struct KeymapConfigFile {
     pub visual: HashMap<String, String>,
 }
 
-fn parse_key_stroke(s: &str) -> Option<KeyStroke> {
-    let trimmed = s.trim();
-    if trimmed.chars().count() == 1 {
-        return Some(KeyStroke::Char(trimmed.chars().next().unwrap()));
+pub fn key_stroke_to_string(stroke: &KeyStroke) -> String {
+    match stroke {
+        KeyStroke::Char(c) => c.to_string(),
+        KeyStroke::Key { key, ctrl, shift, alt } => {
+            let mut parts = vec![];
+            if *ctrl { parts.push("ctrl"); }
+            if *shift { parts.push("shift"); }
+            if *alt { parts.push("alt"); }
+            parts.push(key_name(*key));
+            parts.join("+")
+        }
     }
-    match trimmed.to_lowercase().as_str() {
-        "ctrl+r" => Some(KeyStroke::Key { key: Key::R, ctrl: true }),
-        "ctrl+d" => Some(KeyStroke::Key { key: Key::D, ctrl: true }),
-        "enter" => Some(KeyStroke::Key { key: Key::Enter, ctrl: false }),
-        "space" => Some(KeyStroke::Key { key: Key::Space, ctrl: false }),
-        "backspace" => Some(KeyStroke::Key { key: Key::Backspace, ctrl: false }),
-        "delete" => Some(KeyStroke::Key { key: Key::Delete, ctrl: false }),
-        "left" => Some(KeyStroke::Key { key: Key::ArrowLeft, ctrl: false }),
-        "right" => Some(KeyStroke::Key { key: Key::ArrowRight, ctrl: false }),
-        "up" => Some(KeyStroke::Key { key: Key::ArrowUp, ctrl: false }),
-        "down" => Some(KeyStroke::Key { key: Key::ArrowDown, ctrl: false }),
-        "home" => Some(KeyStroke::Key { key: Key::Home, ctrl: false }),
-        "end" => Some(KeyStroke::Key { key: Key::End, ctrl: false }),
+}
+
+pub fn key_name(key: Key) -> &'static str {
+    match key {
+        Key::Enter => "enter", Key::Space => "space", Key::Backspace => "backspace",
+        Key::Delete => "delete", Key::ArrowLeft => "left", Key::ArrowRight => "right",
+        Key::ArrowUp => "up", Key::ArrowDown => "down", Key::Home => "home", Key::End => "end",
+        Key::A => "a", Key::B => "b", Key::C => "c", Key::D => "d", Key::E => "e",
+        Key::F => "f", Key::G => "g", Key::H => "h", Key::I => "i", Key::J => "j",
+        Key::K => "k", Key::L => "l", Key::M => "m", Key::N => "n", Key::O => "o",
+        Key::P => "p", Key::Q => "q", Key::R => "r", Key::S => "s", Key::T => "t",
+        Key::U => "u", Key::V => "v", Key::W => "w", Key::X => "x", Key::Y => "y",
+        Key::Z => "z",
+        _ => "?",
+    }
+}
+
+/// Human-readable form for display in the settings UI, e.g. "Ctrl+Shift+X".
+pub fn key_stroke_display(stroke: &KeyStroke) -> String {
+    match stroke {
+        KeyStroke::Char(c) => c.to_string(),
+        KeyStroke::Key { key, ctrl, shift, alt } => {
+            let mut parts = vec![];
+            if *ctrl { parts.push("Ctrl".to_string()); }
+            if *shift { parts.push("Shift".to_string()); }
+            if *alt { parts.push("Alt".to_string()); }
+            parts.push(key_name(*key).to_uppercase());
+            parts.join("+")
+        }
+    }
+}
+
+pub fn action_to_string(action: &VimAction) -> String {
+    match action {
+        VimAction::Motion(VimMotion::Left) => "left",
+        VimAction::Motion(VimMotion::Right) => "right",
+        VimAction::Motion(VimMotion::UpVisual) => "up",
+        VimAction::Motion(VimMotion::DownVisual) => "down",
+        VimAction::Motion(VimMotion::WordForward) => "wordforward",
+        VimAction::Motion(VimMotion::WordBackward) => "wordbackward",
+        VimAction::Motion(VimMotion::LineStart) => "linestart",
+        VimAction::Motion(VimMotion::LineEnd) => "lineend",
+        VimAction::Motion(VimMotion::BufferStart) => "bufferstart",
+        VimAction::Motion(VimMotion::BufferEnd) => "bufferend",
+        VimAction::DeleteChar => "deletechar",
+        VimAction::Undo => "undo",
+        VimAction::Redo => "redo",
+        VimAction::Paste { before: false } => "paste",
+        VimAction::Paste { before: true } => "pastebefore",
+        VimAction::EnterInsert(InsertPosition::AtCursor) => "insert",
+        VimAction::EnterInsert(InsertPosition::AfterCursor) => "append",
+        VimAction::EnterInsert(InsertPosition::LineStart) => "insertlinestart",
+        VimAction::EnterInsert(InsertPosition::LineEnd) => "appendlineend",
+        VimAction::EnterInsert(InsertPosition::LineBelow) => "openbelow",
+        VimAction::EnterInsert(InsertPosition::LineAbove) => "openabove",
+        VimAction::EnterVisual { is_line: false } => "visual",
+        VimAction::EnterVisual { is_line: true } => "visualline",
+        VimAction::EnterSearch { backward: false } => "search",
+        VimAction::EnterSearch { backward: true } => "searchbackward",
+        VimAction::RepeatSearch { reverse: false } => "repeatsearch",
+        VimAction::RepeatSearch { reverse: true } => "repeatsearchbackward",
+        VimAction::Operator(VimOperator::Delete) => "delete",
+        VimAction::Operator(VimOperator::Yank) => "yank",
+        VimAction::Operator(VimOperator::Change) => "change",
+        VimAction::DuplicateLine => "duplicateline",
+        VimAction::ToggleTaskCheckbox => "toggletaskcheckbox",
+        _ => "unknown",
+    }.to_string()
+}
+
+fn parse_key_name(s: &str) -> Option<Key> {
+    match s {
+        "enter" => Some(Key::Enter),
+        "space" => Some(Key::Space),
+        "backspace" => Some(Key::Backspace),
+        "delete" => Some(Key::Delete),
+        "left" => Some(Key::ArrowLeft),
+        "right" => Some(Key::ArrowRight),
+        "up" => Some(Key::ArrowUp),
+        "down" => Some(Key::ArrowDown),
+        "home" => Some(Key::Home),
+        "end" => Some(Key::End),
+        "a" => Some(Key::A), "b" => Some(Key::B), "c" => Some(Key::C), "d" => Some(Key::D),
+        "e" => Some(Key::E), "f" => Some(Key::F), "g" => Some(Key::G), "h" => Some(Key::H),
+        "i" => Some(Key::I), "j" => Some(Key::J), "k" => Some(Key::K), "l" => Some(Key::L),
+        "m" => Some(Key::M), "n" => Some(Key::N), "o" => Some(Key::O), "p" => Some(Key::P),
+        "q" => Some(Key::Q), "r" => Some(Key::R), "s" => Some(Key::S), "t" => Some(Key::T),
+        "u" => Some(Key::U), "v" => Some(Key::V), "w" => Some(Key::W), "x" => Some(Key::X),
+        "y" => Some(Key::Y), "z" => Some(Key::Z),
         _ => None,
     }
 }
 
-fn parse_action(s: &str) -> Option<VimAction> {
+pub fn parse_key_stroke(s: &str) -> Option<KeyStroke> {
+    let trimmed = s.trim();
+    if trimmed.chars().count() == 1 {
+        return Some(KeyStroke::Char(trimmed.chars().next().unwrap()));
+    }
+    let lower = trimmed.to_lowercase();
+    let parts: Vec<&str> = lower.split('+').map(|p| p.trim()).collect();
+    if parts.len() > 1 {
+        let mut ctrl = false;
+        let mut shift = false;
+        let mut alt = false;
+        let mut key_str = "";
+        for part in &parts {
+            match *part {
+                "ctrl" => ctrl = true,
+                "shift" => shift = true,
+                "alt" => alt = true,
+                other => key_str = other,
+            }
+        }
+        if let Some(key) = parse_key_name(key_str) {
+            return Some(KeyStroke::Key { key, ctrl, shift, alt });
+        }
+    } else if let Some(key) = parse_key_name(&lower) {
+        return Some(KeyStroke::Key { key, ctrl: false, shift: false, alt: false });
+    }
+    None
+}
+
+pub fn parse_action(s: &str) -> Option<VimAction> {
     match s.trim().to_lowercase().as_str() {
         "left" => Some(VimAction::Motion(VimMotion::Left)),
         "right" => Some(VimAction::Motion(VimMotion::Right)),
@@ -297,6 +483,7 @@ fn parse_action(s: &str) -> Option<VimAction> {
         "yank" => Some(VimAction::Operator(VimOperator::Yank)),
         "change" => Some(VimAction::Operator(VimOperator::Change)),
         "duplicateline" => Some(VimAction::DuplicateLine),
+        "toggletaskcheckbox" => Some(VimAction::ToggleTaskCheckbox),
         _ => None,
     }
 }

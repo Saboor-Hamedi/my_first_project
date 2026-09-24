@@ -98,7 +98,7 @@ impl VimEngine {
                 false
             }
             VimSubMode::Normal => {
-                let stroke = KeyStroke::Key { key, ctrl };
+                let stroke = KeyStroke::from_key(key, modifiers);
                 if let Some(action) = self.keymap.lookup_normal(&stroke) {
                     let count = self.count_accumulator.take().unwrap_or(1);
                     self.execute_normal_action(ed, lines, action, count);
@@ -108,7 +108,7 @@ impl VimEngine {
                 false
             }
             VimSubMode::Visual | VimSubMode::VisualLine => {
-                let stroke = KeyStroke::Key { key, ctrl };
+                let stroke = KeyStroke::from_key(key, modifiers);
                 if let Some(action) = self.keymap.lookup_visual(&stroke) {
                     let count = self.count_accumulator.take().unwrap_or(1);
                     self.execute_visual_action(ed, lines, action, count);

@@ -4,28 +4,94 @@ use crate::theme::Theme;
 use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Pos2, Rect, Stroke};
 
 pub fn render_shortcuts_tab(
-    ui: &egui::Ui,
+    ui: &mut egui::Ui,
     painter: &egui::Painter,
     panel_rect: Rect,
     p_origin: Pos2,
     theme: &Theme,
 ) {
+    // ── 1. Header: Title & Search Bar ────────────────────────────────────────
     painter.text(
-        p_origin,
+        p_origin + vec2(0.0, 4.0),
         Align2::LEFT_TOP,
         "KEYBOARD SHORTCUTS",
         FontId::proportional(15.0),
         theme.highlight,
     );
+
+    // Search Bar matching Keybindings tab
+    let search_id = egui::Id::new("shortcuts_search_query");
+    let mut search_query = ui
+        .ctx()
+        .data_mut(|d| d.get_temp::<String>(search_id))
+        .unwrap_or_default();
+
+    let search_w = 200.0f32.min(panel_rect.width() - 40.0);
+    let search_rect = Rect::from_min_size(
+        pos2(panel_rect.max.x - search_w - 20.0, p_origin.y),
+        vec2(search_w, 28.0),
+    );
+
+    painter.rect(
+        search_rect,
+        4.0,
+        theme.surface(),
+        Stroke::new(1.0, theme.border()),
+        egui::StrokeKind::Inside,
+    );
     painter.text(
-        p_origin + vec2(0.0, 22.0),
-        Align2::LEFT_TOP,
-        "Keyboard-driven navigation reference",
-        FontId::proportional(12.0),
+        pos2(search_rect.min.x + 8.0, search_rect.center().y),
+        Align2::LEFT_CENTER,
+        "🔍",
+        FontId::proportional(11.0),
         theme.muted,
     );
 
-    // Groups: (header_label, &[(key, desc)])
+    let text_rect = Rect::from_min_max(
+        pos2(search_rect.min.x + 26.0, search_rect.min.y),
+        pos2(search_rect.max.x - 6.0, search_rect.max.y),
+    );
+    let mut child_ui = ui.new_child(egui::UiBuilder::new().max_rect(text_rect));
+    let edit_resp = child_ui.add(
+        egui::TextEdit::singleline(&mut search_query)
+            .hint_text("Search shortcuts...")
+            .frame(false)
+            .font(FontId::proportional(12.0))
+            .text_color(theme.text),
+    );
+    if edit_resp.changed() {
+        ui.ctx().data_mut(|d| d.insert_temp(search_id, search_query.clone()));
+    }
+
+    // ── 2. Table Headers ─────────────────────────────────────────────────────
+    let table_header_y = p_origin.y + 34.0;
+    let pad_x = 20.0;
+    let row_left = panel_rect.min.x + pad_x;
+    let row_w = panel_rect.width() - (pad_x * 2.0);
+
+    painter.text(
+        pos2(row_left + 8.0, table_header_y + 4.0),
+        Align2::LEFT_TOP,
+        "COMMAND",
+        FontId::proportional(11.0),
+        theme.muted,
+    );
+    painter.text(
+        pos2(row_left + row_w - 110.0, table_header_y + 4.0),
+        Align2::LEFT_TOP,
+        "SHORTCUT",
+        FontId::proportional(11.0),
+        theme.muted,
+    );
+    painter.line_segment(
+        [
+            pos2(row_left, table_header_y + 22.0),
+            pos2(row_left + row_w, table_header_y + 22.0),
+        ],
+        Stroke::new(1.0, theme.border()),
+    );
+
+    // ── 3. Groups & Filtered Items ───────────────────────────────────────────
     let groups: &[(&str, &[(&str, &str)])] = &[
         ("DOCUMENT", &[
             ("Ctrl + N",      "Create new note"),
@@ -33,168 +99,183 @@ pub fn render_shortcuts_tab(
             ("Ctrl + R",      "Rename document"),
             ("Ctrl + [ / ]",  "Move text left / right (dedent/indent)"),
             ("Ctrl + D",      "Duplicate line below"),
+            ("Ctrl+Shift+X",  "Toggle checklist - [ ] <-> - [x]"),
+            ("Ctrl + E",      "Toggle live markdown / raw monospace"),
         ]),
         ("NAVIGATION", &[
-            ("Ctrl + P",   "Fuzzy search across notes"),
-            ("Ctrl + B",   "Toggle notes sidebar"),
-            ("Ctrl + ,",   "Open preferences modal"),
-            ("Esc",        "Dismiss modal / return to Normal mode"),
+            ("Ctrl + P",      "Fuzzy search across notes"),
+            ("Ctrl + B",      "Toggle notes sidebar"),
+            ("Ctrl + J",      "Toggle interactive terminal dock"),
+            ("Ctrl + ,",      "Open preferences & keybindings"),
+            ("Esc",           "Dismiss modal / return to Normal mode"),
         ]),
         ("VIM & SHOWCMD HUD", &[
             ("h / j / k / l", "Home-row cursor navigation"),
             ("ci\" / da(",    "Text object editing (tracked in HUD)"),
             ("/pattern",      "Live buffer search (FIND HUD badge)"),
             (":w / :doc",     "Command palette (CMD HUD badge)"),
+            ("v / V",         "Visual character / line selection"),
+        ]),
+        ("TABLES & BLOCKS", &[
+            ("Tab",           "Next table cell / auto-append row"),
+            ("Shift + Tab",   "Previous table cell / dedent line"),
+            ("Enter",         "Add table row / list item continuation"),
+            ("Ctrl + Enter",  "Exit code block or markdown table"),
         ]),
         ("SYSTEM", &[
-            ("Ctrl+Shift+W", "Close window"),
-            (":help",        "Command bar reference"),
+            ("Ctrl+Shift+W",  "Close window"),
+            (":help",         "Command bar reference"),
+            (":stats",        "Daily writing statistics"),
         ]),
     ];
 
-    let row_w = panel_rect.width() - 56.0;
-    let row_h = 28.0;
-    let group_gap = 8.0;
-    let header_h = 16.0;
-    let item_gap = 4.0;
+    let query_lower = search_query.trim().to_lowercase();
+    let row_h = 36.0;
+    let header_h = 24.0;
+    let list_top = table_header_y + 26.0;
 
-    let content_top = p_origin.y + 44.0;
-    let total_items: usize = groups.iter().map(|(_, items)| items.len()).sum();
-    let content_h = groups.len() as f32 * (header_h + 4.0 + group_gap)
-        + total_items as f32 * (row_h + item_gap)
-        + 36.0 // footer
-        + 28.0; // bottom margin
-    let visible_h = (panel_rect.max.y - content_top).max(0.0);
+    // Filter items by search query
+    let filtered_groups: Vec<(&str, Vec<(&str, &str)>)> = groups
+        .iter()
+        .filter_map(|(g_label, items)| {
+            let matches: Vec<(&str, &str)> = items
+                .iter()
+                .filter(|(k, d)| {
+                    if query_lower.is_empty() {
+                        true
+                    } else {
+                        k.to_lowercase().contains(&query_lower)
+                            || d.to_lowercase().contains(&query_lower)
+                            || g_label.to_lowercase().contains(&query_lower)
+                    }
+                })
+                .copied()
+                .collect();
+            if matches.is_empty() {
+                None
+            } else {
+                Some((*g_label, matches))
+            }
+        })
+        .collect();
+
+    let total_matches: usize = filtered_groups.iter().map(|(_, items)| items.len()).sum();
+    let content_h = filtered_groups.len() as f32 * header_h
+        + total_matches as f32 * row_h
+        + 42.0 // config footer
+        + 24.0;
+
+    let visible_h = (panel_rect.max.y - list_top).max(0.0);
     let max_scroll = (content_h - visible_h).max(0.0);
 
     let scroll_id = egui::Id::new("shortcuts_tab_scroll");
     let mut scroll = ui.ctx().data_mut(|d| d.get_temp::<f32>(scroll_id)).unwrap_or(0.0);
 
+    // Responsive wheel scroll matching keybindings tab
     let pointer_over_panel = ui.rect_contains_pointer(Rect::from_min_max(
-        pos2(panel_rect.min.x, content_top),
+        pos2(panel_rect.min.x, list_top),
         panel_rect.max,
     ));
-    if pointer_over_panel && max_scroll > 0.0 {
-        let wheel = ui.input(|i| i.smooth_scroll_delta.y);
-        scroll = (scroll - wheel).clamp(0.0, max_scroll);
+    if pointer_over_panel {
+        let wheel = ui.input(|i| i.raw_scroll_delta.y);
+        if wheel != 0.0 {
+            scroll = (scroll - wheel).clamp(0.0, max_scroll);
+            ui.ctx().data_mut(|d| d.insert_temp(scroll_id, scroll));
+        }
     }
-    ui.ctx().data_mut(|d| d.insert_temp(scroll_id, scroll));
 
-    let clip_rect = Rect::from_min_max(pos2(panel_rect.min.x, content_top), panel_rect.max);
+    let clip_rect = Rect::from_min_max(pos2(panel_rect.min.x, list_top), panel_rect.max);
     let list_painter = painter.with_clip_rect(clip_rect);
     let hover_pos = ui.input(|i| i.pointer.hover_pos()).unwrap_or_default();
 
-    let mut cur_y = content_top - scroll;
+    if filtered_groups.is_empty() {
+        list_painter.text(
+            pos2(panel_rect.center().x, list_top + 40.0),
+            Align2::CENTER_CENTER,
+            "No shortcuts found matching your search.",
+            FontId::proportional(13.0),
+            theme.muted,
+        );
+        return;
+    }
 
-    for (g_label, items) in groups.iter() {
-        // Group header line
+    let mut cur_y = list_top - scroll;
+
+    for (g_label, items) in &filtered_groups {
+        // Group Header Line
         if cur_y + header_h >= clip_rect.min.y && cur_y <= clip_rect.max.y {
-            list_painter.line_segment(
-                [pos2(p_origin.x, cur_y + header_h * 0.5), pos2(p_origin.x + 28.0, cur_y + header_h * 0.5)],
-                Stroke::new(1.0, theme.border()),
-            );
             list_painter.text(
-                pos2(p_origin.x + 34.0, cur_y + header_h * 0.5),
+                pos2(row_left + 8.0, cur_y + header_h * 0.5),
                 Align2::LEFT_CENTER,
                 *g_label,
-                FontId::proportional(11.0),
+                FontId::proportional(10.5),
                 theme.muted,
             );
-            let label_end_x = p_origin.x + 34.0 + g_label.len() as f32 * 6.8 + 8.0;
+            let label_end_x = row_left + 8.0 + (g_label.len() as f32 * 6.5) + 12.0;
             list_painter.line_segment(
-                [pos2(label_end_x, cur_y + header_h * 0.5), pos2(p_origin.x + row_w, cur_y + header_h * 0.5)],
+                [pos2(label_end_x, cur_y + header_h * 0.5), pos2(row_left + row_w - 8.0, cur_y + header_h * 0.5)],
                 Stroke::new(1.0, theme.border()),
             );
         }
-        cur_y += header_h + 4.0;
+        cur_y += header_h;
 
-        for (key, desc) in items.iter() {
-            let row_rect = Rect::from_min_size(pos2(p_origin.x, cur_y), vec2(row_w, row_h));
+        for (key, desc) in items {
+            let row_rect = Rect::from_min_size(pos2(row_left, cur_y), vec2(row_w, row_h));
             let in_view = cur_y + row_h >= clip_rect.min.y && cur_y <= clip_rect.max.y;
-            let hovered = in_view && clip_rect.contains(hover_pos) && ui.rect_contains_pointer(row_rect);
 
             if in_view {
-                // Row background
-                let row_bg = if hovered {
-                    theme.surface().lerp_to_gamma(theme.accent, 0.08)
-                } else {
-                    theme.surface()
-                };
-                let row_stroke = Stroke::new(
-                    1.0,
-                    if hovered { theme.accent } else { theme.border() },
-                );
-                list_painter.rect(
-                    row_rect,
-                    6.0,
-                    row_bg,
-                    row_stroke,
-                    egui::StrokeKind::Inside,
-                );
-
-                // Explanation on the Left
+                // Background-less clean row: no background or border on the row/label
                 list_painter.text(
-                    pos2(row_rect.min.x + 16.0, row_rect.center().y),
+                    pos2(row_rect.min.x + 8.0, row_rect.center().y),
                     Align2::LEFT_CENTER,
                     *desc,
                     FontId::proportional(13.0),
-                    if hovered { theme.text } else { theme.muted },
+                    theme.text,
                 );
 
-                // Keycap badge on the Right
+                // Keycap badge on the Right: matching Keybindings tab style
                 let font_key = FontId::monospace(11.0);
                 let text_layout = list_painter.layout_no_wrap(key.to_string(), font_key.clone(), theme.accent);
-                let badge_w = (text_layout.size().x + 20.0).max(75.0);
-                let badge_h = 22.0;
+                let badge_w = (text_layout.size().x + 18.0).max(64.0);
+                let badge_h = 24.0;
                 let badge_rect = Rect::from_min_size(
                     pos2(row_rect.max.x - badge_w - 8.0, row_rect.center().y - badge_h * 0.5),
                     vec2(badge_w, badge_h),
                 );
 
-                let badge_bg = if hovered {
-                    if theme.is_light() {
-                        Color32::from_rgb(255, 255, 255)
-                    } else {
-                        theme.surface().lerp_to_gamma(theme.accent, 0.16)
-                    }
-                } else {
-                    if theme.is_light() {
-                        Color32::from_rgb(255, 255, 255)
-                    } else {
-                        theme.bg
-                    }
-                };
+                let badge_hover = clip_rect.contains(hover_pos) && ui.rect_contains_pointer(badge_rect);
+
                 list_painter.rect(
                     badge_rect,
-                    4.0,
-                    badge_bg,
-                    Stroke::new(1.0, if hovered { theme.accent } else { theme.border() }),
+                    3.0,
+                    if badge_hover { theme.surface() } else { theme.bg },
+                    Stroke::new(1.0, if badge_hover { theme.accent } else { theme.border() }),
                     egui::StrokeKind::Inside,
                 );
                 list_painter.text(
-                    badge_rect.center() - vec2(0.0, 0.5),
+                    badge_rect.center(),
                     Align2::CENTER_CENTER,
                     *key,
                     font_key,
-                    theme.accent,
+                    if badge_hover { theme.highlight } else { theme.accent },
                 );
             }
 
-            cur_y += row_h + item_gap;
+            cur_y += row_h;
         }
 
-        cur_y += group_gap;
+        cur_y += 6.0;
     }
 
     // Keymap file info footer (pointing to keymap.json in settings directory)
     let keymap_path = crate::vim::VimKeymap::get_keymap_path();
-    let footer_rect = Rect::from_min_size(pos2(p_origin.x, cur_y + 4.0), vec2(row_w, 28.0));
+    let footer_rect = Rect::from_min_size(pos2(row_left, cur_y + 8.0), vec2(row_w, 28.0));
     let footer_in_view = footer_rect.max.y >= clip_rect.min.y && footer_rect.min.y <= clip_rect.max.y;
 
     if footer_in_view {
         list_painter.rect(
             footer_rect,
-            5.0,
+            4.0,
             theme.surface(),
             Stroke::new(1.0, theme.border()),
             egui::StrokeKind::Inside,
@@ -221,7 +302,7 @@ pub fn render_shortcuts_tab(
         };
         list_painter.rect(
             open_btn,
-            4.0,
+            3.0,
             btn_bg,
             Stroke::new(1.0, if open_hover { theme.accent } else { theme.border() }),
             egui::StrokeKind::Inside,
@@ -240,10 +321,10 @@ pub fn render_shortcuts_tab(
         }
     }
 
-    // Custom scrollbar
+    // Sleek custom scrollbar matching Keybindings tab
     if max_scroll > 0.0 {
         let track_x = panel_rect.max.x - 8.0;
-        let track = Rect::from_min_max(pos2(track_x, content_top), pos2(track_x + 3.0, panel_rect.max.y - 8.0));
+        let track = Rect::from_min_max(pos2(track_x, list_top), pos2(track_x + 3.0, panel_rect.max.y - 8.0));
         let track_color = if theme.is_light() {
             Color32::from_rgba_unmultiplied(0, 0, 0, 15)
         } else {
@@ -252,7 +333,7 @@ pub fn render_shortcuts_tab(
         painter.rect_filled(track, 1.5, track_color);
 
         let thumb_h = (visible_h * visible_h / content_h).clamp(24.0, visible_h);
-        let thumb_y = content_top + (scroll / max_scroll) * (visible_h - thumb_h - 8.0);
+        let thumb_y = list_top + (scroll / max_scroll) * (visible_h - thumb_h - 8.0);
         let thumb = Rect::from_min_size(pos2(track_x, thumb_y), vec2(3.0, thumb_h));
         let thumb_color = if theme.is_light() {
             Color32::from_rgba_unmultiplied(0, 0, 0, 60)

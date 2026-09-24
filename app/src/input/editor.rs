@@ -41,8 +41,10 @@ pub fn handle_editor_text(app: &mut App, s: &str, now: f64) -> bool {
         if s == ":" && app.vim.mode == VimSubMode::Normal {
             app.in_command = true;
             app.cmd_ed.clear();
+            app.cmd_selected_idx = 0;
+            app.cmd_navigated = false;
             app.showcmd.set_command("", now);
-            return false;
+            return true;
         } else if app.mode == Mode::Doc {
             let mut typed = false;
             for c in s.chars() {
@@ -102,6 +104,10 @@ pub fn handle_editor_text(app: &mut App, s: &str, now: f64) -> bool {
                         app.showcmd.set_search(sym, &app.vim.search.query, now);
                     } else if let Some(action_str) = app.vim.last_completed_action.take() {
                         app.showcmd.record_action(&action_str, now);
+                        if action_str == "ToggleTaskCheckbox" {
+                            app.quick_save_active_note(now);
+                            app.set_status("Toggled task checkbox(es)", now);
+                        }
                     } else {
                         let pending_after = app.vim.pending_keys();
                         if !pending_after.is_empty() {
@@ -121,7 +127,9 @@ pub fn handle_editor_text(app: &mut App, s: &str, now: f64) -> bool {
     } else if s == ":" && (app.mode == Mode::Normal || app.mode == Mode::Doc) && app.ed.row_col().1 == 0 {
         app.in_command = true;
         app.cmd_ed.clear();
-        return false;
+        app.cmd_selected_idx = 0;
+        app.cmd_navigated = false;
+        return true;
     } else if app.mode == Mode::Doc {
         app.set_status("📖 Documentation is read-only.", now);
         return false;
@@ -162,6 +170,10 @@ pub fn handle_editor_key(app: &mut App, key: Key, modifiers: Modifiers, now: f64
                     app.showcmd.set_search(sym, &app.vim.search.query, now);
                 } else if let Some(action_str) = app.vim.last_completed_action.take() {
                     app.showcmd.record_action(&action_str, now);
+                    if action_str == "ToggleTaskCheckbox" {
+                        app.quick_save_active_note(now);
+                        app.set_status("Toggled task checkbox(es)", now);
+                    }
                 } else {
                     let pending_after = app.vim.pending_keys();
                     if !pending_after.is_empty() {

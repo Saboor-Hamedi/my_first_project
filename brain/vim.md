@@ -31,11 +31,11 @@ Check the bottom status dock anytime:
 ## Editor Submodes
 
 In Vim mode, the editor operates across distinct submodes:
-- Normal Mode: For navigation, paragraph traversal, text objects, and commands.
-- Insert Mode: For standard typing and text insertion.
-- Visual Mode (v): For character-wise selection.
-- Visual Line Mode (V): For full-line selection and block actions.
-- Command-line Mode (:): For file, documentation, and app commands.
+- **Normal Mode**: For navigation, paragraph traversal, text objects, and commands.
+- **Insert Mode**: For standard typing and text insertion.
+- **Visual Mode (v)**: For character-wise selection.
+- **Visual Line Mode (V)**: For full-line selection and block actions.
+- **Command-line Mode (:)**: For file, documentation, and app commands.
 
 > Note: In MindForge, your chosen caret style remains identical across Normal, Insert, and Visual modes for consistent visual feedback.
 
@@ -43,55 +43,76 @@ In Vim mode, the editor operates across distinct submodes:
 
 ## Home-Row Navigation
 
-- h / j / k / l: Move cursor Left, Down, Up, and Right
-- w: Jump forward to start of next word
-- b: Jump backward to previous word
-- e: Jump forward to end of current word
-- 0: Jump to beginning of line
-- $: Jump to end of line
-- gg: Jump to the very beginning of the document
-- G: Jump to the very end of the document
+- **h / j / k / l**: Move cursor Left, Down, Up, and Right
+- **w**: Jump forward to start of next word
+- **b**: Jump backward to previous word
+- **e**: Jump forward to end of current word
+- **0**: Jump to beginning of line
+- **$**: Jump to end of line
+- **gg**: Jump to the very beginning of the document
+- **G**: Jump to the very end of the document
 
 ---
 
 ## Mode Transitions
 
-- i: Enter Insert mode before cursor
-- I: Enter Insert mode at beginning of line
-- a: Enter Insert mode after cursor
-- A: Enter Insert mode at end of line
-- o: Insert new line below and enter Insert mode
-- O: Insert new line above and enter Insert mode
-- v: Toggle Visual character selection mode
-- V: Toggle Visual Line selection mode
-- Esc: Return to Normal mode
+- **i**: Enter Insert mode before cursor
+- **I**: Enter Insert mode at beginning of line
+- **a**: Enter Insert mode after cursor
+- **A**: Enter Insert mode at end of line
+- **o**: Insert new line below and enter Insert mode
+- **O**: Insert new line above and enter Insert mode
+- **v**: Toggle Visual character selection mode
+- **V**: Toggle Visual Line selection mode
+- **Esc**: Return to Normal mode
+
+---
+
+## Task Checklists & Productivity Actions
+
+- **Ctrl+Shift+X**: Toggle task checklist (`- [ ]` <-> `- [x]`)
+  - Works on the current row in Normal mode.
+  - In Visual and Visual Line modes, toggles every checklist row across your selection simultaneously.
+  - Automatically triggers an immediate database save.
+- **Ctrl + E**: Toggle between Inline Live Markdown rendering and Raw Monospace mode.
+- **Ctrl + J**: Toggle the interactive Terminal panel dock.
+
+---
+
+## Customizing Keybindings & `keymap.json`
+
+MindForge allows complete, interactive remapping of Vim commands:
+- **Interactive UI**: Open Settings (`Ctrl + ,`) -> **Keybindings**. Click any key to rebind, `[+]` to add alternate bindings (like `ArrowUp` alongside `k`), or `[↺]` to restore defaults.
+- **JSON Configuration**: All bindings are read from and saved to `keymap.json` in your local settings directory. You can edit this file directly or manage it in the app.
+- **Conflict Safe**: The recorder warns you if a combination is already bound and reassigns cleanly upon confirmation.
 
 ---
 
 ## In-Buffer Search
 
-- /pattern: Search forward in document for matching text
-- ?pattern: Search backward in document
-- n: Jump to next search occurrence
-- N: Jump to previous search occurrence
+- **/pattern**: Search forward in document for matching text
+- **?pattern**: Search backward in document
+- **n**: Jump to next search occurrence
+- **N**: Jump to previous search occurrence
 
 ---
 
 ## Command Mode (: )
 
-Press : from Normal mode to open the command palette:
-- :w: Save active note immediately
-- :q: Quit MindForge
-- :doc: Open built-in Documentation viewer
-- :editor: Return to Notes editor
-- :stats: Open daily writing statistics
-- :d or :delete: Delete active note with confirmation prompt
+Press `:` from Normal mode to open the command palette:
+- **:w**: Save active note immediately
+- **:q**: Quit MindForge
+- **:doc**: Open built-in Documentation viewer
+- **:editor**: Return to Notes editor
+- **:stats**: Open daily writing statistics
+- **:d / :delete**: Delete active note with confirmation prompt
+- **:help**: Open command quick reference
 
 ---
 
 ## ShowCmd Keystroke & Command HUD
 
-MindForge features a borderless, floating Heads-Up Display (HUD) in the bottom-right corner of the editor window:
+MindForge features a floating Heads-Up Display (HUD) in the bottom-right corner of the editor window:
 - **`[VIM]` badge**: Real-time tracking of pending multi-key operators (e.g. `d`, `c`, `40j`, `ci"`, `ya)`).
 - **`[VIS]` badge**: Visual mode selection chords (e.g. `vi"`, `va(`).
 - **`[FIND]` badge**: Active forward and backward search queries (`/needle`, `?query`).

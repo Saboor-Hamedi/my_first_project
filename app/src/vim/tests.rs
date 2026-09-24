@@ -438,3 +438,115 @@ fn test_keymap_json_default_template() {
     assert!(keymap.lookup_normal(&'0'.into()).is_some());
     assert!(keymap.lookup_normal(&'$'.into()).is_some());
 }
+
+#[test]
+fn test_keystroke_modifiers_and_serialization() {
+    use crate::vim::keymap::{action_to_string, key_stroke_display, key_stroke_to_string, parse_action, parse_key_stroke, KeyStroke};
+
+    let mods = Modifiers {
+        ctrl: true,
+        shift: true,
+        alt: false,
+        ..Default::default()
+    };
+    let stroke = KeyStroke::from_key(Key::X, mods);
+    assert_eq!(stroke, KeyStroke::Key { key: Key::X, ctrl: true, shift: true, alt: false });
+    assert_eq!(key_stroke_display(&stroke), "Ctrl+Shift+X");
+
+    let s = key_stroke_to_string(&stroke);
+    assert_eq!(s, "ctrl+shift+x");
+    let parsed = parse_key_stroke(&s).expect("must parse composite key stroke");
+    assert_eq!(parsed, stroke);
+
+    let action = VimAction::ToggleTaskCheckbox;
+    let act_str = action_to_string(&action);
+    assert_eq!(act_str, "toggletaskcheckbox");
+    let parsed_act = parse_action(&act_str).expect("must parse action");
+    assert_eq!(parsed_act, action);
+}
+
+#[test]
+fn test_toggle_task_checkbox_normal_mode() {
+    let mut ed = Editor::new();
+    ed.insert_str("- [ ] Do groceries\nPlain paragraph\n  * [ ] Indented task");
+    ed.cur = 0; // line 0
+
+    let mut vim = VimEngine::new();
+    let mods = Modifiers {
+        ctrl: true,
+        shift: true,
+        alt: false,
+        ..Default::default()
+    };
+
+    // 1. Toggle line 0: `- [ ]` -> `- [x]`
+    assert!(vim.handle_key(&mut ed, &[], Key::X, mods));
+    assert_eq!(vim.last_completed_action.as_deref(), Some("ToggleTaskCheckbox"));
+    assert_eq!(ed.line_text(0), "- [x] Do groceries");
+
+    // 2. Toggle line 0 again: `- [x]` -> `- [ ]`
+    assert!(vim.handle_key(&mut ed, &[], Key::X, mods));
+    assert_eq!(ed.line_text(0), "- [ ] Do groceries");
+
+    // 3. Line 1 is a plain paragraph (not a task). Toggle must leave line untouched.
+    ed.cur = 20; // on line 1
+    assert!(vim.handle_key(&mut ed, &[], Key::X, mods));
+    assert_eq!(ed.line_text(1), "Plain paragraph");
+
+    // 4. Line 2 has leading indentation: `  * [ ] Indented task` -> `  * [x] Indented task`
+    ed.cur = ed.buf.len() - 1; // on line 2
+    assert!(vim.handle_key(&mut ed, &[], Key::X, mods));
+    assert_eq!(ed.line_text(2), "  * [x] Indented task");
+}
+
+#[test]
+fn test_toggle_task_checkbox_visual_multiline() {
+    let mut ed = Editor::new();
+    ed.insert_str("- [ ] Task 1\nNotes line\n- [x] Task 2\n* [ ] Task 3");
+    ed.cur = 0;
+
+    let mut vim = VimEngine::new();
+
+    // Enter VisualLine mode and select all lines
+    assert!(vim.handle_char(&mut ed, &[], 'V'));
+    assert_eq!(vim.mode, VimSubMode::VisualLine);
+    assert!(vim.handle_char(&mut ed, &[], 'G')); // jump to bottom in visual
+
+    let mods = Modifiers {
+        ctrl: true,
+        shift: true,
+        alt: false,
+        ..Default::default()
+    };
+
+    // Toggle checkboxes across entire selection
+    assert!(vim.handle_key(&mut ed, &[], Key::X, mods));
+    assert_eq!(vim.last_completed_action.as_deref(), Some("ToggleTaskCheckbox"));
+    assert_eq!(vim.mode, VimSubMode::Normal); // returns to Normal mode
+
+    assert_eq!(ed.line_text(0), "- [x] Task 1");
+    assert_eq!(ed.line_text(1), "Notes line"); // untouched!
+    assert_eq!(ed.line_text(2), "- [ ] Task 2"); // toggled x -> space
+    assert_eq!(ed.line_text(3), "* [x] Task 3"); // toggled space -> x
+
+    // Test undo reverting the whole batch in one step
+    ed.undo();
+    assert_eq!(ed.line_text(0), "- [ ] Task 1");
+    assert_eq!(ed.line_text(1), "Notes line");
+    assert_eq!(ed.line_text(2), "- [x] Task 2");
+    assert_eq!(ed.line_text(3), "* [ ] Task 3");
+}
+
+#[test]
+fn test_vim_keymap_rebind_and_unbind() {
+    use crate::vim::keymap::{KeymapMode, KeyStroke};
+    let mut keymap = VimKeymap::new_standard();
+
+    let stroke = KeyStroke::Key { key: Key::Q, ctrl: true, shift: true, alt: false };
+    keymap.rebind(KeymapMode::Normal, None, stroke.clone(), VimAction::ToggleTaskCheckbox);
+    assert_eq!(keymap.lookup_normal(&stroke), Some(VimAction::ToggleTaskCheckbox));
+
+    keymap.unbind(KeymapMode::Normal, &stroke);
+    assert_eq!(keymap.lookup_normal(&stroke), None);
+}
+

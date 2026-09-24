@@ -57,6 +57,9 @@ pub struct App {
     pub doc_ed: Editor,
     pub cmd_ed: Editor,
     pub in_command: bool,
+    pub cmd_selected_idx: usize,
+    pub cmd_navigated: bool,
+    pub command_history: Vec<String>,
     pub caret: Caret,
     pub theme: Theme,
     pub sound: SoundEngine,
@@ -84,6 +87,7 @@ pub struct App {
     pub active_setting_tab: SettingTab,
     pub backup_dir: String,
     pub last_backup_status: Option<String>,
+    pub keybind_capture: Option<crate::vim::keymap::KeybindCapture>,
 
     // Fuzzy search modal (Ctrl+P)
     pub search_open: bool,
@@ -344,10 +348,14 @@ impl eframe::App for App {
                 self.draw(ui, dt, now, typed);
             });
 
-        // Silky smooth repaint: 120Hz/144Hz while typing, sliding, or animating; idle 100ms when resting
+        // Repaint gating: animate caret at high rate; command/modal at ~60fps; idle at 100ms.
+        // Do NOT call request_repaint() (unbounded) for command mode — it starves the Windows
+        // message pump and causes "Not Responding" when `:` is typed.
         let focused = ctx.input(|i| i.focused);
-        if focused
-            && (self.caret.is_animating(now)
+        if focused && self.caret.is_animating(now) {
+            ctx.request_repaint_after(Duration::from_millis(8));
+        } else if focused
+            && (self.in_command
                 || !self.showcmd.text.is_empty()
                 || self.search_open
                 || self.settings_open
@@ -356,7 +364,7 @@ impl eframe::App for App {
                 || self.delete_confirm_open
                 || self.accent_dropdown_open)
         {
-            ctx.request_repaint();
+            ctx.request_repaint_after(Duration::from_millis(16));
         } else {
             ctx.request_repaint_after(Duration::from_millis(100));
         }

@@ -19,9 +19,7 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
         return Some(false);
     }
     if app.settings_open {
-        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            app.settings_open = false;
-        }
+        // Modal input priority: let the settings modal and keybindings tab manage Escape & key capture
         return Some(false);
     }
     if app.rename_open {
@@ -306,12 +304,13 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
     }
 
     // Checklist Toggle Shortcut: Ctrl+Shift+X (friendly creation/toggle for paragraphs, bullets, tasks)
-    let ctrl_shift_x = ctx.input(|i| {
-        (i.modifiers.ctrl || i.modifiers.command)
-            && i.modifiers.shift
-            && !i.modifiers.alt
-            && i.key_pressed(egui::Key::X)
-    });
+    let ctrl_shift_x = app.editor_input_mode != crate::app::EditorInputMode::Vim
+        && ctx.input(|i| {
+            (i.modifiers.ctrl || i.modifiers.command)
+                && i.modifiers.shift
+                && !i.modifiers.alt
+                && i.key_pressed(egui::Key::X)
+        });
     if ctrl_shift_x {
         let (target_ed_mut, _) = if app.mode == Mode::Doc {
             (&mut app.doc_ed, &mut app.doc_scroll_y)
@@ -358,7 +357,7 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
     if ctrl_v {
         if let Some(text) = get_clipboard_text(app) {
             if app.in_command {
-                crate::input::command::handle_command_paste(app, &text, now);
+                crate::command::input::handle_command_paste(app, &text, now);
                 return Some(true);
             } else if app.search_open {
                 app.search_query.push_str(&text);

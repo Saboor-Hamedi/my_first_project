@@ -1,6 +1,5 @@
 //! Keyboard shortcut routing, text input, and command/editor event dispatch.
 
-pub mod command;
 pub mod editor;
 pub mod global;
 
@@ -24,10 +23,17 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
         for ev in &i.events {
             if app.in_command {
                 match ev {
-                    egui::Event::Paste(s) => command::handle_command_paste(app, s, now),
-                    egui::Event::Text(s) => command::handle_command_text(app, s, now),
+                    egui::Event::Paste(s) => {
+                        crate::command::input::handle_command_paste(app, s, now);
+                        typed = true;
+                    }
+                    egui::Event::Text(s) => {
+                        crate::command::input::handle_command_text(app, s, now);
+                        typed = true;
+                    }
                     egui::Event::Key { key, pressed: true, modifiers, .. } => {
-                        command::handle_command_key(app, *key, *modifiers, now);
+                        crate::command::input::handle_command_key(app, *key, *modifiers, now);
+                        typed = true;
                     }
                     _ => {}
                 }

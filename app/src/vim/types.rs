@@ -34,7 +34,7 @@ pub enum VimOperator {
 }
 
 /// Movement motions supported across Normal and Visual modes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[allow(dead_code)]
 pub enum VimMotion {
     /// Move left by characters (`h`).
@@ -60,7 +60,7 @@ pub enum VimMotion {
 }
 
 /// Kinds of text objects supported by `i` (inner) and `a` (around).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TextObjectKind {
     /// Double quotes `"..."`
     DoubleQuote,
@@ -81,7 +81,7 @@ pub enum TextObjectKind {
 }
 
 /// Cursor destination when entering Insert mode from Normal mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InsertPosition {
     /// Insert before cursor (`i`).
     AtCursor,
@@ -100,7 +100,7 @@ pub enum InsertPosition {
 /// High-level decoupled actions generated from key strokes.
 ///
 /// Decoupling actions from keys allows user-configurable keymaps in the future.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[allow(dead_code)]
 pub enum VimAction {
     /// Execute a movement motion.
@@ -146,6 +146,8 @@ pub enum VimAction {
     },
     /// Duplicate line (`Ctrl+D`).
     DuplicateLine,
+    /// Toggle task checkbox (`- [ ]` <-> `- [x]`) on current line or selection (`Ctrl+Shift+X`).
+    ToggleTaskCheckbox,
     /// Cancel pending operation, search, or visual selection (returns to Normal mode).
     Cancel,
 }

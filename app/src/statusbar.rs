@@ -91,7 +91,6 @@ pub fn render_bottom_dock(
 
     let max_cmd_x = (ai_btn_rect.min.x - 16.0).max(cmd_x + 120.0);
     let cmd_input_left = cmd_x + 58.0;
-    let cmd_avail_w = (max_cmd_x - cmd_input_left).max(40.0);
 
     if in_command {
         // [:CMD] badge
@@ -106,6 +105,8 @@ pub fn render_bottom_dock(
         );
 
         let font = FontId::monospace(14.0);
+        let cmd_avail_w = (max_cmd_x - cmd_input_left).max(40.0);
+
         let cur_clamped = cmd_cur.min(cmd_text.len());
         let mut valid_cur = cur_clamped;
         while !cmd_text.is_char_boundary(valid_cur) && valid_cur > 0 {
@@ -185,7 +186,7 @@ pub fn render_bottom_dock(
             pos2(max_cmd_x, dock_rect.max.y),
         );
         let search_painter = painter.with_clip_rect(search_clip_rect);
-        let query_display = format!("{}_", query);
+        let query_display = format!("{}{}_", symbol, query);
         search_painter.text(
             pos2(cmd_x + 78.0, cmd_y),
             Align2::LEFT_TOP,

@@ -4,6 +4,7 @@ pub mod ai_engine;
 pub mod backup;
 pub mod carets;
 pub mod editor_mode;
+pub mod keybindings_tab;
 pub mod shortcuts;
 pub mod sounds;
 pub mod tabs;
@@ -40,6 +41,8 @@ pub fn render_setting_panel(
     updater: &UpdateManager,
     api_key_enc: &mut String,
     deepseek_model: &mut String,
+    keymap: &mut crate::vim::keymap::VimKeymap,
+    keybind_capture: &mut Option<crate::vim::keymap::KeybindCapture>,
     on_save_setting: &mut dyn FnMut(&str, &str),
 ) -> Option<SettingPanelAction> {
     // Clip all painting strictly to the panel rect — nothing bleeds over modal border
@@ -66,6 +69,10 @@ pub fn render_setting_panel(
         }
         SettingTab::Shortcuts => {
             shortcuts::render_shortcuts_tab(ui, painter, panel_rect, p_origin, theme);
+            None
+        }
+        SettingTab::Keybindings => {
+            keybindings_tab::render_keybindings_tab(ui, painter, panel_rect, p_origin, theme, keymap, keybind_capture);
             None
         }
         SettingTab::Backup => {

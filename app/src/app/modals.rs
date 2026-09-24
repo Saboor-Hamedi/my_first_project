@@ -75,6 +75,8 @@ impl App {
                 &self.updater,
                 &mut self.agent_state.deepseek_api_key_enc,
                 &mut self.agent_state.deepseek_model,
+                &mut self.vim.keymap,
+                &mut self.keybind_capture,
                 &mut on_save,
             );
 
@@ -96,9 +98,16 @@ impl App {
             }
 
             // Close preferences on Escape key or outside click
-            let escape = ui.input(|i| i.key_pressed(egui::Key::Escape));
+            let escape = ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
             let outside_click = ui.input(|i| i.pointer.primary_clicked()) && !ui.rect_contains_pointer(modal_rect);
-            if escape || outside_click {
+            if escape {
+                if self.keybind_capture.is_some() {
+                    self.keybind_capture = None;
+                } else {
+                    self.settings_open = false;
+                    self.set_status("Preferences closed", now);
+                }
+            } else if outside_click {
                 self.settings_open = false;
                 self.set_status("Preferences closed", now);
             }

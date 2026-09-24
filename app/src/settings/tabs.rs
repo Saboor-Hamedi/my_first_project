@@ -9,18 +9,20 @@ pub enum SettingTab {
     Sounds,
     Theme,
     Shortcuts,
+    Keybindings,
     Backup,
     Updates,
     Ai,
 }
 
 impl SettingTab {
-    pub const ALL: [SettingTab; 8] = [
+    pub const ALL: [SettingTab; 9] = [
         SettingTab::Carets,
         SettingTab::EditorMode,
         SettingTab::Sounds,
         SettingTab::Theme,
         SettingTab::Shortcuts,
+        SettingTab::Keybindings,
         SettingTab::Backup,
         SettingTab::Updates,
         SettingTab::Ai,
@@ -33,6 +35,7 @@ impl SettingTab {
             SettingTab::Sounds => "Sounds",
             SettingTab::Theme => "Theme",
             SettingTab::Shortcuts => "Shortcuts",
+            SettingTab::Keybindings => "Keybindings",
             SettingTab::Backup => "Backup",
             SettingTab::Updates => "Updates",
             SettingTab::Ai => "AI Agent",
@@ -46,6 +49,7 @@ impl SettingTab {
             SettingTab::Sounds => "🔔",
             SettingTab::Theme => "🎨",
             SettingTab::Shortcuts => "⌨",
+            SettingTab::Keybindings => "🔧",
             SettingTab::Backup => "💾",
             SettingTab::Updates => "🔄",
             SettingTab::Ai => "◈",
@@ -80,7 +84,7 @@ pub fn render_setting_tabs(
 
     let start_y = tabs_rect.min.y + 24.0;
     let tab_w = tabs_rect.width() - 16.0;
-    let tab_h = 42.0;
+    let tab_h = 36.0;
 
     // "PREFERENCES" header
     painter.text(
@@ -93,7 +97,7 @@ pub fn render_setting_tabs(
 
     for (i, &tab) in SettingTab::ALL.iter().enumerate() {
         let item_rect = Rect::from_min_size(
-            pos2(tabs_rect.min.x + 8.0, start_y + 30.0 + i as f32 * (tab_h + 4.0)),
+            pos2(tabs_rect.min.x + 8.0, start_y + 26.0 + i as f32 * (tab_h + 3.0)),
             vec2(tab_w, tab_h),
         );
         let is_sel = *active_tab == tab;
