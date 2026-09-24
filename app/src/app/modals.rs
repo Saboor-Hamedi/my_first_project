@@ -97,9 +97,13 @@ impl App {
                 }
             }
 
-            // Close preferences on Escape key or outside click
+            // Close preferences on Escape key or outside click (ignoring the click that opened the modal)
             let escape = ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
-            let outside_click = ui.input(|i| i.pointer.primary_clicked()) && !ui.rect_contains_pointer(modal_rect);
+            let outside_click = !self.settings_just_opened
+                && ui.input(|i| i.pointer.primary_clicked())
+                && !ui.rect_contains_pointer(modal_rect);
+            self.settings_just_opened = false;
+
             if escape {
                 if self.keybind_capture.is_some() {
                     self.keybind_capture = None;

@@ -149,9 +149,9 @@ pub fn render_carets_tab(
         theme.text,
     );
 
-    // ── Controls row: Slider on Left, Toggle on Right ─────────────────
-    let controls_y = desc_y + 48.0;
-    let controls_h = 32.0;
+    // ── Controls row 1: Width on Left, Blinking on Right ─────────────────
+    let controls_y = desc_y + 46.0;
+    let controls_h = 30.0;
 
     // LEFT: Width Slider with label
     painter.text(
@@ -163,7 +163,7 @@ pub fn render_carets_tab(
     );
 
     let slider_x = p_origin.x + 56.0;
-    let slider_w = 200.0;
+    let slider_w = 150.0;
     let slider_rect = Rect::from_min_size(
         pos2(slider_x, controls_y + (controls_h - 20.0) * 0.5),
         vec2(slider_w, 20.0),
@@ -220,55 +220,47 @@ pub fn render_carets_tab(
         theme.accent,
     );
 
-    // RIGHT: Living Caret Animations Toggle
-    let pill_w = 44.0;
-    let pill_h = 24.0;
-    let pill_x = p_origin.x + available_w - pill_w;
-    let pill_rect = Rect::from_min_size(
-        pos2(pill_x, controls_y + (controls_h - pill_h) * 0.5),
-        vec2(pill_w, pill_h),
+    // RIGHT: Blinking Toggle
+    let pill_w = 40.0;
+    let blink_pill_pos = pos2(
+        p_origin.x + available_w - pill_w,
+        controls_y + (controls_h - 22.0) * 0.5,
     );
-    let pill_hover = ui.rect_contains_pointer(pill_rect);
-    let anim_on = caret.animations_enabled;
-
-    if pill_hover {
-        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-        if ui.input(|i| i.pointer.primary_clicked()) {
-            caret.animations_enabled = !caret.animations_enabled;
-            on_save_setting("caret_animations", if caret.animations_enabled { "on" } else { "off" });
-        }
+    if crate::ui_components::toggle::render_toggle_with_label(
+        ui,
+        painter,
+        blink_pill_pos,
+        "Blinking Caret",
+        &mut caret.blink_enabled,
+        theme,
+        "caret_blink_toggle",
+    ) {
+        on_save_setting("caret_blinking", if caret.blink_enabled { "on" } else { "off" });
     }
 
-    let track_bg = if anim_on {
-        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), if theme.is_light() { 60 } else { 40 })
-    } else {
-        theme.surface()
-    };
-    painter.rect(
-        pill_rect,
-        pill_h * 0.5,
-        track_bg,
-        Stroke::new(1.0, if anim_on { theme.accent } else { theme.border() }),
-        egui::StrokeKind::Inside,
-    );
-
-    let knob_r = (pill_h * 0.5) - 3.0;
-    let knob_x = if anim_on {
-        pill_rect.max.x - knob_r - 4.0
-    } else {
-        pill_rect.min.x + knob_r + 4.0
-    };
-    painter.circle_filled(
-        pos2(knob_x, pill_rect.center().y),
-        knob_r,
-        if anim_on { theme.accent } else { theme.muted },
-    );
-
+    // ── Controls row 2: Effects on Left, Living Animations on Right ───
+    let row2_y = controls_y + 34.0;
     painter.text(
-        pos2(pill_rect.min.x - 12.0, pill_rect.center().y),
-        Align2::RIGHT_CENTER,
-        "Living Caret Animations",
-        FontId::proportional(12.5),
-        theme.text,
+        pos2(p_origin.x, row2_y + controls_h * 0.5),
+        Align2::LEFT_CENTER,
+        "Physics & FX",
+        FontId::monospace(12.0),
+        theme.muted,
     );
+
+    let anim_pill_pos = pos2(
+        p_origin.x + available_w - pill_w,
+        row2_y + (controls_h - 22.0) * 0.5,
+    );
+    if crate::ui_components::toggle::render_toggle_with_label(
+        ui,
+        painter,
+        anim_pill_pos,
+        "Living Animations",
+        &mut caret.animations_enabled,
+        theme,
+        "caret_anim_toggle",
+    ) {
+        on_save_setting("caret_animations", if caret.animations_enabled { "on" } else { "off" });
+    }
 }

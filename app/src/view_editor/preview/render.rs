@@ -167,6 +167,7 @@ pub fn render_markdown_view_inner(
     let start_x = content_rect.min.x + pad_x;
     let mut current_y = content_rect.min.y + pad_y - *scroll_y;
     let mut code_block_idx: usize = 0;
+    let mut table_idx: usize = 0;
 
     for (b_idx, block) in blocks.iter().enumerate() {
         match block {
@@ -336,10 +337,12 @@ pub fn render_markdown_view_inner(
                 );
             }
             MdBlock::Table { headers, rows } => {
+                table_idx += 1;
                 if b_idx > 0 {
                     current_y += 8.0;
                 }
                 current_y += super::table::render_preview_table(
+                    ui,
                     painter,
                     &content_painter,
                     start_x,
@@ -349,6 +352,7 @@ pub fn render_markdown_view_inner(
                     headers,
                     rows,
                     theme,
+                    table_idx,
                     rect,
                 );
             }

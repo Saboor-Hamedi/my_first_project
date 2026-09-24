@@ -166,20 +166,22 @@ Paragraph text
 
         let ctx = Context::default();
         let _ = ctx.run(Default::default(), |ctx| {
-            let painter = ctx.layer_painter(eframe::egui::LayerId::background());
-            let theme = Theme::default();
-            let viewport = Rect::from_min_max(pos2(0.0, 0.0), pos2(800.0, 600.0));
+            eframe::egui::CentralPanel::default().show(ctx, |ui| {
+                let painter = ui.painter().clone();
+                let theme = Theme::default();
+                let viewport = Rect::from_min_max(pos2(0.0, 0.0), pos2(800.0, 600.0));
 
-            let headers = vec!["Col A".to_string(), "Col B".to_string()];
-            let rows = vec![
-                vec!["Val 1".to_string(), "Val 2".to_string()],
-                vec!["Val 3".to_string(), "Val 4".to_string()],
-            ];
+                let headers = vec!["Col A".to_string(), "Col B".to_string()];
+                let rows = vec![
+                    vec!["Val 1".to_string(), "Val 2".to_string()],
+                    vec!["Val 3".to_string(), "Val 4".to_string()],
+                ];
 
-            let table_h = super::super::table::render_preview_table(
-                &painter, &painter, 10.0, 10.0, 500.0, 14.0, &headers, &rows, &theme, viewport,
-            );
-            assert!(table_h > 50.0);
+                let table_h = super::super::table::render_preview_table(
+                    ui, &painter, &painter, 10.0, 10.0, 500.0, 14.0, &headers, &rows, &theme, 0, viewport,
+                );
+                assert!(table_h > 50.0);
+            });
         });
     }
 

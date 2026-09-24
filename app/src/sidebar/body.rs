@@ -187,19 +187,15 @@ pub fn render_sidebar_body(
                     }
 
                     if hovered {
-                        if del_hover {
-                            ui.painter().rect_filled(del_rect, 4.0, Color32::from_rgba_unmultiplied(220, 60, 60, 35));
-                            if ui.input(|i| i.pointer.primary_clicked()) {
-                                action = Some(SidebarAction::DeleteNote(note.id));
-                            }
+                        if crate::ui_components::render_close_button_rect(
+                            ui,
+                            ui.painter(),
+                            del_rect,
+                            theme,
+                            ("del_note", note.id),
+                        ) {
+                            action = Some(SidebarAction::DeleteNote(note.id));
                         }
-                        ui.painter().text(
-                            del_rect.center(),
-                            Align2::CENTER_CENTER,
-                            "×",
-                            FontId::proportional(13.0),
-                            if del_hover { Color32::from_rgb(220, 70, 70) } else { theme.muted },
-                        );
                     }
                 }
 

@@ -98,7 +98,7 @@ pub fn pipe_color(theme: &Theme, is_active: bool) -> Color32 {
 /// Returns the cell text color.
 pub fn cell_color(theme: &Theme, is_header: bool) -> Color32 {
     if is_header {
-        theme.highlight
+        theme.accent
     } else {
         theme.text
     }

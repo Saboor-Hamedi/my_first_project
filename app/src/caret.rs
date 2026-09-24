@@ -152,6 +152,7 @@ pub struct Caret {
     pub kind: CaretKind,
     pub glide: f32,
     pub animations_enabled: bool,
+    pub blink_enabled: bool,
     pub last_type: f64,
     pub calm: bool,
     pub particles: Vec<Particle>,
@@ -171,6 +172,7 @@ impl Default for Caret {
             kind: CaretKind::Beam,
             glide: 1.0,
             animations_enabled: true,
+            blink_enabled: true,
             last_type: 0.0,
             calm: false,
             particles: Vec::new(),
@@ -367,11 +369,17 @@ impl Caret {
     }
 
     fn blink_visible(&self, now: f64) -> bool {
+        if !self.blink_enabled {
+            return true;
+        }
         let idle = now - self.last_type;
         idle < 0.5 || (((idle - 0.5) / 0.53) as u64) % 2 == 0
     }
 
     fn blink_alpha(&self, now: f64) -> f32 {
+        if !self.blink_enabled {
+            return 1.0;
+        }
         let idle = (now - self.last_type) as f32;
         if idle < 0.45 {
             1.0

@@ -188,9 +188,11 @@ pub fn render_updates_tab(
         ),
     };
 
+    let btn_w = 210.0_f32.min(card_w);
+    let btn_h = 32.0;
     let btn_rect = Rect::from_min_size(
-        pos2(p_origin.x, p_origin.y + 270.0),
-        vec2(card_w, 42.0),
+        pos2(p_origin.x, p_origin.y + 266.0),
+        vec2(btn_w, btn_h),
     );
     let btn_resp = ui.allocate_rect(btn_rect, egui::Sense::click());
     let btn_hov = can_click && (btn_resp.hovered() || ui.rect_contains_pointer(btn_rect));
@@ -198,23 +200,23 @@ pub fn render_updates_tab(
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
     let bg = if btn_hov {
-        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 35)
+        theme.surface().lerp_to_gamma(theme.accent, 0.05)
     } else {
         theme.surface()
     };
     painter.rect(
         btn_rect,
-        6.0,
+        5.0,
         bg,
-        Stroke::new(1.0, if btn_hov { theme.accent } else { theme.border() }),
+        Stroke::new(1.0, if btn_hov { theme.border().lerp_to_gamma(theme.accent, 0.4) } else { theme.border() }),
         egui::StrokeKind::Inside,
     );
     painter.text(
         btn_rect.center(),
         Align2::CENTER_CENTER,
         btn_label,
-        FontId::monospace(12.5),
-        if can_click { theme.accent } else { theme.muted },
+        FontId::monospace(12.0),
+        if can_click { if btn_hov { theme.accent } else { theme.text } } else { theme.muted },
     );
 
     if can_click && (btn_resp.clicked() || (btn_hov && ui.input(|i| i.pointer.primary_clicked()))) {

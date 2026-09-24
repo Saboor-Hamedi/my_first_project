@@ -307,6 +307,9 @@ impl App {
             if let Ok(Some(anim)) = db.get_setting("caret_animations") {
                 self.caret.animations_enabled = anim != "off" && anim != "false";
             }
+            if let Ok(Some(blink)) = db.get_setting("caret_blinking") {
+                self.caret.blink_enabled = blink != "off" && blink != "false";
+            }
             if let Ok(Some(op)) = db.get_setting("opacity") {
                 if let Ok(val) = op.parse::<f32>() {
                     self.opacity = val.clamp(0.2, 1.0);
