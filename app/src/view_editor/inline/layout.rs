@@ -143,9 +143,11 @@ pub fn compute_inline_layout(
         let line_h = galley_h.max(min_line_h);
 
         // Calculate interactive checkbox rect in document-relative coordinates (offset by ed_origin when drawn/hit-tested)
-        let checkbox_rect = if let InlineLineKind::TaskItem { .. } = kind {
+        let checkbox_rect = if let InlineLineKind::TaskItem { check_char_idx, .. } = kind {
             let box_size = 14.0;
-            let box_x = 2.0;
+            let indent_spaces = check_char_idx.saturating_sub(3);
+            let indent_px = indent_spaces as f32 * (base_font_size * 0.55);
+            let box_x = 2.0 + indent_px;
             let box_y = cumulative_y + (line_h - box_size) * 0.5;
             Some(Rect::from_min_size(pos2(box_x, box_y), vec2(box_size, box_size)))
         } else {

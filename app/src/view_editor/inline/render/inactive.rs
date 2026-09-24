@@ -6,7 +6,7 @@ use super::super::charmap::{
     append_with_leading_space_and_map, CharMapBuilder,
 };
 use super::super::elements::{
-    bullet_glyph, cell_color, checkbox_glyph, code_metrics, heading_color, heading_metrics,
+    bullet_glyph, cell_color, code_metrics, heading_color, heading_metrics,
     highlight_code_chars, number_glyph, quote_color, quote_indent, split_table_cells, table_metrics,
 };
 use super::super::spans::parse_inline_spans;
@@ -66,6 +66,9 @@ pub fn render_inactive_line(
     let base_text_color = match kind {
         InlineLineKind::Heading(lvl) | InlineLineKind::SetextHeading(lvl) => heading_color(*lvl, theme),
         InlineLineKind::Quote(_) => quote_color(theme),
+        InlineLineKind::TaskItem { checked: true, .. } => {
+            Color32::from_rgba_unmultiplied(theme.text.r(), theme.text.g(), theme.text.b(), 135)
+        }
         _ => theme.text,
     };
 
@@ -104,12 +107,21 @@ pub fn render_inactive_line(
             append_and_map(job, charmap, &indent_spaces, char_start, fmt);
             prefix_len
         }
-        InlineLineKind::TaskItem { checked, check_char_idx } => {
-            // Render Unicode checkbox glyph
-            let glyph = checkbox_glyph(*checked);
-            let glyph_color = if *checked { theme.accent } else { theme.muted };
-            let fmt = TextFormat::simple(default_font.clone(), glyph_color);
-            append_and_map(job, charmap, glyph, char_start + check_char_idx, fmt);
+        InlineLineKind::TaskItem { check_char_idx, .. } => {
+            let indent_count = check_char_idx.saturating_sub(3);
+            if indent_count > 0 {
+                let spaces: String = " ".repeat(indent_count);
+                append_and_map(
+                    job,
+                    charmap,
+                    &spaces,
+                    char_start,
+                    TextFormat::simple(default_font.clone(), Color32::TRANSPARENT),
+                );
+            }
+            // Reserve clean transparent space for the vector checkbox widget (22px)
+            let fmt = TextFormat::simple(default_font.clone(), Color32::TRANSPARENT);
+            append_and_map(job, charmap, "   ", char_start + check_char_idx, fmt);
             prefix_len
         }
         InlineLineKind::BulletItem => {

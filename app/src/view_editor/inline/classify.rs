@@ -63,20 +63,22 @@ pub fn classify_line(chars: &[char]) -> (InlineLineKind, usize) {
         }
     }
 
-    // Task list items: - [ ] or - [x] or * [ ] or * [x]
+    // Task list items: - [ ] or - [x] or * [ ] or * [x] (with optional leading indentation)
     // Supports with trailing space (6 chars) or at line end (5 chars)
+    let indent_len = chars.iter().take_while(|&&c| c == ' ' || c == '\t').count();
+    let after_indent = &chars[indent_len..];
     let is_task_prefix = |c0: char| c0 == '-' || c0 == '*';
-    if chars.len() >= 5
-        && is_task_prefix(chars[0])
-        && chars[1] == ' '
-        && chars[2] == '['
-        && chars[4] == ']'
+    if after_indent.len() >= 5
+        && is_task_prefix(after_indent[0])
+        && after_indent[1] == ' '
+        && after_indent[2] == '['
+        && after_indent[4] == ']'
     {
-        let check_c = chars[3];
+        let check_c = after_indent[3];
         let is_checked = check_c == 'x' || check_c == 'X';
         let is_unchecked = check_c == ' ';
         if is_checked || is_unchecked {
-            let prefix_len = if chars.len() >= 6 && chars[5] == ' ' {
+            let task_marker_len = if after_indent.len() >= 6 && after_indent[5] == ' ' {
                 6
             } else {
                 5
@@ -84,9 +86,9 @@ pub fn classify_line(chars: &[char]) -> (InlineLineKind, usize) {
             return (
                 InlineLineKind::TaskItem {
                     checked: is_checked,
-                    check_char_idx: 3,
+                    check_char_idx: indent_len + 3,
                 },
-                prefix_len,
+                indent_len + task_marker_len,
             );
         }
     }

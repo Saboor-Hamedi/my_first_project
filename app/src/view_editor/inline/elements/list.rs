@@ -8,6 +8,7 @@ pub fn bullet_glyph() -> &'static str {
 
 /// Standard unicode checkbox glyphs for task items.
 #[inline]
+#[allow(dead_code)]
 pub fn checkbox_glyph(checked: bool) -> &'static str {
     if checked {
         "☑ "

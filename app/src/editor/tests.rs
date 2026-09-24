@@ -716,4 +716,86 @@ fn test_exit_table_via_ctrl_enter() {
     assert_eq!(ed.cur, table_end);
 }
 
+#[test]
+fn test_toggle_checklist_single_line_cycle() {
+    let mut ed = Editor::new();
+    ed.insert_str("Buy groceries");
+    ed.cur = 5;
+
+    // 1. Plain -> Unchecked
+    assert!(ed.toggle_checklist());
+    assert_eq!(ed.text(), "- [ ] Buy groceries");
+
+    // 2. Unchecked -> Checked
+    assert!(ed.toggle_checklist());
+    assert_eq!(ed.text(), "- [x] Buy groceries");
+
+    // 3. Checked -> Plain
+    assert!(ed.toggle_checklist());
+    assert_eq!(ed.text(), "Buy groceries");
+}
+
+#[test]
+fn test_toggle_checklist_from_bullets_and_numbers() {
+    let mut ed = Editor::new();
+    ed.insert_str("- Bullet item\n1. Numbered item\n  * Indented bullet");
+
+    // Toggle on line 1 (bullet)
+    ed.cur = 2;
+    ed.selection = None;
+    assert!(ed.toggle_checklist());
+    assert_eq!(
+        ed.text(),
+        "- [ ] Bullet item\n1. Numbered item\n  * Indented bullet"
+    );
+
+    // Toggle on line 2 (numbered)
+    ed.cur = 25;
+    ed.selection = None;
+    assert!(ed.toggle_checklist());
+    assert_eq!(
+        ed.text(),
+        "- [ ] Bullet item\n- [ ] Numbered item\n  * Indented bullet"
+    );
+
+    // Toggle on line 3 (indented bullet)
+    ed.cur = 45;
+    ed.selection = None;
+    assert!(ed.toggle_checklist());
+    assert_eq!(
+        ed.text(),
+        "- [ ] Bullet item\n- [ ] Numbered item\n  - [ ] Indented bullet"
+    );
+}
+
+#[test]
+fn test_toggle_checklist_multiline_selection() {
+    let mut ed = Editor::new();
+    ed.insert_str("Line one\nLine two\nLine three");
+    // Select all lines
+    ed.select_all();
+
+    // 1. All plain -> All unchecked
+    assert!(ed.toggle_checklist());
+    assert_eq!(
+        ed.text(),
+        "- [ ] Line one\n- [ ] Line two\n- [ ] Line three"
+    );
+
+    // 2. All unchecked -> All checked
+    assert!(ed.toggle_checklist());
+    assert_eq!(
+        ed.text(),
+        "- [x] Line one\n- [x] Line two\n- [x] Line three"
+    );
+
+    // 3. All checked -> All unchecked
+    assert!(ed.toggle_checklist());
+    assert_eq!(
+        ed.text(),
+        "- [ ] Line one\n- [ ] Line two\n- [ ] Line three"
+    );
+}
+
+
 

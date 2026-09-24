@@ -61,15 +61,15 @@ pub fn render_editor_body(
         // Calculate digits needed for total lines
         let total_lines = (ed.buf.iter().filter(|&&c| c == '\n').count() + 1).max(1);
         let digits = total_lines.to_string().len().max(2);
-        (digits as f32 * cw + 10.0).max(22.0)
+        (digits as f32 * (font_size * 0.55) + 14.0).max(28.0)
     } else {
         0.0
     };
 
-    let pad_x = if show_line_numbers { 14.0 } else { 22.0 };
+    let pad_x = if show_line_numbers { 16.0 } else { 24.0 };
     let pad_y = 10.0;
     let safe_w = editor_rect.width();
-    let effective_gutter_w = if safe_w > gutter_w + 32.0 { gutter_w } else { 0.0 };
+    let effective_gutter_w = if safe_w > gutter_w + 40.0 { gutter_w } else { 0.0 };
     let text_left = (editor_rect.min.x + effective_gutter_w + pad_x).min(editor_rect.max.x);
     let ed_origin = pos2(text_left, editor_rect.min.y - *scroll_y + pad_y);
 

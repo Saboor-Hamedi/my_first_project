@@ -342,6 +342,166 @@ impl Editor {
         }
     }
 
+    /// Toggles markdown checklist items (`- [ ]` / `- [x]`) on the current line or across all selected lines.
+    ///
+    /// Handles multiple selected paragraphs, plain text, bullet lists (`-`, `*`, `+`),
+    /// and numbered lists (`1.`), converting them into checklist items or toggling their checked state.
+    pub fn toggle_checklist(&mut self) -> bool {
+        self.save_undo_snapshot();
+
+        let (first_start, last_end, has_sel) = if let Some((start, end)) = self.selected_range() {
+            let (fs, _) = self.line_bounds(start);
+            let check_end = if end > start && self.buf.get(end - 1) == Some(&'\n') {
+                end - 1
+            } else {
+                end
+            };
+            let (_, le) = self.line_bounds(check_end);
+            (fs, le, true)
+        } else {
+            let (fs, le) = self.line_bounds(self.cur);
+            (fs, le, false)
+        };
+
+        // Gather all line (start, end) ranges within the selection
+        let mut lines = Vec::new();
+        let mut i = first_start;
+        while i <= last_end && i <= self.buf.len() {
+            let (ls, le) = self.line_bounds(i);
+            lines.push((ls, le));
+            if le >= last_end || le >= self.buf.len() {
+                break;
+            }
+            i = le + 1;
+        }
+
+        if lines.is_empty() {
+            return false;
+        }
+
+        #[derive(PartialEq)]
+        enum LineTaskState {
+            CheckedTask(usize),
+            UncheckedTask(usize),
+            Bullet(usize),
+            Numbered(usize),
+            Plain,
+            Empty,
+        }
+
+        let mut line_states = Vec::new();
+        for &(ls, le) in &lines {
+            let line_chars: Vec<char> = self.buf[ls..le].to_vec();
+            let indent_len = line_chars.iter().take_while(|c| **c == ' ' || **c == '\t').count();
+            let rest: String = line_chars[indent_len..].iter().collect();
+
+            if rest.is_empty() {
+                line_states.push(LineTaskState::Empty);
+            } else if rest.starts_with("- [x] ") || rest.starts_with("- [X] ") || rest.starts_with("* [x] ") || rest.starts_with("* [X] ") {
+                line_states.push(LineTaskState::CheckedTask(indent_len + 6));
+            } else if rest.starts_with("- [ ] ") || rest.starts_with("* [ ] ") {
+                line_states.push(LineTaskState::UncheckedTask(indent_len + 6));
+            } else if rest.starts_with("- ") || rest.starts_with("* ") || rest.starts_with("+ ") {
+                line_states.push(LineTaskState::Bullet(indent_len + 2));
+            } else if let Some(num_len) = parse_numbered_list_prefix(&rest) {
+                line_states.push(LineTaskState::Numbered(indent_len + num_len));
+            } else {
+                line_states.push(LineTaskState::Plain);
+            }
+        }
+
+        let non_empty_states: Vec<&LineTaskState> = line_states.iter().filter(|s| **s != LineTaskState::Empty).collect();
+        let all_checked = !non_empty_states.is_empty() && non_empty_states.iter().all(|s| matches!(s, LineTaskState::CheckedTask(_)));
+        let all_unchecked = !non_empty_states.is_empty() && non_empty_states.iter().all(|s| matches!(s, LineTaskState::UncheckedTask(_)));
+
+        let mut anchor = self.selection.unwrap_or(self.cur);
+        let mut cur = self.cur;
+
+        // Apply transformations in reverse order so character offsets before ls remain invariant
+        for (idx, &(ls, le)) in lines.iter().enumerate().rev() {
+            let state = &line_states[idx];
+            let line_chars: Vec<char> = self.buf[ls..le].to_vec();
+            let indent_len = line_chars.iter().take_while(|c| **c == ' ' || **c == '\t').count();
+            let indent: Vec<char> = line_chars[..indent_len].to_vec();
+
+            let new_line: Vec<char> = if all_checked {
+                if !has_sel {
+                    // Single line cycle: checked -> plain text
+                    let rest = &line_chars[indent_len + 6..];
+                    let mut res = indent;
+                    res.extend_from_slice(rest);
+                    res
+                } else {
+                    // Multi-line: uncheck to "- [ ] "
+                    let rest = &line_chars[indent_len + 6..];
+                    let mut res = indent;
+                    res.extend("- [ ] ".chars());
+                    res.extend_from_slice(rest);
+                    res
+                }
+            } else if all_unchecked {
+                // If all are unchecked: check them to "- [x] "
+                let rest = &line_chars[indent_len + 6..];
+                let mut res = indent;
+                res.extend("- [x] ".chars());
+                res.extend_from_slice(rest);
+                res
+            } else {
+                // Convert plain / bullet / numbered lines to "- [ ] "
+                match state {
+                    LineTaskState::Empty => line_chars,
+                    LineTaskState::CheckedTask(_) | LineTaskState::UncheckedTask(_) => line_chars,
+                    LineTaskState::Bullet(prefix_len) => {
+                        let rest = &line_chars[*prefix_len..];
+                        let mut res = indent;
+                        res.extend("- [ ] ".chars());
+                        res.extend_from_slice(rest);
+                        res
+                    }
+                    LineTaskState::Numbered(prefix_len) => {
+                        let rest = &line_chars[*prefix_len..];
+                        let mut res = indent;
+                        res.extend("- [ ] ".chars());
+                        res.extend_from_slice(rest);
+                        res
+                    }
+                    LineTaskState::Plain => {
+                        let rest = &line_chars[indent_len..];
+                        let mut res = indent;
+                        res.extend("- [ ] ".chars());
+                        res.extend_from_slice(rest);
+                        res
+                    }
+                }
+            };
+
+            let old_len = le - ls;
+            let new_len = new_line.len();
+            let delta = new_len as isize - old_len as isize;
+
+            self.buf.splice(ls..le, new_line);
+
+            if anchor >= le {
+                anchor = (anchor as isize + delta).max(ls as isize) as usize;
+            } else if anchor > ls + indent_len {
+                anchor = (anchor as isize + delta).max(ls as isize) as usize;
+            }
+
+            if cur >= le {
+                cur = (cur as isize + delta).max(ls as isize) as usize;
+            } else if cur > ls + indent_len {
+                cur = (cur as isize + delta).max(ls as isize) as usize;
+            }
+        }
+
+        self.cur = cur.min(self.buf.len());
+        if has_sel {
+            self.selection = Some(anchor.min(self.buf.len()));
+        }
+
+        true
+    }
+
     /// Returns (line_start, line_end) for the line containing `pos`.
     pub fn line_bounds(&self, pos: usize) -> (usize, usize) {
         let mut line_start = pos.min(self.buf.len());
@@ -1029,3 +1189,17 @@ fn parse_bullet_list(rest: &str) -> Option<char> {
     }
     Some(bullet)
 }
+
+fn parse_numbered_list_prefix(rest: &str) -> Option<usize> {
+    let digits_len = rest.chars().take_while(|c| c.is_ascii_digit()).count();
+    if digits_len == 0 || digits_len >= rest.len() {
+        return None;
+    }
+    let after_digits = &rest[digits_len..];
+    if after_digits.starts_with(". ") || after_digits.starts_with(".\t") {
+        Some(digits_len + 2)
+    } else {
+        None
+    }
+}
+

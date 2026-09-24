@@ -15,15 +15,16 @@ pub fn render_task_checkbox(
     let radius = 3.5;
 
     if checked {
-        // Filled accent box
-        painter.rect_filled(box_rect, radius, theme.accent);
-        // High-contrast checkmark
-        let check_color = if theme.is_light() { Color32::WHITE } else { theme.bg };
-        let p1 = pos2(box_rect.min.x + 3.0, box_rect.min.y + 7.0);
-        let p2 = pos2(box_rect.min.x + 6.0, box_rect.min.y + 10.5);
-        let p3 = pos2(box_rect.min.x + 11.0, box_rect.min.y + 3.5);
-        painter.line_segment([p1, p2], Stroke::new(1.8, check_color));
-        painter.line_segment([p2, p3], Stroke::new(1.8, check_color));
+        // Beautiful vibrant emerald task green (Apple / GitHub / Notion standard)
+        let green_bg = Color32::from_rgb(46, 204, 113);
+        painter.rect_filled(box_rect, radius, green_bg);
+        // Crisp high-contrast white checkmark
+        let check_color = Color32::WHITE;
+        let p1 = pos2(box_rect.min.x + 3.2, box_rect.min.y + 7.2);
+        let p2 = pos2(box_rect.min.x + 6.2, box_rect.min.y + 10.8);
+        let p3 = pos2(box_rect.min.x + 11.5, box_rect.min.y + 3.8);
+        painter.line_segment([p1, p2], Stroke::new(2.0, check_color));
+        painter.line_segment([p2, p3], Stroke::new(2.0, check_color));
     } else {
         // Empty outlined box with smooth hover glow
         let border_color = if is_hovered { theme.accent } else { theme.border() };
@@ -41,7 +42,7 @@ pub fn render_task_checkbox(
             box_rect,
             radius,
             fill_color,
-            Stroke::new(1.2, border_color),
+            Stroke::new(1.3, border_color),
             eframe::egui::StrokeKind::Inside,
         );
     }

@@ -55,7 +55,10 @@ impl ZoomState {
     /// Calculates scaled font size and exact monospace character metrics (cw, lh) for editor text layout.
     pub fn editor_metrics(&self, base_font_size: f32, ctx: &egui::Context) -> (f32, f32, f32) {
         let ed_font_size = (base_font_size * self.level).clamp(8.0, 60.0);
-        let font = FontId::monospace(ed_font_size);
+        // Optical scale calibration: egui's monospace glyphs are ~9% larger than proportional glyphs.
+        // Calibrating raw monospace font size by 0.92 ensures seamless optical scale when toggling Ctrl+E.
+        let raw_font_size = (ed_font_size * 0.92).round().max(8.0);
+        let font = FontId::monospace(raw_font_size);
         let (cw, lh) = ctx.fonts(|f| {
             let sample_100 = "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM";
             let g100 = f.layout_no_wrap(sample_100.to_owned(), font.clone(), Color32::WHITE);
@@ -64,7 +67,7 @@ impl ZoomState {
             let lh = (g1.size().y * 1.30).round();
             (cw, lh)
         });
-        (ed_font_size, cw, lh)
+        (raw_font_size, cw, lh)
     }
 
     /// Processes user zoom input (trackpad pinch, Ctrl+Wheel, Ctrl+0, Ctrl+=, Ctrl+-).

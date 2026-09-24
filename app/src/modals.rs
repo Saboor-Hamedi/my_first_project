@@ -33,9 +33,11 @@ pub fn render_search_modal(
 
     let is_querying = !query.trim().is_empty();
     let bar_h = 54.0;
+    let has_results = !results.is_empty();
+    let show_results = is_querying || has_results;
     let visible_items = results.len().min(6);
 
-    let modal_h = if !is_querying {
+    let modal_h = if !show_results {
         bar_h
     } else if results.is_empty() {
         bar_h + 1.0 + 52.0 + 32.0 // bar + divider + empty state + footer
@@ -92,6 +94,47 @@ pub fn render_search_modal(
         theme.muted,
     );
 
+    // Keyboard navigation: pure, intuitive ArrowUp / ArrowDown before TextEdit consumes them
+    let (nav_up, nav_down, nav_enter, nav_esc) = ui.input_mut(|i| {
+        let up = i.key_pressed(egui::Key::ArrowUp);
+        let down = i.key_pressed(egui::Key::ArrowDown);
+        let enter = i.key_pressed(egui::Key::Enter);
+        let esc = i.key_pressed(egui::Key::Escape);
+
+        if up {
+            i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp);
+        }
+        if down {
+            i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown);
+        }
+
+        (up, down, enter, esc)
+    });
+
+    if nav_up && !results.is_empty() {
+        if *selected_idx > 0 {
+            *selected_idx -= 1;
+        } else {
+            *selected_idx = results.len().saturating_sub(1);
+        }
+    }
+    if nav_down && !results.is_empty() {
+        if *selected_idx + 1 < results.len() {
+            *selected_idx += 1;
+        } else {
+            *selected_idx = 0;
+        }
+    }
+    if nav_enter {
+        if let Some(item) = results.get(*selected_idx) {
+            action.selected_item = Some(item.clone());
+        }
+        action.should_close = true;
+    }
+    if nav_esc {
+        action.should_close = true;
+    }
+
     // Single-line text input vertically aligned with the search icon
     let input_h = 24.0;
     let edit_rect = Rect::from_min_size(
@@ -113,32 +156,8 @@ pub fn render_search_modal(
         response.request_focus();
     }
 
-    // Keyboard navigation
-    let (up, down, enter, esc) = ui.input(|i| (
-        i.key_pressed(egui::Key::ArrowUp),
-        i.key_pressed(egui::Key::ArrowDown),
-        i.key_pressed(egui::Key::Enter),
-        i.key_pressed(egui::Key::Escape),
-    ));
-
-    if up && *selected_idx > 0 {
-        *selected_idx -= 1;
-    }
-    if down && !results.is_empty() && *selected_idx + 1 < results.len() {
-        *selected_idx += 1;
-    }
-    if enter {
-        if let Some(item) = results.get(*selected_idx) {
-            action.selected_item = Some(item.clone());
-        }
-        action.should_close = true;
-    }
-    if esc {
-        action.should_close = true;
-    }
-
-    // ── Expanded Results (Only when user types) ──────────────────────────────
-    if is_querying {
+    // ── Expanded Results (When querying or when notes exist) ──────────────────────────────
+    if show_results {
         // Subtle divider separating search input from results
         let div_y = modal_rect.min.y + bar_h;
         painter.line_segment(
@@ -157,12 +176,20 @@ pub fn render_search_modal(
                 theme.muted,
             );
         } else {
-            for (i, item) in results.iter().take(visible_items).enumerate() {
+            let window_start = if *selected_idx >= visible_items {
+                *selected_idx + 1 - visible_items
+            } else {
+                0
+            };
+            let window_end = (window_start + visible_items).min(results.len());
+
+            for (render_idx, actual_idx) in (window_start..window_end).enumerate() {
+                let item = &results[actual_idx];
                 let item_rect = Rect::from_min_size(
-                    pos2(modal_rect.min.x + 8.0, results_y + i as f32 * 40.0),
+                    pos2(modal_rect.min.x + 8.0, results_y + render_idx as f32 * 40.0),
                     vec2(modal_w - 16.0, 36.0),
                 );
-                let is_selected = i == *selected_idx;
+                let is_selected = actual_idx == *selected_idx;
                 let is_hovered = ui.rect_contains_pointer(item_rect);
 
                 if is_selected || is_hovered {
@@ -189,7 +216,7 @@ pub fn render_search_modal(
                 }
 
                 if is_hovered && ui.input(|i| i.pointer.primary_clicked()) {
-                    *selected_idx = i;
+                    *selected_idx = actual_idx;
                     action.selected_item = Some(item.clone());
                     action.should_close = true;
                 }
@@ -276,7 +303,7 @@ pub fn render_search_modal(
         painter.text(
             pos2(modal_rect.min.x + 18.0, footer_y + 1.0),
             Align2::LEFT_TOP,
-            "↑↓ Navigate  ·  ↵ Select  ·  esc Close",
+            "↑↓ Navigate  ·  ↵ Open  ·  esc Close",
             FontId::monospace(10.5),
             theme.muted,
         );

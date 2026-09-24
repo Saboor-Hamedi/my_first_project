@@ -7,6 +7,43 @@ use eframe::egui;
 /// Processes global shortcuts (saving, note creation, modals, clipboard, undo/redo).
 /// Returns `Some(typed)` if a global shortcut fully handled the frame, or `None` to continue to typing.
 pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> Option<bool> {
+    // 0. Active Modal Input Priority:
+    // When any modal (Search, Settings, Rename, Delete confirmation, Accent dropdown) is active,
+    // absorb global shortcuts so that modal dialogs retain 100% focused input context.
+    // This prevents global actions (e.g., terminal toggle Ctrl+J, new note Ctrl+N, AI toggle Ctrl+Shift+I)
+    // from interrupting or conflicting with modal interaction.
+    if app.search_open {
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            app.search_open = false;
+        }
+        return Some(false);
+    }
+    if app.settings_open {
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            app.settings_open = false;
+        }
+        return Some(false);
+    }
+    if app.rename_open {
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            app.rename_open = false;
+        }
+        return Some(false);
+    }
+    if app.delete_confirm_open {
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            app.delete_confirm_open = false;
+            app.pending_delete_note_id = None;
+        }
+        return Some(false);
+    }
+    if app.accent_dropdown_open {
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            app.accent_dropdown_open = false;
+        }
+        return Some(false);
+    }
+
     // Global terminal toggle shortcut: Ctrl+J or Ctrl+` (Backtick / Tilde)
     let toggle_term = ctx.input(|i| {
         (i.modifiers.ctrl && !i.modifiers.shift && !i.modifiers.alt && i.key_pressed(egui::Key::J))
@@ -87,47 +124,6 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
             app.help_scroll_y = (app.help_scroll_y - 45.0).max(0.0);
             return Some(false);
         }
-    }
-
-    // Accent Color Dropdown input priority
-    if app.accent_dropdown_open {
-        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            app.accent_dropdown_open = false;
-        }
-        return Some(false);
-    }
-
-    // Settings Modal input priority
-    if app.settings_open {
-        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            app.settings_open = false;
-        }
-        return Some(false);
-    }
-
-    // Rename Modal input priority: absorbs all shortcuts so TextEdit retains full focus and handles Ctrl+A, typing, etc.
-    if app.rename_open {
-        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            app.rename_open = false;
-        }
-        return Some(false);
-    }
-
-    // Search Modal input priority
-    if app.search_open {
-        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            app.search_open = false;
-        }
-        return Some(false);
-    }
-
-    // Delete Confirmation Modal input priority
-    if app.delete_confirm_open {
-        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            app.delete_confirm_open = false;
-            app.pending_delete_note_id = None;
-        }
-        return Some(false);
     }
 
     // Global Keyboard Shortcuts
@@ -307,6 +303,27 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
             app.set_status("Copied selection", now);
         }
         return Some(false);
+    }
+
+    // Checklist Toggle Shortcut: Ctrl+Shift+X (friendly creation/toggle for paragraphs, bullets, tasks)
+    let ctrl_shift_x = ctx.input(|i| {
+        (i.modifiers.ctrl || i.modifiers.command)
+            && i.modifiers.shift
+            && !i.modifiers.alt
+            && i.key_pressed(egui::Key::X)
+    });
+    if ctrl_shift_x {
+        let (target_ed_mut, _) = if app.mode == Mode::Doc {
+            (&mut app.doc_ed, &mut app.doc_scroll_y)
+        } else {
+            (&mut app.ed, &mut app.scroll_y)
+        };
+        if target_ed_mut.toggle_checklist() {
+            app.is_dirty = true;
+            app.sound.play();
+            app.set_status("Toggled checklist item (Ctrl+Shift+X)", now);
+            return Some(true);
+        }
     }
 
     // Clipboard Cut (Ctrl+X)

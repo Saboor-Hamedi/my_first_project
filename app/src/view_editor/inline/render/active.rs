@@ -72,6 +72,9 @@ pub fn render_active_line(
 
     let base_text_color = match kind {
         InlineLineKind::Heading(lvl) | InlineLineKind::SetextHeading(lvl) => heading_color(*lvl, theme),
+        InlineLineKind::TaskItem { checked: true, .. } => {
+            Color32::from_rgba_unmultiplied(theme.text.r(), theme.text.g(), theme.text.b(), 135)
+        }
         _ => theme.text,
     };
 
@@ -99,7 +102,6 @@ pub fn render_active_line(
         }
         InlineLineKind::Heading(_)
         | InlineLineKind::Quote(_)
-        | InlineLineKind::TaskItem { .. }
         | InlineLineKind::BulletItem
         | InlineLineKind::NumberedItem(_) => {
             if prefix_len > 0 && prefix_len <= n {
@@ -109,6 +111,23 @@ pub fn render_active_line(
             } else {
                 0
             }
+        }
+        InlineLineKind::TaskItem { check_char_idx, .. } => {
+            let indent_count = check_char_idx.saturating_sub(3);
+            if indent_count > 0 {
+                let spaces: String = " ".repeat(indent_count);
+                append_and_map(
+                    job,
+                    charmap,
+                    &spaces,
+                    char_start,
+                    TextFormat::simple(default_font.clone(), Color32::TRANSPARENT),
+                );
+            }
+            // Reserve clean transparent space for the vector checkbox widget (22px)
+            let fmt = TextFormat::simple(default_font.clone(), Color32::TRANSPARENT);
+            append_and_map(job, charmap, "   ", char_start + check_char_idx, fmt);
+            prefix_len
         }
         _ => 0,
     };
