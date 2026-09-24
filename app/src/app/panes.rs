@@ -20,7 +20,7 @@ impl App {
         typed: bool,
     ) {
         // Docked bottom terminal layout: splits editor_panel_rect vertically so terminal sits under editor & preview
-        let (top_panel_rect, bottom_terminal_rect, term_splitter_rect_opt) = if !self.zen_mode && self.terminal_open && (self.mode == Mode::Normal || self.mode == Mode::Doc) {
+        let (top_panel_rect, bottom_terminal_rect, term_splitter_rect_opt) = if self.terminal_open && (self.mode == Mode::Normal || self.mode == Mode::Doc) {
             let total_h = editor_panel_rect.height();
             let divider_h = 10.0;
             let tab_bar_h = crate::view_editor::TAB_ROW_H;
@@ -101,7 +101,8 @@ impl App {
             None
         };
 
-        if !self.zen_mode {
+        let are_tabs_visible = self.show_tabs;
+        if are_tabs_visible {
             if self.mode == Mode::Normal {
                 self.sync_active_tab();
                 let tab_items: Vec<crate::view_editor::TabItem> = self
@@ -208,7 +209,7 @@ impl App {
         }
 
         // Body area below tab strip (for editor, gutter, preview, help)
-        let body_rect = if !self.zen_mode && (self.mode == Mode::Normal || self.mode == Mode::Doc || self.mode == Mode::Help) {
+        let body_rect = if are_tabs_visible && (self.mode == Mode::Normal || self.mode == Mode::Doc || self.mode == Mode::Help) {
             let body_min_y = tab_bar_rect.max.y;
             let body_max_y = top_panel_rect.max.y.max(body_min_y + 30.0);
             Rect::from_min_max(
@@ -262,6 +263,10 @@ impl App {
                 }
             }
         }
+
+        let is_empty_buffer = self.open_notes.is_empty()
+            || (self.open_notes.len() == 1 && self.open_notes[0].id == 0 && self.open_notes[0].editor.is_empty());
+        let show_dashboard = self.mode == Mode::Normal && (self.show_welcome || is_empty_buffer);
 
         let (ed_font_size, ed_cw, ed_lh) = self.zoom.editor_metrics(self.font_size, ui.ctx());
 
@@ -384,7 +389,66 @@ impl App {
                     None
                 };
 
-                if self.inline_mode {
+                if show_dashboard {
+                    if let Some(dash_action) = crate::view_dashboard::render_welcome_dashboard(
+                        ui,
+                        painter,
+                        actual_editor_rect,
+                        &self.theme,
+                        self.total_notes_count,
+                    ) {
+                        match dash_action {
+                            crate::view_dashboard::DashboardAction::NewNote => {
+                                self.show_welcome = false;
+                                self.create_new_note(now);
+                            }
+                            crate::view_dashboard::DashboardAction::FindNote => {
+                                self.search_open = true;
+                                self.search_just_opened = true;
+                            }
+                            crate::view_dashboard::DashboardAction::OpenRecent(id) => {
+                                self.show_welcome = false;
+                                self.open_note_by_id(id, now);
+                            }
+                            crate::view_dashboard::DashboardAction::OpenTerminal => {
+                                self.terminal_open = true;
+                                self.terminal_focused = true;
+                            }
+                            crate::view_dashboard::DashboardAction::OpenAi => {
+                                self.preview_open = true;
+                                self.right_pane_tab = crate::app::RightPaneTab::AiAgent;
+                                self.agent_state.is_open = true;
+                            }
+                            crate::view_dashboard::DashboardAction::OpenDocs => {
+                                self.show_welcome = false;
+                                self.mode = Mode::Doc;
+                            }
+                            crate::view_dashboard::DashboardAction::OpenSettings => {
+                                self.settings_open = true;
+                                self.settings_just_opened = true;
+                            }
+                            crate::view_dashboard::DashboardAction::ToggleZen => {
+                                self.zen_mode = !self.zen_mode;
+                                if self.zen_mode {
+                                    self.show_titlebar = false;
+                                    self.show_tabs = false;
+                                    self.sidebar_open = false;
+                                    self.preview_open = false;
+                                } else {
+                                    self.show_titlebar = true;
+                                    self.show_tabs = true;
+                                }
+                                let _ = self.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+                                    key: "zen_mode".into(),
+                                    val: if self.zen_mode { "true" } else { "false" }.into(),
+                                });
+                            }
+                            crate::view_dashboard::DashboardAction::Quit => {
+                                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
+                        }
+                    }
+                } else if self.inline_mode {
                     render_inline_editor(
                         ui,
                         painter,
@@ -451,16 +515,14 @@ impl App {
                 }
 
                 // Render Bottom-Docked Embedded Terminal Drawer
-                if !self.zen_mode {
-                    self.render_terminal_drawer(
-                        ui,
-                        painter,
-                        editor_panel_rect,
-                        bottom_terminal_rect,
-                        term_splitter_rect_opt,
-                        now,
-                    );
-                }
+                self.render_terminal_drawer(
+                    ui,
+                    painter,
+                    editor_panel_rect,
+                    bottom_terminal_rect,
+                    term_splitter_rect_opt,
+                    now,
+                );
             }
             Mode::Help => {
                 let action = crate::help_panel::render_help_tab_view(

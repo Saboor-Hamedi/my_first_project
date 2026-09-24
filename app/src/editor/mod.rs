@@ -26,6 +26,10 @@ impl Editor {
         Self::default()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.buf.is_empty()
+    }
+
     pub fn clear(&mut self) {
         if !self.buf.is_empty() {
             self.save_undo_snapshot();

@@ -17,6 +17,8 @@ pub fn render_theme_tab(
     panel_rect: Rect,
     p_origin: Pos2,
     theme: &mut Theme,
+    opacity: &mut f32,
+    blur_effect: &mut crate::blur::BlurEffect,
     on_save_setting: &mut dyn FnMut(&str, &str),
 ) {
     painter.text(
@@ -29,10 +31,109 @@ pub fn render_theme_tab(
     painter.text(
         p_origin + vec2(0.0, 22.0),
         Align2::LEFT_TOP,
-        "Curated developer palettes that transform the entire interface",
+        "Curated developer palettes and desktop frosted blur controls",
         FontId::proportional(12.0),
         theme.muted,
     );
+
+    // ── Window Backdrop & Transparency ──────────────────────────────────
+    let controls_y = p_origin.y + 48.0;
+
+    // Opacity Slider on Left:
+    painter.text(
+        pos2(p_origin.x, controls_y + 8.0),
+        Align2::LEFT_CENTER,
+        "Opacity",
+        FontId::monospace(12.0),
+        theme.muted,
+    );
+
+    let slider_x = p_origin.x + 64.0;
+    let slider_w = 120.0;
+    let slider_rect = Rect::from_min_size(pos2(slider_x, controls_y - 2.0), vec2(slider_w, 20.0));
+    let slider_hover = ui.rect_contains_pointer(slider_rect);
+    if slider_hover && ui.input(|i| i.pointer.primary_down() || i.pointer.primary_clicked()) {
+        if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+            let t = ((pos.x - slider_rect.min.x) / slider_rect.width()).clamp(0.0, 1.0);
+            let new_op = (0.4 + t * 0.6).clamp(0.4, 1.0);
+            if (*opacity - new_op).abs() > 0.01 {
+                *opacity = (new_op * 100.0).round() / 100.0;
+                on_save_setting("opacity", &format!("{:.2}", *opacity));
+            }
+        }
+    }
+
+    let track_y = slider_rect.center().y;
+    painter.rect_filled(Rect::from_min_size(pos2(slider_x, track_y - 2.0), vec2(slider_w, 4.0)), 2.0, theme.border());
+    let active_w = slider_w * ((*opacity - 0.4) / 0.6).clamp(0.0, 1.0);
+    if active_w > 0.0 {
+        painter.rect_filled(Rect::from_min_size(pos2(slider_x, track_y - 2.0), vec2(active_w, 4.0)), 2.0, theme.accent);
+    }
+    let thumb_x = slider_x + active_w;
+    painter.circle_filled(pos2(thumb_x, track_y), if slider_hover { 7.0 } else { 6.0 }, theme.accent);
+    painter.text(
+        pos2(slider_rect.max.x + 10.0, track_y),
+        Align2::LEFT_CENTER,
+        format!("{:.0}%", *opacity * 100.0),
+        FontId::monospace(11.5),
+        theme.accent,
+    );
+
+    // Backdrop Effect pills on Right:
+    let effect_pills = [
+        ("None", crate::blur::BlurEffect::None),
+        ("Mica", crate::blur::BlurEffect::Mica),
+        ("Acrylic", crate::blur::BlurEffect::Acrylic),
+    ];
+    let pill_w = 70.0;
+    let pill_gap = 6.0;
+    let pills_total_w = 3.0 * pill_w + 2.0 * pill_gap;
+    let pills_start_x = panel_rect.max.x - 20.0 - pills_total_w;
+
+    for (p_idx, &(p_label, p_eff)) in effect_pills.iter().enumerate() {
+        let p_rect = Rect::from_min_size(
+            pos2(pills_start_x + p_idx as f32 * (pill_w + pill_gap), controls_y - 5.0),
+            vec2(pill_w, 26.0),
+        );
+        let is_sel = *blur_effect == p_eff;
+        let p_hover = ui.rect_contains_pointer(p_rect);
+
+        if p_hover {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+
+        let bg = if p_hover {
+            theme.surface().lerp_to_gamma(theme.accent, 0.04)
+        } else {
+            theme.surface()
+        };
+
+        painter.rect(
+            p_rect,
+            6.0,
+            bg,
+            Stroke::new(1.0, if is_sel { theme.accent } else if p_hover { theme.border().lerp_to_gamma(theme.accent, 0.4) } else { theme.border() }),
+            egui::StrokeKind::Inside,
+        );
+
+        painter.text(
+            p_rect.center(),
+            Align2::CENTER_CENTER,
+            p_label,
+            FontId::proportional(12.0),
+            if is_sel { theme.accent } else if p_hover { theme.highlight } else { theme.muted },
+        );
+
+        if p_hover && ui.input(|i| i.pointer.primary_clicked()) {
+            *blur_effect = p_eff;
+            if (p_eff == crate::blur::BlurEffect::Acrylic || p_eff == crate::blur::BlurEffect::Mica) && *opacity > 0.95 {
+                *opacity = 0.88;
+                on_save_setting("opacity", "0.88");
+            }
+            crate::blur::apply_window_blur(p_eff);
+            on_save_setting("blur", p_eff.name().to_lowercase().as_str());
+        }
+    }
 
     let pad_x = 20.0;
     let grid_left = panel_rect.min.x + pad_x;
@@ -43,7 +144,7 @@ pub fn render_theme_tab(
     let row_gap = 12.0;
     let card_w = (grid_w - col_gap) * 0.5;
     let card_h = 80.0;
-    let grid_top = p_origin.y + 56.0;
+    let grid_top = controls_y + 36.0;
 
     let rows = ThemeKind::ALL.len().div_ceil(2);
     let content_h = rows as f32 * (card_h + row_gap) + 64.0;

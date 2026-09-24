@@ -41,6 +41,12 @@ pub const COMMAND_CATALOG: &[CommandInfo] = &[
     CommandInfo { name: "edit", desc: "Return to note editor" },
     CommandInfo { name: "scan", desc: "Run web security scan" },
     CommandInfo { name: "scans", desc: "View web security scan history" },
+    CommandInfo { name: "titlebar", desc: "Toggle window titlebar (:titlebar)" },
+    CommandInfo { name: "sidebar", desc: "Toggle notes sidebar (:sidebar)" },
+    CommandInfo { name: "settings", desc: "Open preferences & settings (:settings)" },
+    CommandInfo { name: "zen", desc: "Toggle Zen mode (:zen)" },
+    CommandInfo { name: "ai", desc: "Toggle DeepSeek AI Assistant (:ai)" },
+    CommandInfo { name: "tabs", desc: "Toggle document tabs bar (:tabs)" },
     CommandInfo { name: "quit", desc: "Quit or close view" },
 ];
 
@@ -219,9 +225,221 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
                     };
                     app.set_status(msg, now);
                 }
+                "notitlebar" | "notitle" | "notb" | "titlebar off" | "titlebar=off" | "titlebar 0" => {
+                    app.show_titlebar = false;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "show_titlebar".into(),
+                        val: "false".into(),
+                    });
+                    app.set_status(":set notitlebar (Titlebar hidden)", now);
+                }
+                "titlebar" | "title" | "tb" | "titlebar on" | "titlebar=on" | "titlebar 1" => {
+                    app.show_titlebar = true;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "show_titlebar".into(),
+                        val: "true".into(),
+                    });
+                    app.set_status(":set titlebar (Titlebar visible)", now);
+                }
+                "titlebar!" | "tb!" => {
+                    app.show_titlebar = !app.show_titlebar;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "show_titlebar".into(),
+                        val: if app.show_titlebar { "true".into() } else { "false".into() },
+                    });
+                    let msg = if app.show_titlebar { ":set titlebar (Titlebar visible)" } else { ":set notitlebar (Titlebar hidden)" };
+                    app.set_status(msg, now);
+                }
+                "nosidebar" | "nosb" | "sidebar off" | "sidebar=off" | "sidebar 0" => {
+                    app.sidebar_open = false;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "sidebar".into(),
+                        val: "false".into(),
+                    });
+                    app.set_status(":set nosidebar (Sidebar hidden)", now);
+                }
+                "sidebar" | "sb" | "sidebar on" | "sidebar=on" | "sidebar 1" => {
+                    app.sidebar_open = true;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "sidebar".into(),
+                        val: "true".into(),
+                    });
+                    app.set_status(":set sidebar (Sidebar visible)", now);
+                }
+                "sidebar!" | "sb!" => {
+                    app.sidebar_open = !app.sidebar_open;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "sidebar".into(),
+                        val: if app.sidebar_open { "true".into() } else { "false".into() },
+                    });
+                    let msg = if app.sidebar_open { ":set sidebar (Sidebar visible)" } else { ":set nosidebar (Sidebar hidden)" };
+                    app.set_status(msg, now);
+                }
+                "notabs" | "notab" | "tabs off" | "tabs=off" | "tabs 0" => {
+                    app.show_tabs = false;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "show_tabs".into(),
+                        val: "false".into(),
+                    });
+                    app.set_status(":set notabs (Tabs bar hidden)", now);
+                }
+                "tabs" | "tab" | "tabs on" | "tabs=on" | "tabs 1" => {
+                    app.show_tabs = true;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "show_tabs".into(),
+                        val: "true".into(),
+                    });
+                    app.set_status(":set tabs (Tabs bar visible)", now);
+                }
+                "tabs!" | "tab!" => {
+                    app.show_tabs = !app.show_tabs;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "show_tabs".into(),
+                        val: if app.show_tabs { "true".into() } else { "false".into() },
+                    });
+                    let msg = if app.show_tabs { ":set tabs (Tabs bar visible)" } else { ":set notabs (Tabs bar hidden)" };
+                    app.set_status(msg, now);
+                }
+                "nozen" | "zen off" | "zen=off" | "zen 0" => {
+                    app.zen_mode = false;
+                    app.show_titlebar = true;
+                    app.show_tabs = true;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "zen_mode".into(),
+                        val: "false".into(),
+                    });
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "show_titlebar".into(),
+                        val: "true".into(),
+                    });
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "show_tabs".into(),
+                        val: "true".into(),
+                    });
+                    app.set_status(":set nozen (Zen mode OFF)", now);
+                }
+                "zen" | "zen on" | "zen=on" | "zen 1" => {
+                    app.zen_mode = true;
+                    app.show_titlebar = false;
+                    app.show_tabs = false;
+                    app.sidebar_open = false;
+                    app.preview_open = false;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "zen_mode".into(),
+                        val: "true".into(),
+                    });
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "show_titlebar".into(),
+                        val: "false".into(),
+                    });
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "show_tabs".into(),
+                        val: "false".into(),
+                    });
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "sidebar".into(),
+                        val: "false".into(),
+                    });
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "preview".into(),
+                        val: "false".into(),
+                    });
+                    app.set_status(":set zen (Zen mode ON)", now);
+                }
+                "zen!" => {
+                    app.zen_mode = !app.zen_mode;
+                    if app.zen_mode {
+                        app.show_titlebar = false;
+                        app.show_tabs = false;
+                        app.sidebar_open = false;
+                        app.preview_open = false;
+                    } else {
+                        app.show_titlebar = true;
+                        app.show_tabs = true;
+                    }
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "zen_mode".into(),
+                        val: if app.zen_mode { "true" } else { "false" }.into(),
+                    });
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "show_titlebar".into(),
+                        val: if app.show_titlebar { "true" } else { "false" }.into(),
+                    });
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "show_tabs".into(),
+                        val: if app.show_tabs { "true" } else { "false" }.into(),
+                    });
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "sidebar".into(),
+                        val: if app.sidebar_open { "true" } else { "false" }.into(),
+                    });
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "preview".into(),
+                        val: if app.preview_open { "true" } else { "false" }.into(),
+                    });
+                    let msg = if app.zen_mode { ":set zen (Zen mode ON)" } else { ":set nozen (Zen mode OFF)" };
+                    app.set_status(msg, now);
+                }
+                "noai" | "ai off" | "ai=off" | "ai 0" => {
+                    if app.preview_open && app.right_pane_tab == crate::app::RightPaneTab::AiAgent {
+                        app.preview_open = false;
+                        app.agent_state.is_open = false;
+                    }
+                    app.set_status(":set noai (AI Assistant closed)", now);
+                }
+                "ai" | "ai on" | "ai=on" | "ai 1" => {
+                    app.preview_open = true;
+                    app.right_pane_tab = crate::app::RightPaneTab::AiAgent;
+                    app.ai_focus_requested = true;
+                    app.agent_state.is_open = true;
+                    app.set_status(":set ai (AI Assistant opened)", now);
+                }
+                "ai!" => {
+                    if app.preview_open && app.right_pane_tab == crate::app::RightPaneTab::AiAgent {
+                        app.preview_open = false;
+                        app.agent_state.is_open = false;
+                        app.set_status(":set noai (AI Assistant closed)", now);
+                    } else {
+                        app.preview_open = true;
+                        app.right_pane_tab = crate::app::RightPaneTab::AiAgent;
+                        app.set_status(":set ai (AI Assistant opened)", now);
+                    }
+                }
+                "blur" | "acrylic" | "mica" => {
+                    app.blur_effect = crate::blur::BlurEffect::Acrylic;
+                    crate::blur::apply_window_blur(app.blur_effect);
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "blur".into(),
+                        val: "acrylic".into(),
+                    });
+                    app.set_status(":set blur (Backdrop blur enabled)", now);
+                }
+                "noblur" => {
+                    app.blur_effect = crate::blur::BlurEffect::None;
+                    crate::blur::apply_window_blur(app.blur_effect);
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "blur".into(),
+                        val: "none".into(),
+                    });
+                    app.set_status(":set noblur (Blur disabled)", now);
+                }
+                s if s.starts_with("opacity") || s.starts_with("op") => {
+                    let parts: Vec<&str> = s.split(|c| c == '=' || c == ' ').collect();
+                    if let Some(val_str) = parts.get(1) {
+                        if let Ok(v) = val_str.parse::<f32>() {
+                            let op = if v > 1.0 { v / 100.0 } else { v }.clamp(0.2, 1.0);
+                            app.opacity = op;
+                            let _ = app.db_tx.send(DbMsg::SaveSetting {
+                                key: "opacity".into(),
+                                val: format!("{:.2}", op),
+                            });
+                            app.set_status(format!(":set opacity {:.0}%", op * 100.0), now);
+                        }
+                    }
+                }
                 _ => {
                     app.set_status(
-                        format!("Unknown option: :set {}. Try :set nu / :set nonu or :set preview / :set nopreview", opt),
+                        format!("Unknown option: :set {}. Try :set nu / :set titlebar / :set sidebar / :set tabs / :set zen / :set ai / :set blur", opt),
                         now,
                     );
                 }
@@ -335,6 +553,230 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
                 val: "false".into(),
             });
             app.set_status("Live preview closed", now);
+        }
+        "titlebar" | "title" | "tb" => {
+            match args.to_lowercase().trim() {
+                "on" | "enable" | "1" | "true" => {
+                    app.show_titlebar = true;
+                    app.set_status("Titlebar: ON", now);
+                }
+                "off" | "disable" | "0" | "false" => {
+                    app.show_titlebar = false;
+                    app.set_status("Titlebar: OFF (hidden)", now);
+                }
+                _ => {
+                    app.show_titlebar = !app.show_titlebar;
+                    let msg = if app.show_titlebar {
+                        "Titlebar: ON"
+                    } else {
+                        "Titlebar: OFF (hidden)"
+                    };
+                    app.set_status(msg, now);
+                }
+            }
+        }
+        "sidebar" | "sb" => {
+            match args.to_lowercase().trim() {
+                "on" | "enable" | "1" | "true" => {
+                    app.sidebar_open = true;
+                    app.set_status("Sidebar: ON (Ctrl+B to toggle)", now);
+                }
+                "off" | "disable" | "0" | "false" => {
+                    app.sidebar_open = false;
+                    app.set_status("Sidebar: OFF (hidden)", now);
+                }
+                _ => {
+                    app.sidebar_open = !app.sidebar_open;
+                    let msg = if app.sidebar_open {
+                        "Sidebar: ON (Ctrl+B to toggle)"
+                    } else {
+                        "Sidebar: OFF (hidden)"
+                    };
+                    app.set_status(msg, now);
+                }
+            }
+        }
+        "settings" | "setting" | "preferences" | "pref" | "config" => {
+            app.settings_open = !app.settings_open;
+            app.settings_just_opened = app.settings_open;
+            let msg = if app.settings_open {
+                "Preferences & Settings opened (Esc to close)"
+            } else {
+                "Preferences & Settings closed"
+            };
+            app.set_status(msg, now);
+        }
+        "zen" | "zenmode" => {
+            match args.to_lowercase().trim() {
+                "on" | "enable" | "1" | "true" => {
+                    app.zen_mode = true;
+                    app.show_titlebar = false;
+                    app.show_tabs = false;
+                    app.sidebar_open = false;
+                    app.preview_open = false;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "zen_mode".into(),
+                        val: "true".into(),
+                    });
+                    app.set_status("Zen Mode: ON (Ctrl+. to toggle)", now);
+                }
+                "off" | "disable" | "0" | "false" => {
+                    app.zen_mode = false;
+                    app.show_titlebar = true;
+                    app.show_tabs = true;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "zen_mode".into(),
+                        val: "false".into(),
+                    });
+                    app.set_status("Zen Mode: OFF (Ctrl+. to toggle)", now);
+                }
+                _ => {
+                    app.zen_mode = !app.zen_mode;
+                    if app.zen_mode {
+                        app.show_titlebar = false;
+                        app.show_tabs = false;
+                        app.sidebar_open = false;
+                        app.preview_open = false;
+                    } else {
+                        app.show_titlebar = true;
+                        app.show_tabs = true;
+                    }
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "zen_mode".into(),
+                        val: if app.zen_mode { "true" } else { "false" }.into(),
+                    });
+                    let msg = if app.zen_mode {
+                        "Zen Mode: ON (Ctrl+. to toggle)"
+                    } else {
+                        "Zen Mode OFF (Ctrl+. to toggle)"
+                    };
+                    app.set_status(msg, now);
+                }
+            }
+        }
+        "ai" | "agent" | "assistant" | "deepseek" => {
+            match args.to_lowercase().trim() {
+                "off" | "disable" | "0" | "false" => {
+                    if app.preview_open && app.right_pane_tab == crate::app::RightPaneTab::AiAgent {
+                        app.preview_open = false;
+                        app.agent_state.is_open = false;
+                    }
+                    app.set_status("AI Assistant closed", now);
+                }
+                "on" | "enable" | "1" | "true" => {
+                    app.preview_open = true;
+                    app.right_pane_tab = crate::app::RightPaneTab::AiAgent;
+                    app.ai_focus_requested = true;
+                    app.agent_state.is_open = true;
+                    app.set_status("AI Assistant opened (Ctrl+Shift+I to toggle)", now);
+                }
+                _ => {
+                    if app.preview_open && app.right_pane_tab == crate::app::RightPaneTab::AiAgent {
+                        app.preview_open = false;
+                        app.agent_state.is_open = false;
+                        app.set_status("AI Assistant closed", now);
+                    } else {
+                        app.preview_open = true;
+                        app.right_pane_tab = crate::app::RightPaneTab::AiAgent;
+                        app.ai_focus_requested = true;
+                        app.agent_state.is_open = true;
+                        app.set_status("AI Assistant opened (Ctrl+Shift+I to toggle)", now);
+                    }
+                }
+            }
+        }
+        "tabs" | "tabbar" => {
+            match args.to_lowercase().trim() {
+                "on" | "enable" | "1" | "true" => {
+                    app.show_tabs = true;
+                    app.set_status("Document tabs: ON", now);
+                }
+                "off" | "disable" | "0" | "false" => {
+                    app.show_tabs = false;
+                    app.set_status("Document tabs: OFF (hidden)", now);
+                }
+                _ => {
+                    app.show_tabs = !app.show_tabs;
+                    let msg = if app.show_tabs {
+                        "Document tabs: ON"
+                    } else {
+                        "Document tabs: OFF (hidden)"
+                    };
+                    app.set_status(msg, now);
+                }
+            }
+        }
+        "dashboard" | "welcome" | "alpha" => {
+            app.show_welcome = !app.show_welcome;
+            let msg = if app.show_welcome {
+                "Welcome dashboard opened (:dashboard to return to editor)"
+            } else {
+                "Returned to editor"
+            };
+            app.set_status(msg, now);
+        }
+        "blur" | "acrylic" | "mica" | "noblur" => {
+            let eff = match cmd.as_str() {
+                "mica" => crate::blur::BlurEffect::Mica,
+                "acrylic" => crate::blur::BlurEffect::Acrylic,
+                "noblur" => crate::blur::BlurEffect::None,
+                _ => {
+                    match args.to_lowercase().trim() {
+                        "mica" => crate::blur::BlurEffect::Mica,
+                        "acrylic" => crate::blur::BlurEffect::Acrylic,
+                        "off" | "none" | "0" | "false" => crate::blur::BlurEffect::None,
+                        _ => {
+                            if app.blur_effect == crate::blur::BlurEffect::None {
+                                crate::blur::BlurEffect::Acrylic
+                            } else {
+                                crate::blur::BlurEffect::None
+                            }
+                        }
+                    }
+                }
+            };
+            app.blur_effect = eff;
+            crate::blur::apply_window_blur(eff);
+            let val = match eff {
+                crate::blur::BlurEffect::Acrylic => "acrylic",
+                crate::blur::BlurEffect::Mica => "mica",
+                crate::blur::BlurEffect::None => "none",
+            };
+            let _ = app.db_tx.send(DbMsg::SaveSetting {
+                key: "blur".into(),
+                val: val.into(),
+            });
+            app.set_status(format!("Backdrop blur set to {:?}", eff), now);
+        }
+        "opacity" => {
+            let clean = args.trim();
+            if let Ok(v) = clean.parse::<f32>() {
+                let op = if v > 1.0 { v / 100.0 } else { v }.clamp(0.2, 1.0);
+                app.opacity = op;
+                let _ = app.db_tx.send(DbMsg::SaveSetting {
+                    key: "opacity".into(),
+                    val: format!("{:.2}", op),
+                });
+                app.set_status(format!("Window opacity set to {:.0}%", op * 100.0), now);
+            } else {
+                app.set_status(format!("Current opacity: {:.0}% (:opacity 0.20 - 1.00)", app.opacity * 100.0), now);
+            }
+        }
+        "font" | "fonts" => {
+            let target = args.trim();
+            if target.is_empty() {
+                app.settings_open = true;
+                app.settings_just_opened = true;
+                app.active_setting_tab = crate::settings::SettingTab::Fonts;
+                app.set_status("Font preferences opened", now);
+            } else {
+                app.selected_font = target.to_string();
+                let _ = app.db_tx.send(DbMsg::SaveSetting {
+                    key: "selected_font".into(),
+                    val: target.to_string(),
+                });
+                app.set_status(format!("Editor font set to {}", target), now);
+            }
         }
         "live" | "inline" | "livepreview" => {
             app.inline_mode = true;

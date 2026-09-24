@@ -347,16 +347,16 @@ pub fn render_command_suggestions(
 
         if is_selected {
             let sel_bg = Color32::from_rgba_unmultiplied(
-                theme.accent.r(),
-                theme.accent.g(),
-                theme.accent.b(),
-                if theme.is_light() { 36 } else { 48 },
+                theme.muted.r(),
+                theme.muted.g(),
+                theme.muted.b(),
+                if theme.is_light() { 22 } else { 30 },
             );
             painter.rect(
                 row_rect,
                 4.0,
                 sel_bg,
-                Stroke::new(1.0, theme.accent),
+                Stroke::NONE,
                 egui::StrokeKind::Inside,
             );
         } else if is_hovered {

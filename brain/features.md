@@ -25,6 +25,54 @@ Press **`Ctrl + E`** to toggle between two distinct writing modes:
 
 ---
 
+## Zen Mode & Modular Interface Control
+
+Press **`Ctrl + .`** or type **`:zen`** to enter distraction-free Zen mode:
+- **Maximized Canvas**: Strictly hides the titlebar, tabs, sidebar, and right panes so only your active editor and bottom statusbar remain.
+- **Persistent State**: Zen mode is saved directly to your local SQLite database and faithfully remembered across app restarts.
+- **Independent Surface Commands**: Hide or show any individual surface at any time using `:titlebar`, `:sidebar`, `:tabs`, `:ai`, `:preview`, or `:settings`.
+
+---
+
+## Neovim-Style Welcome Dashboard
+
+Type **`:dashboard`** or **`:welcome`** (or launch MindForge with no open documents) to display the minimalist welcome page:
+- **ASCII Banner**: Centered MindForge typography header with document count and version statistics.
+- **Single-Key Hotkeys**: Press `[n]` for New Note, `[f]` for Find Note, `[t]` for Terminal, `[a]` for AI Assistant, `[d]` for Docs, `[s]` for Preferences, `[z]` for Zen Mode, or `[q]` to Quit.
+- **Recent Notes**: Directly launch any of your 5 most recent documents with `[1]` through `[5]`.
+
+---
+
+## Editor Typography & Font Customization
+
+Open Settings (`Ctrl + ,`) and select the **Fonts & Type** tab (or access it directly from the Carets panel):
+- **Curated Developer Typefaces**: Switch in real-time between `JetBrains Mono` (embedded default), `Iosevka`, `Victor Mono`, `Fira Code`, `Caskaydia Cove Nerd Font`, and `Berkeley Mono`.
+- **Zero-Install Fallback**: Embedded JetBrains Mono ensures a flawless coding experience out-of-the-box with zero operating system dependencies.
+- **System Detection**: Automatically detects and loads installed typefaces from `C:\Windows\Fonts` and local user font directories.
+- **Interactive Font Size Slider**: Granular font size adjustment from 12px to 28px with immediate live text updates.
+
+---
+
+## Window Backdrop Blur & Dragging Control
+
+- **Windows DWM Backdrop Blur**: Support for native hardware-accelerated Acrylic and Mica frosted-glass blur (`:blur`, `:acrylic`, `:mica`, `:noblur`).
+- **Adjustable Opacity**: Dial in your preferred window transparency with `:opacity <val>` (e.g. `:opacity 85` or `:set opacity 0.88`).
+- **Alt + Left-Click Drag Anywhere**: Move the borderless window instantly from any position on the canvas or background without hunting for a titlebar.
+- **Top 7px Edge Strip & Statusbar Drag**: Move the window even in borderless Zen mode.
+
+---
+
+## DeepSeek Pro AI Assistant
+
+Toggle with **`Ctrl + Shift + I`**, click the **`AI Agent`** badge in the statusbar, or type **`:ai`**:
+- **Context-Aware Pair Programming & Writing**: Chat with local and cloud models with active note context.
+- **Starter Prompt Suggestions**: Quick-start buttons to immediately analyze your notes without intrusive borders or heavy highlights.
+- **Unified Text Color**: Markdown headings, lists, code blocks, and tables in the AI pane use the same theme text color as your editor and preview.
+- **Quick Copy**: Click the copy icon on any response to copy markdown directly to your clipboard, confirmed with a clean green checkmark.
+- **Seamless Split**: Resizable side-by-side layout with a tactile divider knob enforcing a minimum 150px safety width.
+
+---
+
 ## Integrated Interactive Terminal
 
 Press **`Ctrl + J`** to toggle the built-in terminal dock at the bottom of the screen:

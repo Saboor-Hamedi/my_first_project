@@ -28,17 +28,41 @@ impl App {
             egui::StrokeKind::Inside,
         );
 
-        let layout = if self.zen_mode {
-            crate::layout::compute_zen_layout(bounds, self.sidebar_open, self.sidebar_width)
-        } else {
-            crate::layout::compute_app_layout(bounds, self.sidebar_open, self.sidebar_width)
-        };
+        // Apply Acrylic / Mica backdrop blur on first frame
+        if self.first_frame {
+            crate::blur::apply_window_blur(self.blur_effect);
+        }
+
+        // Full Control Window Dragging:
+        // 1. Alt + Left-Click Drag anywhere on the canvas (Linux / Blender / Neovim GUI convention)
+        if ui.input(|i| i.modifiers.alt && i.pointer.primary_down()) {
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
+        }
+
+        let is_titlebar_visible = self.show_titlebar;
+
+        // 2. Invisible top-edge grab strip (top 7px) whenever titlebar is hidden
+        if !is_titlebar_visible {
+            if let Some(pos) = ui.input(|i| i.pointer.interact_pos().or_else(|| i.pointer.hover_pos())) {
+                if pos.y <= bounds.min.y + 7.0 && ui.input(|i| i.pointer.primary_down()) {
+                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                }
+            }
+        }
+        let sidebar_visible = self.sidebar_open;
+        let layout = crate::layout::compute_modular_layout(
+            bounds,
+            sidebar_visible,
+            self.sidebar_width,
+            is_titlebar_visible,
+            true,
+        );
         let titlebar_rect = layout.titlebar_rect;
         let cmd_bar_rect = layout.cmd_bar_rect;
         let editor_panel_rect = layout.editor_panel_rect;
 
-        // Full-width modern Titlebar (hidden in Zen mode)
-        let (titlebar_action, accent_anchor_rect) = if !self.zen_mode {
+        // Full-width modern Titlebar (hidden if show_titlebar is false or in Zen mode)
+        let (titlebar_action, accent_anchor_rect) = if is_titlebar_visible {
             let (header_title, header_dirty) = match self.mode {
                 Mode::Doc => {
                     let doc_title = crate::docs::get_docs()

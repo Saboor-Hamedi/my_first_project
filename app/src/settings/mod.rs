@@ -5,6 +5,7 @@ pub mod backup;
 pub mod carets;
 pub mod editor_mode;
 pub mod keybindings_tab;
+pub mod setting_font;
 pub mod shortcuts;
 pub mod sounds;
 pub mod tabs;
@@ -43,6 +44,10 @@ pub fn render_setting_panel(
     deepseek_model: &mut String,
     keymap: &mut crate::vim::keymap::VimKeymap,
     keybind_capture: &mut Option<crate::vim::keymap::KeybindCapture>,
+    selected_font: &mut String,
+    font_size: &mut f32,
+    opacity: &mut f32,
+    blur_effect: &mut crate::blur::BlurEffect,
     on_save_setting: &mut dyn FnMut(&str, &str),
 ) -> Option<SettingPanelAction> {
     // Clip all painting strictly to the panel rect — nothing bleeds over modal border
@@ -52,7 +57,28 @@ pub fn render_setting_panel(
 
     match active_tab {
         SettingTab::Carets => {
-            carets::render_carets_tab(ui, painter, panel_rect, p_origin, caret, theme, on_save_setting);
+            carets::render_carets_tab(
+                ui,
+                painter,
+                panel_rect,
+                p_origin,
+                caret,
+                theme,
+                on_save_setting,
+            );
+            None
+        }
+        SettingTab::Fonts => {
+            setting_font::render_font_settings(
+                ui,
+                painter,
+                panel_rect,
+                p_origin,
+                selected_font,
+                font_size,
+                theme,
+                on_save_setting,
+            );
             None
         }
         SettingTab::EditorMode => {
@@ -64,7 +90,7 @@ pub fn render_setting_panel(
             None
         }
         SettingTab::Theme => {
-            theme::render_theme_tab(ui, painter, panel_rect, p_origin, theme, on_save_setting);
+            theme::render_theme_tab(ui, painter, panel_rect, p_origin, theme, opacity, blur_effect, on_save_setting);
             None
         }
         SettingTab::Shortcuts => {

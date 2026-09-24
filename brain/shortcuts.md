@@ -9,14 +9,41 @@ MindForge provides an extensive suite of intuitive, ergonomic keyboard shortcuts
 - **Ctrl + N**: Create a new blank note
 - **Ctrl + S**: Quick save active note to local SQLite database
 - **Ctrl + B**: Toggle notes sidebar open or closed
+- **Ctrl + .**: Toggle Zen Mode (distraction-free editor)
 - **Ctrl + P**: Open fast fuzzy search across all notes
 - **Ctrl + R**: Quick rename active note
 - **Ctrl + E**: Toggle Inline Live Markdown Mode vs Raw Monospace Editor
 - **Ctrl + J**: Toggle integrated interactive Terminal dock
 - **Ctrl + \\**: Toggle side-by-side Live Markdown Preview split
+- **Ctrl + Shift + I**: Toggle DeepSeek AI Assistant right pane
 - **Ctrl + ,**: Open Settings & Preferences modal
 - **Ctrl + Shift + D**: Safely delete active note (with confirmation modal)
 - **Esc**: Dismiss active modal, cancel key recording, or return to Normal mode
+
+---
+
+## Zen Mode & Modular Interface Commands
+
+MindForge gives you full control over every single piece of the interface. Hide or show any element on demand, and Zen mode is faithfully persisted across sessions:
+- **Ctrl + .** or `:zen`: Toggle Zen mode (strictly hides titlebar, tabs, sidebar, preview, and terminal for an uninterrupted focus canvas; preserved in SQLite)
+- `:titlebar` (or `:tb`, `:set titlebar` / `:set notitlebar`): Toggle the top window titlebar
+- `:sidebar` (or `:sb`, `:set sidebar` / `:set nosidebar`): Toggle notes sidebar
+- `:tabs` (or `:tabbar`, `:set tabs` / `:set notabs`): Toggle document tabs strip
+- `:ai` (or `:agent`, `:set ai` / `:set noai`): Toggle AI Assistant pane
+- `:preview` (or `:set preview` / `:set nopreview`): Toggle live Markdown preview
+- `:dashboard` (or `:welcome`): Toggle the Neovim-style ASCII dashboard
+- `:blur` (or `:acrylic`, `:mica`, `:noblur`): Toggle Windows DWM Acrylic/Mica backdrop blur
+- `:opacity <0.2-1.0>` (or `:set opacity <val>`): Set window opacity percentage
+- `:font <name>`: Switch editor typography to JetBrains Mono, Iosevka, Victor Mono, Fira Code, Caskaydia Cove, or Berkeley Mono
+- `:settings` (or `:pref`, `:set`): Open Preferences & Settings modal
+
+---
+
+## Window Navigation & Borderless Dragging
+
+- **Alt + Left-Click Drag Anywhere**: Move the borderless window instantly from any position on the canvas or background without needing a titlebar.
+- **Top-Edge Grab Strip (7px)**: Drag the window from the top boundary when the titlebar is hidden or in Zen mode.
+- **Statusbar Drag**: Grab and drag the window from any unoccupied area of the bottom dock.
 
 ---
 

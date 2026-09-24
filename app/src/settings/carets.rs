@@ -36,24 +36,25 @@ pub fn render_carets_tab(
     theme: &Theme,
     on_save_setting: &mut dyn FnMut(&str, &str),
 ) {
+    let available_w = (panel_rect.width() - 56.0).max(300.0);
+
     painter.text(
         p_origin,
         Align2::LEFT_TOP,
         "CARET CUSTOMIZATION",
-        FontId::proportional(15.0),
+        FontId::proportional(14.0),
         theme.highlight,
     );
     painter.text(
-        p_origin + vec2(0.0, 22.0),
+        p_origin + vec2(0.0, 20.0),
         Align2::LEFT_TOP,
         format!("Choose from {} animated styles & particle effects", CaretKind::ALL.len()),
-        FontId::proportional(12.0),
+        FontId::proportional(11.5),
         theme.muted,
     );
 
     // ── Expanded Chip Grid ────────────────────────────────────────────
-    let chip_start_y = p_origin.y + 54.0;
-    let available_w = (panel_rect.width() - 56.0).max(300.0);
+    let chip_start_y = p_origin.y + 46.0;
     let col_gap = 12.0;
     let row_gap = 10.0;
     let col_w = ((available_w - 3.0 * col_gap) / 4.0).floor().max(80.0);
@@ -77,12 +78,6 @@ pub fn render_carets_tab(
             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
         }
 
-        let bg = if hovered {
-            theme.surface().lerp_to_gamma(theme.accent, 0.05)
-        } else {
-            theme.surface()
-        };
-
         let stroke = if is_selected {
             Stroke::new(1.0, theme.accent)
         } else if hovered {
@@ -90,8 +85,13 @@ pub fn render_carets_tab(
         } else {
             Stroke::new(1.0, theme.border())
         };
-
-        painter.rect(chip_rect, 6.0, bg, stroke, egui::StrokeKind::Inside);
+        painter.rect(
+            chip_rect,
+            6.0,
+            theme.surface(),
+            stroke,
+            egui::StrokeKind::Inside,
+        );
 
         // Color indicator dot
         painter.circle_filled(
@@ -100,22 +100,16 @@ pub fn render_carets_tab(
             dot_color,
         );
 
-        // Label
+        // Label — highlighted in accent color only, never background
         painter.text(
             pos2(chip_rect.min.x + 14.0, chip_rect.center().y),
             Align2::LEFT_CENTER,
             kind.name(),
             FontId::proportional(12.5),
             if is_selected {
-                if theme.is_light() {
-                    Color32::from_rgb(
-                        (theme.accent.r() as f32 * 0.75) as u8,
-                        (theme.accent.g() as f32 * 0.75) as u8,
-                        (theme.accent.b() as f32 * 0.75) as u8,
-                    )
-                } else {
-                    theme.accent
-                }
+                theme.accent
+            } else if hovered {
+                theme.highlight
             } else {
                 theme.text
             },
@@ -134,12 +128,10 @@ pub fn render_carets_tab(
         pos2(p_origin.x, desc_y),
         vec2(available_w, 36.0),
     );
-    painter.rect(
+    painter.rect_filled(
         desc_rect,
         5.0,
         theme.surface(),
-        Stroke::new(1.0, theme.border()),
-        egui::StrokeKind::Inside,
     );
     painter.text(
         pos2(desc_rect.min.x + 14.0, desc_rect.center().y),

@@ -64,6 +64,9 @@ pub struct App {
     pub theme: Theme,
     pub sound: SoundEngine,
     pub font_size: f32,
+    pub selected_font: String,
+    pub blur_effect: crate::blur::BlurEffect,
+    pub show_welcome: bool,
     pub opacity: f32,
     pub last_char_time: f64,
     pub cell: Option<(f32, f32)>,
@@ -202,6 +205,10 @@ pub struct App {
 
     // Zen Mode (Ctrl+.)
     pub zen_mode: bool,
+
+    // Granular UI Surface Visibility (toggleable via commands & shortcuts)
+    pub show_titlebar: bool,
+    pub show_tabs: bool,
 }
 
 impl App {
@@ -229,6 +236,7 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _f: &mut eframe::Frame) {
         if self.first_frame {
             self.first_frame = false;
+            crate::blur::apply_window_blur(self.blur_effect);
             if let Some(cmd) = egui::ViewportCommand::center_on_screen(ctx) {
                 ctx.send_viewport_cmd(cmd);
             }

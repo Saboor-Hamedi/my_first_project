@@ -26,6 +26,8 @@ To begin writing right away:
 - Press **Ctrl + Shift + X** to toggle task checklists (`- [ ]` <-> `- [x]`).
 - Press **Ctrl + E** to switch between Inline Live Markdown rendering and Raw Monospace mode.
 - Press **Ctrl + J** to open the integrated interactive terminal dock.
+- Press **Ctrl + Shift + I** to open the DeepSeek AI Assistant right pane.
+- Press **Ctrl + .** to enter distraction-free Zen mode.
 - Press **Ctrl + B** to toggle the notes sidebar and explore your library.
 - Press **Ctrl + P** to quickly search across all your notes by title or content.
 - Press **Ctrl + ,** to configure themes, caret effects, mechanical keyboard audio, and keybindings.

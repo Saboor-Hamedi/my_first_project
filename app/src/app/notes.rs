@@ -79,6 +79,7 @@ impl App {
                 tab.scroll_y = 0.0;
                 tab.is_dirty = false;
             }
+            self.show_welcome = true;
             self.save_open_tabs();
             self.set_status("Cleared to new note", now);
             return;
@@ -316,5 +317,42 @@ impl App {
 
     pub fn update_search_results(&mut self) {
         update_search_results(self);
+    }
+
+    pub fn create_new_note(&mut self, now: f64) {
+        if self.is_dirty && self.mode == Mode::Normal {
+            self.quick_save_active_note(now);
+        }
+        if let Some(cur) = self.open_notes.get_mut(self.active_tab) {
+            cur.editor = self.ed.clone();
+            cur.title = self.active_note_title.clone();
+            cur.scroll_y = self.scroll_y;
+            cur.is_dirty = self.is_dirty;
+        }
+        self.active_note_id = None;
+        self.active_note_title = "Untitled Note".to_string();
+        self.ed.clear();
+        self.mode = Mode::Normal;
+        self.vim.set_mode(crate::vim::VimSubMode::Normal, &mut self.ed);
+        self.is_dirty = false;
+        self.scroll_y = 0.0;
+        self.open_notes.push(crate::app::OpenNote {
+            id: 0,
+            title: "Untitled Note".to_string(),
+            editor: self.ed.clone(),
+            scroll_y: 0.0,
+            is_dirty: false,
+        });
+        self.active_tab = self.open_notes.len() - 1;
+        self.save_open_tabs();
+        self.set_status("Created new note", now);
+    }
+
+    pub fn open_note_by_id(&mut self, id: i64, now: f64) {
+        if let Some(ref db) = self.db {
+            if let Ok(Some(note)) = db.get_note(id) {
+                self.load_note(note.id, note.topic, note.body, now);
+            }
+        }
     }
 }

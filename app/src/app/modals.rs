@@ -61,6 +61,7 @@ impl App {
                 });
             };
 
+            let prev_font = self.selected_font.clone();
             let p_action = render_setting_panel(
                 ui,
                 painter,
@@ -77,8 +78,16 @@ impl App {
                 &mut self.agent_state.deepseek_model,
                 &mut self.vim.keymap,
                 &mut self.keybind_capture,
+                &mut self.selected_font,
+                &mut self.font_size,
+                &mut self.opacity,
+                &mut self.blur_effect,
                 &mut on_save,
             );
+
+            if self.selected_font != prev_font {
+                self.cell = None;
+            }
 
             if let Some(act) = p_action {
                 match act {

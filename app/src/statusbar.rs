@@ -27,12 +27,12 @@ pub fn render_bottom_dock(
     let accent = theme.accent;
     let muted = theme.muted;
 
-    // Detached modern bottom dock card with uniform 5px radius and subtle 1px border derived from theme
+    // Seamless bottom dock matching the editor canvas (theme.bg, no border)
     painter.rect(
         dock_rect,
         5.0,
-        theme.surface(),
-        Stroke::new(1.0, theme.border()),
+        theme.bg,
+        Stroke::NONE,
         egui::StrokeKind::Inside,
     );
 
@@ -273,6 +273,12 @@ pub fn render_bottom_dock(
         stats_galley,
         theme.muted,
     );
+
+    // Empty-space statusbar drag: lets users grab and move the borderless window from the dock
+    let is_empty_dock_hovered = ui.rect_contains_pointer(dock_rect) && !is_ai_hovered && !is_knob_hovered && !in_command;
+    if is_empty_dock_hovered && ui.input(|i| i.pointer.primary_down()) {
+        ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
+    }
 
     toggle_ai
 }

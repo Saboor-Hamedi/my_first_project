@@ -33,11 +33,14 @@ pub mod terminal_pane;
 pub mod ui_components;
 pub mod zoom;
 pub mod agent;
+pub mod blur;
+pub mod font_manager;
+pub mod view_dashboard;
 
 pub use types::{snapshot, visual_line};
 
 use app::App;
-use eframe::egui::{self, FontData, FontDefinitions, FontFamily};
+use eframe::egui;
 
 fn main() -> eframe::Result<()> {
     let icon_bytes = include_bytes!("../assets/icon_64.rgba");
@@ -64,42 +67,9 @@ fn main() -> eframe::Result<()> {
         "mindforge",
         options,
         Box::new(|cc| {
-            setup_fonts(&cc.egui_ctx);
-            Ok(Box::new(App::new()))
+            let app = App::new();
+            font_manager::apply_font(&cc.egui_ctx, &app.selected_font);
+            Ok(Box::new(app))
         }),
     )
-}
-
-fn setup_fonts(ctx: &egui::Context) {
-    let mut fonts = FontDefinitions::default();
-    fonts.font_data.insert(
-        "mono".into(),
-        FontData::from_static(include_bytes!("../assets/JetBrainsMono-Regular.ttf")).into(),
-    );
-
-    #[cfg(target_os = "windows")]
-    {
-        if let Ok(emoji_bytes) = std::fs::read(r"C:\Windows\Fonts\seguiemj.ttf") {
-            fonts.font_data.insert(
-                "win_emoji".into(),
-                FontData::from_owned(emoji_bytes).into(),
-            );
-        }
-    }
-
-    let mono = fonts.families.get_mut(&FontFamily::Monospace).unwrap();
-    mono.insert(0, "mono".into());
-    #[cfg(target_os = "windows")]
-    if fonts.font_data.contains_key("win_emoji") {
-        mono.push("win_emoji".into());
-    }
-
-    let prop = fonts.families.get_mut(&FontFamily::Proportional).unwrap();
-    prop.insert(0, "mono".into());
-    #[cfg(target_os = "windows")]
-    if fonts.font_data.contains_key("win_emoji") {
-        prop.push("win_emoji".into());
-    }
-
-    ctx.set_fonts(fonts);
 }

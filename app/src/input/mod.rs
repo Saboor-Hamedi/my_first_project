@@ -76,5 +76,9 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
         }
     });
 
+    if typed {
+        app.show_welcome = false;
+    }
+
     typed
 }

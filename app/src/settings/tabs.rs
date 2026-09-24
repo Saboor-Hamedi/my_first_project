@@ -1,10 +1,11 @@
 //! Settings modal tab navigation.
 
-use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, Stroke};
+use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Pos2, Rect, Stroke};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingTab {
     Carets,
+    Fonts,
     EditorMode,
     Sounds,
     Theme,
@@ -16,8 +17,9 @@ pub enum SettingTab {
 }
 
 impl SettingTab {
-    pub const ALL: [SettingTab; 9] = [
+    pub const ALL: [SettingTab; 10] = [
         SettingTab::Carets,
+        SettingTab::Fonts,
         SettingTab::EditorMode,
         SettingTab::Sounds,
         SettingTab::Theme,
@@ -31,6 +33,7 @@ impl SettingTab {
     pub fn title(&self) -> &'static str {
         match self {
             SettingTab::Carets => "Carets",
+            SettingTab::Fonts => "Fonts & Type",
             SettingTab::EditorMode => "Editor Mode",
             SettingTab::Sounds => "Sounds",
             SettingTab::Theme => "Theme",
@@ -42,17 +45,84 @@ impl SettingTab {
         }
     }
 
-    pub fn icon(&self) -> &'static str {
+    pub fn draw_icon(&self, painter: &egui::Painter, center: Pos2, color: Color32) {
+        let stroke = Stroke::new(1.3, color);
         match self {
-            SettingTab::Carets => "✨",
-            SettingTab::EditorMode => "⚡",
-            SettingTab::Sounds => "🔔",
-            SettingTab::Theme => "🎨",
-            SettingTab::Shortcuts => "⌨",
-            SettingTab::Keybindings => "🔧",
-            SettingTab::Backup => "💾",
-            SettingTab::Updates => "🔄",
-            SettingTab::Ai => "◈",
+            SettingTab::Carets => {
+                // Sleek I-beam caret cursor
+                painter.line_segment([pos2(center.x - 3.5, center.y - 6.0), pos2(center.x + 3.5, center.y - 6.0)], stroke);
+                painter.line_segment([pos2(center.x, center.y - 6.0), pos2(center.x, center.y + 6.0)], stroke);
+                painter.line_segment([pos2(center.x - 3.5, center.y + 6.0), pos2(center.x + 3.5, center.y + 6.0)], stroke);
+            }
+            SettingTab::Fonts => {
+                // Typographic "Aa" glyph
+                painter.text(center, Align2::CENTER_CENTER, "Aa", FontId::monospace(13.0), color);
+            }
+            SettingTab::EditorMode => {
+                // Lightning bolt
+                let p1 = pos2(center.x + 1.0, center.y - 6.5);
+                let p2 = pos2(center.x - 4.0, center.y + 0.5);
+                let p3 = pos2(center.x + 0.0, center.y + 0.5);
+                let p4 = pos2(center.x - 1.0, center.y + 6.5);
+                let p5 = pos2(center.x + 4.0, center.y - 0.5);
+                let p6 = pos2(center.x - 0.0, center.y - 0.5);
+                painter.line_segment([p1, p2], stroke);
+                painter.line_segment([p2, p3], stroke);
+                painter.line_segment([p3, p4], stroke);
+                painter.line_segment([p4, p5], stroke);
+                painter.line_segment([p5, p6], stroke);
+                painter.line_segment([p6, p1], stroke);
+            }
+            SettingTab::Sounds => {
+                // Speaker icon
+                let spk = Rect::from_center_size(pos2(center.x - 3.0, center.y), vec2(4.0, 6.0));
+                painter.rect_stroke(spk, 1.0, stroke, egui::StrokeKind::Inside);
+                painter.line_segment([pos2(center.x - 1.0, center.y - 3.0), pos2(center.x + 3.0, center.y - 6.0)], stroke);
+                painter.line_segment([pos2(center.x + 3.0, center.y - 6.0), pos2(center.x + 3.0, center.y + 6.0)], stroke);
+                painter.line_segment([pos2(center.x + 3.0, center.y + 6.0), pos2(center.x - 1.0, center.y + 3.0)], stroke);
+            }
+            SettingTab::Theme => {
+                // Palette circle
+                painter.circle_stroke(center, 6.0, stroke);
+                painter.circle_filled(pos2(center.x - 2.5, center.y - 2.0), 1.3, color);
+                painter.circle_filled(pos2(center.x + 2.5, center.y - 2.0), 1.3, color);
+                painter.circle_filled(pos2(center.x, center.y + 2.5), 1.3, color);
+            }
+            SettingTab::Shortcuts => {
+                // Keyboard frame
+                let kb = Rect::from_center_size(center, vec2(15.0, 10.0));
+                painter.rect_stroke(kb, 2.0, stroke, egui::StrokeKind::Inside);
+                painter.circle_filled(pos2(center.x - 3.5, center.y - 1.5), 0.9, color);
+                painter.circle_filled(pos2(center.x, center.y - 1.5), 0.9, color);
+                painter.circle_filled(pos2(center.x + 3.5, center.y - 1.5), 0.9, color);
+                painter.line_segment([pos2(center.x - 3.5, center.y + 2.0), pos2(center.x + 3.5, center.y + 2.0)], stroke);
+            }
+            SettingTab::Keybindings => {
+                // Sliders icon
+                painter.line_segment([pos2(center.x - 6.0, center.y - 3.0), pos2(center.x + 6.0, center.y - 3.0)], stroke);
+                painter.circle_filled(pos2(center.x - 2.0, center.y - 3.0), 1.8, color);
+                painter.line_segment([pos2(center.x - 6.0, center.y + 3.0), pos2(center.x + 6.0, center.y + 3.0)], stroke);
+                painter.circle_filled(pos2(center.x + 2.0, center.y + 3.0), 1.8, color);
+            }
+            SettingTab::Backup => {
+                // Floppy disk icon
+                let dsk = Rect::from_center_size(center, vec2(12.0, 12.0));
+                painter.rect_stroke(dsk, 2.0, stroke, egui::StrokeKind::Inside);
+                let inner = Rect::from_min_size(pos2(center.x - 3.0, center.y - 5.0), vec2(6.0, 4.0));
+                painter.rect_filled(inner, 1.0, color);
+            }
+            SettingTab::Updates => {
+                // Sync arrows
+                painter.circle_stroke(center, 5.0, stroke);
+                painter.circle_filled(pos2(center.x + 4.0, center.y - 2.0), 1.4, color);
+            }
+            SettingTab::Ai => {
+                // Diamond spark ◈
+                painter.line_segment([pos2(center.x, center.y - 6.0), pos2(center.x + 5.0, center.y)], stroke);
+                painter.line_segment([pos2(center.x + 5.0, center.y), pos2(center.x, center.y + 6.0)], stroke);
+                painter.line_segment([pos2(center.x, center.y + 6.0), pos2(center.x - 5.0, center.y)], stroke);
+                painter.line_segment([pos2(center.x - 5.0, center.y), pos2(center.x, center.y - 6.0)], stroke);
+            }
         }
     }
 }
@@ -134,16 +204,11 @@ pub fn render_setting_tabs(
             (theme.muted, theme.muted)
         };
 
-        // Icon — clean glyph in accent color when selected (no boxes/badges)
-        painter.text(
-            pos2(item_rect.min.x + 16.0, item_rect.center().y - 1.0),
-            Align2::LEFT_CENTER,
-            tab.icon(),
-            FontId::proportional(15.0),
-            icon_color,
-        );
+        // Draw crisp vector icon (no emoji)
+        let icon_center = pos2(item_rect.min.x + 20.0, item_rect.center().y);
+        tab.draw_icon(painter, icon_center, icon_color);
 
-        // Label — slightly right of icon
+        // Label
         painter.text(
             pos2(item_rect.min.x + 38.0, item_rect.center().y),
             Align2::LEFT_CENTER,

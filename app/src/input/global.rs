@@ -509,9 +509,34 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
     if ctrl_dot {
         app.zen_mode = !app.zen_mode;
         if app.zen_mode {
+            app.show_titlebar = false;
+            app.show_tabs = false;
             app.sidebar_open = false;
             app.preview_open = false;
+        } else {
+            app.show_titlebar = true;
+            app.show_tabs = true;
         }
+        let _ = app.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+            key: "zen_mode".into(),
+            val: if app.zen_mode { "true" } else { "false" }.into(),
+        });
+        let _ = app.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+            key: "show_titlebar".into(),
+            val: if app.show_titlebar { "true" } else { "false" }.into(),
+        });
+        let _ = app.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+            key: "show_tabs".into(),
+            val: if app.show_tabs { "true" } else { "false" }.into(),
+        });
+        let _ = app.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+            key: "sidebar".into(),
+            val: if app.sidebar_open { "true" } else { "false" }.into(),
+        });
+        let _ = app.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+            key: "preview".into(),
+            val: if app.preview_open { "true" } else { "false" }.into(),
+        });
         let msg = if app.zen_mode {
             "Zen Mode ON (Ctrl+. to toggle)"
         } else {

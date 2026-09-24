@@ -34,6 +34,15 @@ Switch effortlessly between two viewing experiences:
 
 ---
 
+## Distraction-Free Zen Mode (`Ctrl + .`)
+
+Press **Ctrl + .** (or type `:zen`) to clear away window chrome (titlebar, tabs, sidebar, preview) and enter pure distraction-free focus:
+- Only your active editor canvas and the bottom status dock remain visible.
+- If you need the sidebar or AI assistant while in Zen mode, press **Ctrl + B** or **Ctrl + Shift + I** to reveal them instantly without leaving Zen mode.
+- Use command bar controls (`:titlebar`, `:sidebar`, `:tabs`, `:ai`, `:preview`) to customize exactly which surfaces you want to see.
+
+---
+
 ## Managing Your Notes Library
 
 The sidebar provides instant access to your notes:

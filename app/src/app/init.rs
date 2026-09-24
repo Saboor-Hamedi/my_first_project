@@ -41,10 +41,13 @@ impl App {
             theme: Theme::from_kind(ThemeKind::Green),
             sound: SoundEngine::new(SoundProfile::Thocky),
             font_size: 16.0,
+            selected_font: "JetBrains Mono".to_string(),
+            blur_effect: crate::blur::BlurEffect::Acrylic,
+            show_welcome: true,
             zoom: crate::zoom::ZoomState::new(),
             right_pane_tab: RightPaneTab::Preview,
             ai_focus_requested: false,
-            opacity: 1.0,
+            opacity: 0.88,
             last_char_time: -10.0,
             cell: None,
             visual_lines: vec![VisualLine { char_start: 0, char_end: 0 }],
@@ -140,6 +143,8 @@ impl App {
             clipboard_text: None,
             agent_state: crate::agent::AgentState::new(),
             zen_mode: false,
+            show_titlebar: true,
+            show_tabs: true,
         };
 
         app.load_settings();
@@ -179,6 +184,7 @@ impl App {
                     }
                     if !app.open_notes.is_empty() {
                         tabs_restored = true;
+                        app.show_welcome = false;
                         let saved_active = db.get_setting("open_note_active_tab")
                             .ok()
                             .flatten()
@@ -234,6 +240,9 @@ impl App {
                     });
                     app.active_tab = 0;
                     app.last_active_tab = 0;
+                    if !n.body.trim().is_empty() {
+                        app.show_welcome = false;
+                    }
                 } else {
                     app.open_notes.push(OpenNote {
                         id: 0,
@@ -244,6 +253,7 @@ impl App {
                     });
                     app.active_tab = 0;
                     app.last_active_tab = 0;
+                    app.show_welcome = true;
                 }
             }
 
@@ -315,6 +325,32 @@ impl App {
                 if let Ok(val) = op.parse::<f32>() {
                     self.opacity = val.clamp(0.2, 1.0);
                 }
+            }
+            if let Ok(Some(sf)) = db.get_setting("selected_font") {
+                self.selected_font = sf;
+            }
+            if let Ok(Some(bl)) = db.get_setting("blur") {
+                self.blur_effect = match bl.as_str() {
+                    "acrylic" => crate::blur::BlurEffect::Acrylic,
+                    "mica" => crate::blur::BlurEffect::Mica,
+                    "none" | "off" => crate::blur::BlurEffect::None,
+                    _ => crate::blur::BlurEffect::Acrylic,
+                };
+            }
+            if let Ok(Some(zen)) = db.get_setting("zen_mode") {
+                self.zen_mode = zen == "true" || zen == "on" || zen == "1";
+                if self.zen_mode {
+                    self.show_titlebar = false;
+                    self.show_tabs = false;
+                    self.sidebar_open = false;
+                    self.preview_open = false;
+                }
+            }
+            if let Ok(Some(tb)) = db.get_setting("show_titlebar") {
+                self.show_titlebar = tb == "true" || tb == "1" || tb == "on";
+            }
+            if let Ok(Some(tabs)) = db.get_setting("show_tabs") {
+                self.show_tabs = tabs == "true" || tabs == "1" || tabs == "on";
             }
             if let Ok(Some(f)) = db.get_setting("font") {
                 if let Ok(val) = f.parse::<f32>() {

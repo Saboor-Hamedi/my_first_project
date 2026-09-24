@@ -324,14 +324,8 @@ pub fn render_doc_sidebar(
 ) -> Option<DocSidebarAction> {
     let mut action = None;
 
-    // Floating panel background with subtle minimal border derived from theme
-    painter.rect(
-        rect,
-        5.0,
-        theme.sidebar_bg(),
-        Stroke::new(1.0, theme.border()),
-        egui::StrokeKind::Inside,
-    );
+    // Clean sidebar background without border or rounding, exactly matching sidebar.rs
+    painter.rect_filled(rect, 0.0, theme.sidebar_bg());
 
     let origin = rect.min + vec2(16.0, 18.0);
 
@@ -442,78 +436,72 @@ pub fn render_doc_sidebar(
         );
     }
 
-    // ── Footer Bar (matching sidebar/footer.rs) ─────────────────────────────
-    let icon_size = 30.0;
-    let pad = 14.0;
+    // ── Footer Bar: Exactly matching sidebar/footer.rs ──────────────────────
+    let btn_size = 30.0;
+    let bottom_y = rect.max.y - btn_size - 10.0;
 
-    // 1. Settings icon on bottom left
+    // 1. Settings icon button on bottom left (identical geometry & styling to footer.rs)
     let settings_rect = Rect::from_min_size(
-        pos2(rect.min.x + pad, rect.max.y - icon_size - pad),
-        vec2(icon_size, icon_size),
+        pos2(rect.min.x + 14.0, bottom_y),
+        vec2(btn_size, btn_size),
     );
-    let settings_resp = ui.allocate_rect(settings_rect, egui::Sense::click())
-        .on_hover_text("Settings (Ctrl+,)");
+    let settings_resp = ui.allocate_rect(settings_rect, egui::Sense::click());
     let settings_hovered = settings_resp.hovered() || ui.rect_contains_pointer(settings_rect);
 
-    if settings_hovered {
-        painter.circle_filled(
-            settings_rect.center(),
-            icon_size * 0.5,
-            Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 45),
-        );
-        painter.circle_stroke(
-            settings_rect.center(),
-            icon_size * 0.5,
-            Stroke::new(1.0, theme.accent),
-        );
-        if settings_resp.clicked() || ui.input(|i| i.pointer.primary_clicked()) {
-            action = Some(DocSidebarAction::OpenSettings);
+    let settings_bg = if settings_hovered {
+        if theme.is_light() {
+            Color32::from_rgba_unmultiplied(0, 0, 0, 14)
+        } else {
+            Color32::from_rgba_unmultiplied(255, 255, 255, 16)
         }
     } else {
-        painter.circle_filled(
-            settings_rect.center(),
-            icon_size * 0.5,
-            theme.surface(),
-        );
-        painter.circle_stroke(
-            settings_rect.center(),
-            icon_size * 0.5,
-            Stroke::new(1.0, theme.border()),
-        );
-    }
+        Color32::TRANSPARENT
+    };
+    let settings_stroke = if settings_hovered {
+        Stroke::new(1.0, theme.border())
+    } else {
+        Stroke::NONE
+    };
+    painter.rect(settings_rect, 6.0, settings_bg, settings_stroke, egui::StrokeKind::Inside);
+
     painter.text(
         settings_rect.center(),
         Align2::CENTER_CENTER,
         "⚙",
-        FontId::monospace(14.0),
-        if settings_hovered { theme.accent } else { Color32::from_gray(160) },
+        FontId::proportional(15.5),
+        if settings_hovered { theme.text } else { theme.muted },
     );
+    let settings_resp = settings_resp.on_hover_text("Settings (Ctrl+,)");
+    if settings_resp.clicked() || (settings_hovered && ui.input(|i| i.pointer.primary_clicked())) {
+        action = Some(DocSidebarAction::OpenSettings);
+    }
 
-    // 2. Return to Notes Editor button on bottom right
-    let btn_w = 96.0;
+    // 2. Return to Notes Editor button on bottom right (sleek, compact, borderless idle)
+    let back_btn_w = 76.0;
+    let back_btn_h = 30.0;
     let back_rect = Rect::from_min_size(
-        pos2(rect.max.x - btn_w - pad, rect.max.y - icon_size - pad),
-        vec2(btn_w, icon_size),
+        pos2(rect.max.x - back_btn_w - 14.0, bottom_y),
+        vec2(back_btn_w, back_btn_h),
     );
     let back_resp = ui.allocate_rect(back_rect, egui::Sense::click())
         .on_hover_text("Return to Notes (:editor)");
     let back_hovered = back_resp.hovered() || ui.rect_contains_pointer(back_rect);
 
-    if back_hovered {
-        painter.rect_filled(back_rect, 4.0, theme.surface());
-        painter.rect_stroke(back_rect, 4.0, Stroke::new(1.0, theme.accent), egui::StrokeKind::Inside);
-        if back_resp.clicked() || ui.input(|i| i.pointer.primary_clicked()) {
-            action = Some(DocSidebarAction::BackToEditor);
+    let back_bg = if back_hovered {
+        if theme.is_light() {
+            Color32::from_rgba_unmultiplied(0, 0, 0, 14)
+        } else {
+            Color32::from_rgba_unmultiplied(255, 255, 255, 16)
         }
     } else {
-        painter.rect(
-            back_rect,
-            4.0,
-            theme.surface(),
-            Stroke::new(1.0, theme.border()),
-            egui::StrokeKind::Inside,
-        );
-    }
+        Color32::TRANSPARENT
+    };
+    let back_stroke = if back_hovered {
+        Stroke::new(1.0, theme.border())
+    } else {
+        Stroke::NONE
+    };
+    painter.rect(back_rect, 6.0, back_bg, back_stroke, egui::StrokeKind::Inside);
 
     painter.text(
         back_rect.center(),
@@ -522,6 +510,10 @@ pub fn render_doc_sidebar(
         FontId::monospace(11.5),
         if back_hovered { theme.accent } else { theme.muted },
     );
+
+    if back_resp.clicked() || (back_hovered && ui.input(|i| i.pointer.primary_clicked())) {
+        action = Some(DocSidebarAction::BackToEditor);
+    }
 
     action
 }

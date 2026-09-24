@@ -22,21 +22,43 @@ pub struct AppLayout {
 
 /// Computes the exact window geometry ensuring a uniform 5px outer gap everywhere,
 /// identical top and bottom alignment between the sidebar and editor panel, and
-/// a centered resizable splitter knob.
-pub fn compute_app_layout(bounds: Rect, sidebar_open: bool, sidebar_w: f32) -> AppLayout {
-    let titlebar_rect = Rect::from_min_max(
-        pos2(bounds.min.x + GAP, bounds.min.y + GAP),
-        pos2(bounds.max.x - GAP, bounds.min.y + GAP + TITLEBAR_H),
-    );
+/// a centered resizable splitter knob. Supports modular hiding of titlebar and statusbar.
+pub fn compute_modular_layout(
+    bounds: Rect,
+    sidebar_open: bool,
+    sidebar_w: f32,
+    show_titlebar: bool,
+    show_statusbar: bool,
+) -> AppLayout {
+    let titlebar_rect = if show_titlebar {
+        Rect::from_min_max(
+            pos2(bounds.min.x + GAP, bounds.min.y + GAP),
+            pos2(bounds.max.x - GAP, bounds.min.y + GAP + TITLEBAR_H),
+        )
+    } else {
+        Rect::NOTHING
+    };
 
-    let cmd_bar_rect = Rect::from_min_max(
-        pos2(bounds.min.x + GAP, bounds.max.y - GAP - CMD_BAR_H),
-        pos2(bounds.max.x - GAP, bounds.max.y - GAP),
-    );
+    let cmd_bar_rect = if show_statusbar {
+        Rect::from_min_max(
+            pos2(bounds.min.x + GAP, bounds.max.y - GAP - CMD_BAR_H),
+            pos2(bounds.max.x - GAP, bounds.max.y - GAP),
+        )
+    } else {
+        Rect::NOTHING
+    };
 
-    // Sidebar and editor panel share the exact same vertical extent (top and bottom)
-    let panel_top = titlebar_rect.max.y + GAP;
-    let panel_bottom = cmd_bar_rect.min.y - GAP;
+    let panel_top = if show_titlebar {
+        titlebar_rect.max.y + GAP
+    } else {
+        bounds.min.y + GAP
+    };
+
+    let panel_bottom = if show_statusbar {
+        cmd_bar_rect.min.y - GAP
+    } else {
+        bounds.max.y - GAP
+    };
 
     if sidebar_open {
         let sw = sidebar_w.clamp(MIN_SIDEBAR_W, MAX_SIDEBAR_W);
@@ -78,55 +100,12 @@ pub fn compute_app_layout(bounds: Rect, sidebar_open: bool, sidebar_w: f32) -> A
     }
 }
 
-/// Computes the distraction-free Zen mode layout:
-/// Titlebar and tabs are omitted, maximizing the editor view while keeping the statusbar.
-/// Allows the sidebar to be opened/collapsed on demand.
-pub fn compute_zen_layout(bounds: Rect, sidebar_open: bool, sidebar_w: f32) -> AppLayout {
-    let cmd_bar_rect = Rect::from_min_max(
-        pos2(bounds.min.x + GAP, bounds.max.y - GAP - CMD_BAR_H),
-        pos2(bounds.max.x - GAP, bounds.max.y - GAP),
-    );
-    let panel_top = bounds.min.y + GAP;
-    let panel_bottom = cmd_bar_rect.min.y - GAP;
+pub fn compute_app_layout(bounds: Rect, sidebar_open: bool, sidebar_w: f32) -> AppLayout {
+    compute_modular_layout(bounds, sidebar_open, sidebar_w, true, true)
+}
 
-    if sidebar_open {
-        let sw = sidebar_w.clamp(MIN_SIDEBAR_W, MAX_SIDEBAR_W);
-        let sb_rect = Rect::from_min_max(
-            pos2(bounds.min.x + GAP, panel_top),
-            pos2(bounds.min.x + GAP + sw, panel_bottom),
-        );
-        let splitter_center_x = sb_rect.max.x + GAP + SPLITTER_BAR_W * 0.5;
-        let split_hit_rect = Rect::from_center_size(
-            pos2(splitter_center_x, (panel_top + panel_bottom) * 0.5),
-            vec2(14.0, (panel_bottom - panel_top).max(0.0)),
-        );
-        let ed_left = sb_rect.max.x + GAP + SPLITTER_BAR_W + GAP;
-        let ed_panel = Rect::from_min_max(
-            pos2(ed_left, panel_top),
-            pos2(bounds.max.x - GAP, panel_bottom),
-        );
-        AppLayout {
-            titlebar_rect: Rect::NOTHING,
-            cmd_bar_rect,
-            sidebar_rect: Some(sb_rect),
-            splitter_hit_rect: Some(split_hit_rect),
-            splitter_center_x: Some(splitter_center_x),
-            editor_panel_rect: ed_panel,
-        }
-    } else {
-        let ed_panel = Rect::from_min_max(
-            pos2(bounds.min.x + GAP, panel_top),
-            pos2(bounds.max.x - GAP, panel_bottom),
-        );
-        AppLayout {
-            titlebar_rect: Rect::NOTHING,
-            cmd_bar_rect,
-            sidebar_rect: None,
-            splitter_hit_rect: None,
-            splitter_center_x: None,
-            editor_panel_rect: ed_panel,
-        }
-    }
+pub fn compute_zen_layout(bounds: Rect, sidebar_open: bool, sidebar_w: f32) -> AppLayout {
+    compute_modular_layout(bounds, sidebar_open, sidebar_w, false, true)
 }
 
 #[cfg(test)]
