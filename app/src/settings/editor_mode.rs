@@ -2,7 +2,7 @@
 
 use crate::app::EditorInputMode;
 use crate::theme::Theme;
-use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Pos2, Rect, Stroke};
+use eframe::egui::{self, pos2, vec2, Align2, FontId, Pos2, Rect, Stroke};
 
 pub fn render_editor_mode_tab(
     ui: &egui::Ui,

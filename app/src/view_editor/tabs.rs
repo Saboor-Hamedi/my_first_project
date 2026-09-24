@@ -35,15 +35,6 @@ pub fn render_tab_bar(
 
     let mut action = None;
 
-    // Subtle bottom divider line separating tabs from editor/preview split
-    painter.line_segment(
-        [
-            pos2(tab_bar_rect.min.x, tab_bar_rect.max.y),
-            pos2(tab_bar_rect.max.x, tab_bar_rect.max.y),
-        ],
-        Stroke::new(1.0, theme.border()),
-    );
-
     let tab_gap = 6.0;
     let initial_pad = 6.0;
     let chip_margin_y = 4.0;

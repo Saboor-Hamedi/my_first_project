@@ -19,8 +19,7 @@ pub fn preview_heading_metrics(level: u8, base_font_size: f32) -> (FontId, f32) 
 /// Returns the heading text color resolving strictly to the active theme's palette.
 pub fn preview_heading_color(level: u8, theme: &Theme) -> Color32 {
     match level {
-        1 => theme.highlight,
-        2 => theme.accent,
+        1 | 2 => theme.accent,
         3 => theme.text,
         _ => theme.muted,
     }

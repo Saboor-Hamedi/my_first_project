@@ -104,8 +104,9 @@ pub fn render_ai_pane(
     let char_count = state.input_text.chars().count();
     let approx_wrap = (char_count / 38).max(1);
     let effective_lines = newline_count.max(approx_wrap);
-    let dynamic_box_h = ((effective_lines as f32 * 20.0) + 26.0).clamp(68.0, 170.0);
-    let input_area_h = dynamic_box_h + 20.0;
+    let dynamic_box_h = ((effective_lines as f32 * 20.0) + 26.0).clamp(60.0, 160.0);
+    let hint_h = 16.0;
+    let input_area_h = dynamic_box_h + hint_h + 20.0;
 
     // ── Chat Scroll Area (Balanced Symmetrical Margins) ──────────────────────
     let pad_left = 16.0f32;
@@ -193,7 +194,6 @@ pub fn render_ai_pane(
 
                         if is_user {
                             // User Message: aligned right with avatar on right side (bubble-then-avatar in reading order)
-                            let u_time_str = crate::agent::format_time_12h(&msg.timestamp);
                             let user_max_bubble_w = (avail_content_w - 38.0).max(60.0);
 
                             ui.horizontal(|ui| {
@@ -211,42 +211,33 @@ pub fn render_ai_pane(
 
                                     ui.add_space(8.0);
 
-                                    // 2. User bubble content to the left of avatar
-                                    ui.vertical(|ui| {
-                                        ui.set_max_width(user_max_bubble_w);
-
-                                        // Role and timestamp header (aligned right)
-                                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                            ui.label(
-                                                egui::RichText::new(&u_time_str)
-                                                    .font(FontId::monospace(font_size * 0.75))
-                                                    .color(Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 160)),
-                                            );
-                                            ui.add_space(6.0);
-                                            ui.label(
-                                                egui::RichText::new("You")
-                                                    .font(FontId::proportional(font_size * 0.92))
-                                                    .strong()
-                                                    .color(theme.text),
-                                            );
-                                        });
-
-                                        ui.add_space(3.0);
-                                        for line in msg.content.lines() {
-                                            if line.is_empty() {
-                                                ui.add_space(font_size * 0.4);
-                                                continue;
+                                    // 2. User bubble content (clean right-aligned bubble, no header text)
+                                    let bubble_bg = if theme.is_light() {
+                                        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 22)
+                                    } else {
+                                        Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 35)
+                                    };
+                                    egui::Frame::NONE
+                                        .fill(bubble_bg)
+                                        .corner_radius(10.0)
+                                        .inner_margin(egui::Margin::symmetric(10, 7))
+                                        .show(ui, |ui| {
+                                            ui.set_max_width(user_max_bubble_w);
+                                            for line in msg.content.lines() {
+                                                if line.is_empty() {
+                                                    ui.add_space(font_size * 0.4);
+                                                    continue;
+                                                }
+                                                let job = crate::view_editor::preview::build_inline_job(
+                                                    line,
+                                                    font_size,
+                                                    theme.text,
+                                                    theme,
+                                                    user_max_bubble_w - 20.0,
+                                                );
+                                                ui.add(egui::Label::new(job).selectable(true).wrap_mode(egui::TextWrapMode::Wrap));
                                             }
-                                            let job = crate::view_editor::preview::build_inline_job(
-                                                line,
-                                                font_size,
-                                                theme.text,
-                                                theme,
-                                                user_max_bubble_w,
-                                            );
-                                            ui.add(egui::Label::new(job).selectable(true).wrap_mode(egui::TextWrapMode::Wrap));
-                                        }
-                                    });
+                                        });
                                 });
                             });
                             ui.add_space(14.0);
@@ -257,7 +248,7 @@ pub fn render_ai_pane(
 
                             ui.horizontal(|ui| {
                                 ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
-                                    // 1. Assistant avatar on left (~25px diameter circle, no border)
+                                    // 1. Assistant avatar on left (~25px diameter circle with crisp vector sparkle, no border)
                                     let (avatar_rect, _) = ui.allocate_exact_size(vec2(25.0, 25.0), egui::Sense::hover());
                                     let avatar_bg = if theme.is_light() {
                                         theme.surface().lerp_to_gamma(theme.accent, 0.16)
@@ -265,121 +256,102 @@ pub fn render_ai_pane(
                                         Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 36)
                                     };
                                     ui.painter().circle_filled(avatar_rect.center(), 12.5, avatar_bg);
-                                    ui.painter().text(
-                                        avatar_rect.center(),
-                                        Align2::CENTER_CENTER,
-                                        "✦",
-                                        FontId::proportional(11.0),
-                                        theme.accent,
-                                    );
+                                    draw_ai_sparkle_icon(ui.painter(), avatar_rect.center(), 5.5, theme.accent);
 
                                     ui.add_space(8.0);
 
-                                    // 2. Assistant bubble content to the right of avatar
+                                    // 2. Assistant bubble content to the right of avatar (no "Assistant 4:50 PM" header)
                                     ui.vertical(|ui| {
                                         ui.set_max_width(asst_max_bubble_w);
 
-                                        // Role and timestamp header
-                                        ui.horizontal(|ui| {
-                                            ui.label(
-                                                egui::RichText::new("Assistant")
-                                                    .font(FontId::proportional(font_size * 0.92))
-                                                    .strong()
-                                                    .color(theme.highlight),
-                                            );
-                                            ui.add_space(6.0);
-                                            ui.label(
-                                                egui::RichText::new(&resp_time_str)
-                                                    .font(FontId::monospace(font_size * 0.75))
-                                                    .color(Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 160)),
-                                            );
-                                        });
-
-                                        ui.add_space(4.0);
                                         render_chat_markdown(ui, &msg.content, theme, msg_idx, font_size, asst_max_bubble_w);
 
-                                        ui.add_space(6.0);
-                                        // Response action footer: 12-hour time, Like, Dislike, Copy Response
+                                        ui.add_space(5.0);
+
+                                        // Response action footer: Time on left, (Copy, Dislike, Like) on right, shown on hover
                                         let is_liked = msg.feedback == Some(true);
                                         let is_disliked = msg.feedback == Some(false);
+                                        let has_feedback = is_liked || is_disliked;
 
                                         ui.horizontal(|ui| {
-                                            ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
+                                            ui.set_width(asst_max_bubble_w);
 
-                                            // Thumbs up (Like)
-                                            let (like_rect, like_resp) = ui.allocate_exact_size(vec2(22.0, 20.0), egui::Sense::click());
-                                            if like_resp.hovered() {
-                                                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-                                            }
-                                            if like_resp.clicked() {
-                                                feedback_action = Some((msg_idx, if is_liked { None } else { Some(true) }));
-                                            }
-                                            render_thumbs_up_icon(ui.painter(), like_rect, is_liked, like_resp.hovered(), theme);
-
-                                            // Thumbs down (Dislike)
-                                            let (dislike_rect, dislike_resp) = ui.allocate_exact_size(vec2(22.0, 20.0), egui::Sense::click());
-                                            if dislike_resp.hovered() {
-                                                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-                                            }
-                                            if dislike_resp.clicked() {
-                                                feedback_action = Some((msg_idx, if is_disliked { None } else { Some(false) }));
-                                            }
-                                            render_thumbs_down_icon(ui.painter(), dislike_rect, is_disliked, dislike_resp.hovered(), theme);
-
-                                            ui.add_space(4.0);
-
-                                            // Copy response button
-                                            let copy_id = egui::Id::new("ai_copy_msg").with(msg_idx);
-                                            let current_time = ui.input(|i| i.time);
-                                            let last_copied: Option<f64> = ui.data(|d| d.get_temp(copy_id));
-                                            let is_copied = last_copied.map_or(false, |t| current_time - t < 1.8);
-
-                                            let copy_text = if is_copied { "✓ Copied" } else { "Copy" };
-                                            let (btn_rect, btn_resp) = ui.allocate_exact_size(vec2(48.0, 18.0), egui::Sense::click());
-                                            if btn_resp.hovered() {
-                                                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-                                            }
-                                            if btn_resp.clicked() {
-                                                crate::input::global::set_win32_clipboard(&msg.content);
-                                                ui.data_mut(|d| d.insert_temp(copy_id, current_time));
-                                                ui.ctx().request_repaint();
-                                            }
-                                            if is_copied {
-                                                let elapsed = current_time - last_copied.unwrap();
-                                                let rem = 1.8 - elapsed;
-                                                if rem > 0.0 {
-                                                    ui.ctx().request_repaint_after(std::time::Duration::from_millis((rem * 1000.0) as u64 + 20));
-                                                }
-                                            }
-
-                                            let btn_bg = if is_copied {
-                                                Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 40)
-                                            } else if btn_resp.hovered() {
-                                                Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 30)
-                                            } else {
-                                                Color32::TRANSPARENT
-                                            };
-                                            let btn_stroke = if is_copied || btn_resp.hovered() {
-                                                Stroke::new(1.0, theme.accent)
-                                            } else {
-                                                Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 45))
-                                            };
-                                            let btn_text_color = if is_copied {
-                                                theme.accent
-                                            } else if btn_resp.hovered() {
-                                                theme.text
-                                            } else {
-                                                theme.muted
-                                            };
-
-                                            ui.painter().rect(btn_rect, 3.0, btn_bg, btn_stroke, egui::StrokeKind::Inside);
-                                            ui.painter().text(
-                                                btn_rect.center(),
-                                                Align2::CENTER_CENTER,
-                                                copy_text,
-                                                FontId::proportional(9.5),
-                                                btn_text_color,
+                                            // Time appears under the response on the left
+                                            ui.label(
+                                                egui::RichText::new(&resp_time_str)
+                                                    .font(FontId::monospace(font_size * 0.74))
+                                                    .color(Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 140)),
                                             );
+
+                                            // Action buttons on the right, visible on hover or if feedback active
+                                            let is_hovered = ui.rect_contains_pointer(ui.max_rect()) || ui.rect_contains_pointer(avatar_rect);
+                                            if is_hovered || has_feedback {
+                                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                    ui.spacing_mut().item_spacing = vec2(4.0, 0.0);
+
+                                                    // 1. Copy response button (no border!)
+                                                    let copy_id = egui::Id::new("ai_copy_msg").with(msg_idx);
+                                                    let current_time = ui.input(|i| i.time);
+                                                    let last_copied: Option<f64> = ui.data(|d| d.get_temp(copy_id));
+                                                    let is_copied = last_copied.map_or(false, |t| current_time - t < 1.8);
+
+                                                    let copy_text = if is_copied { "✓ Copied" } else { "Copy" };
+                                                    let (btn_rect, btn_resp) = ui.allocate_exact_size(vec2(44.0, 18.0), egui::Sense::click());
+                                                    if btn_resp.hovered() {
+                                                        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                                                    }
+                                                    if btn_resp.clicked() {
+                                                        crate::input::global::set_win32_clipboard(&msg.content);
+                                                        ui.data_mut(|d| d.insert_temp(copy_id, current_time));
+                                                        ui.ctx().request_repaint();
+                                                    }
+                                                    if is_copied {
+                                                        let elapsed = current_time - last_copied.unwrap();
+                                                        let rem = 1.8 - elapsed;
+                                                        if rem > 0.0 {
+                                                            ui.ctx().request_repaint_after(std::time::Duration::from_millis((rem * 1000.0) as u64 + 20));
+                                                        }
+                                                    }
+
+                                                    if btn_resp.hovered() || is_copied {
+                                                        let hover_bg = if is_copied {
+                                                            Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 35)
+                                                        } else {
+                                                            Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 25)
+                                                        };
+                                                        ui.painter().rect_filled(btn_rect, 3.0, hover_bg);
+                                                    }
+                                                    ui.painter().text(
+                                                        btn_rect.center(),
+                                                        Align2::CENTER_CENTER,
+                                                        copy_text,
+                                                        FontId::proportional(9.5),
+                                                        if is_copied { theme.accent } else if btn_resp.hovered() { theme.text } else { theme.muted },
+                                                    );
+
+                                                    ui.add_space(4.0);
+
+                                                    // 2. Thumbs down (Dislike)
+                                                    let (dislike_rect, dislike_resp) = ui.allocate_exact_size(vec2(20.0, 18.0), egui::Sense::click());
+                                                    if dislike_resp.hovered() {
+                                                        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                                                    }
+                                                    if dislike_resp.clicked() {
+                                                        feedback_action = Some((msg_idx, if is_disliked { None } else { Some(false) }));
+                                                    }
+                                                    render_thumbs_down_icon(ui.painter(), dislike_rect, is_disliked, dislike_resp.hovered(), theme);
+
+                                                    // 3. Thumbs up (Like)
+                                                    let (like_rect, like_resp) = ui.allocate_exact_size(vec2(20.0, 18.0), egui::Sense::click());
+                                                    if like_resp.hovered() {
+                                                        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                                                    }
+                                                    if like_resp.clicked() {
+                                                        feedback_action = Some((msg_idx, if is_liked { None } else { Some(true) }));
+                                                    }
+                                                    render_thumbs_up_icon(ui.painter(), like_rect, is_liked, like_resp.hovered(), theme);
+                                                });
+                                            }
                                         });
                                     });
                                 });
@@ -405,13 +377,7 @@ pub fn render_ai_pane(
                                     Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 36)
                                 };
                                 ui.painter().circle_filled(avatar_rect.center(), 12.5, avatar_bg);
-                                ui.painter().text(
-                                    avatar_rect.center(),
-                                    Align2::CENTER_CENTER,
-                                    "✦",
-                                    FontId::proportional(11.0),
-                                    theme.accent,
-                                );
+                                draw_ai_sparkle_icon(ui.painter(), avatar_rect.center(), 5.5, theme.accent);
                                 ui.add_space(8.0);
                                 let t = ui.input(|i| i.time);
                                 let dots = match ((t * 3.5) as u32) % 4 {
@@ -445,16 +411,17 @@ pub fn render_ai_pane(
     );
 
     // ── Bottom Input Row (Aligned with balanced margins) ──────────────────────
+    let hint_h = 16.0;
     let send_btn_w = 36.0;
     let send_btn_h = 36.0;
     let send_btn_rect = Rect::from_min_size(
-        pos2(rect.max.x - send_btn_w - 12.0, rect.max.y - 10.0 - send_btn_h),
+        pos2(rect.max.x - send_btn_w - 12.0, rect.max.y - hint_h - 8.0 - send_btn_h),
         vec2(send_btn_w, send_btn_h),
     );
 
     let input_box_rect = Rect::from_min_max(
-        pos2(rect.min.x + pad_left, input_top_y + 10.0),
-        pos2(send_btn_rect.min.x - 8.0, rect.max.y - 10.0),
+        pos2(rect.min.x + pad_left, input_top_y + 8.0),
+        pos2(send_btn_rect.min.x - 8.0, rect.max.y - hint_h - 8.0),
     );
 
     // Custom themed container for TextEdit
@@ -530,13 +497,13 @@ pub fn render_ai_pane(
         },
     );
 
-    // Small persistent keyboard shortcut hint under textarea
+    // Small persistent keyboard shortcut hint UNDER the textarea
     painter.text(
-        pos2(input_box_rect.min.x + 2.0, rect.max.y - 2.0),
+        pos2(input_box_rect.min.x + 2.0, rect.max.y - 4.0),
         Align2::LEFT_BOTTOM,
         "Enter to send  ·  Shift+Enter for newline",
-        FontId::proportional(9.5),
-        theme.muted,
+        FontId::proportional(9.2),
+        Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 160),
     );
 
     if request_focus {
@@ -1211,4 +1178,19 @@ fn render_thumbs_down_icon(painter: &egui::Painter, rect: Rect, active: bool, ho
     painter.line_segment([p_hand_bottom, p_thumb_joint], stroke);
     painter.line_segment([p_thumb_joint, p_thumb_tip], stroke);
     painter.line_segment([p_thumb_tip, p_thumb_base], stroke);
+}
+
+fn draw_ai_sparkle_icon(painter: &egui::Painter, center: egui::Pos2, r: f32, color: Color32) {
+    let ir = r * 0.28;
+    let points = vec![
+        pos2(center.x, center.y - r),
+        pos2(center.x + ir, center.y - ir),
+        pos2(center.x + r, center.y),
+        pos2(center.x + ir, center.y + ir),
+        pos2(center.x, center.y + r),
+        pos2(center.x - ir, center.y + ir),
+        pos2(center.x - r, center.y),
+        pos2(center.x - ir, center.y - ir),
+    ];
+    painter.add(egui::epaint::PathShape::convex_polygon(points, color, Stroke::NONE));
 }

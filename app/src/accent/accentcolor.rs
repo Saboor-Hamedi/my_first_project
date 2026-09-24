@@ -22,12 +22,10 @@ impl AccentOverrides {
     pub fn apply(&self, theme: &mut Theme) {
         if let Some(c) = self.accent {
             theme.accent = c;
+            theme.highlight = c; // Accent color updates all tabs, notes, titles, and highlights
         }
         if let Some(c) = self.text {
             theme.text = c;
-        }
-        if let Some(c) = self.highlight {
-            theme.highlight = c;
         }
     }
 
@@ -108,7 +106,7 @@ pub fn render_accent_dropdown(
     let mut action = None;
 
     let dropdown_w = 320.0;
-    let dropdown_h = 400.0;
+    let dropdown_h = 296.0;
     let min_x = (anchor_rect.max.x - dropdown_w).max(8.0);
     let min_y = anchor_rect.max.y + 4.0;
     let dropdown_rect = Rect::from_min_size(pos2(min_x, min_y), vec2(dropdown_w, dropdown_h));
@@ -176,7 +174,7 @@ pub fn render_accent_dropdown(
     painter.text(
         pos2(header_rect.min.x + 14.0, header_rect.min.y + 30.0),
         Align2::LEFT_CENTER,
-        "accent, text, and selection colors",
+        "accent and editor text colors",
         FontId::monospace(10.0),
         theme.muted.gamma_multiply(open_t),
     );
@@ -217,7 +215,6 @@ pub fn render_accent_dropdown(
     for (label, slot, default_color) in [
         ("Accent Color", &mut overrides.accent, default_theme.accent),
         ("Text Color", &mut overrides.text, default_theme.text),
-        ("Selected / Hover", &mut overrides.highlight, default_theme.highlight),
     ] {
         let rect = Rect::from_min_size(pos2(inner_rect.min.x, cur_y), vec2(inner_rect.width(), section_h));
         render_color_section(ui, painter, rect, label, slot, default_color, theme, &mut changed);

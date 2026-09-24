@@ -336,18 +336,6 @@ pub fn render_editor_body(
                 }
             }
         }
-
-        // Ultra-subtle, elegant vertical hairline separating gutter from text canvas
-        let sep_color = Color32::from_rgba_unmultiplied(
-            theme.border().r(),
-            theme.border().g(),
-            theme.border().b(),
-            if theme.is_light() { 55 } else { 40 },
-        );
-        painter.line_segment(
-            [pos2(gutter_rect.max.x + 3.0, editor_rect.min.y), pos2(gutter_rect.max.x + 3.0, editor_rect.max.y)],
-            Stroke::new(1.0, sep_color),
-        );
     }
 
     // Scrollbar thumb is kept invisible per UI design (mouse wheel and keyboard scrolling remain active).

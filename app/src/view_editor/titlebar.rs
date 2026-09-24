@@ -45,7 +45,7 @@ pub fn render_full_titlebar(
         Align2::LEFT_CENTER,
         "MINDFORGE",
         FontId::monospace(12.5),
-        theme.highlight,
+        theme.accent,
     );
 
     // 4. Subtle separator derived from theme

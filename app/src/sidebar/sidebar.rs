@@ -15,7 +15,7 @@ pub use footer::render_sidebar_footer;
 pub use header::render_sidebar_header;
 
 use core::Note;
-use eframe::egui::{self, vec2, Rect, Stroke};
+use eframe::egui::{self, vec2, Rect};
 
 pub enum SidebarAction {
     SwitchMode(usize),
@@ -42,14 +42,8 @@ pub fn render_sidebar(
 ) -> Option<SidebarAction> {
     let sidebar_w = sb_rect.width();
 
-    // Floating panel background with subtle minimal border derived from theme
-    painter.rect(
-        sb_rect,
-        5.0,
-        theme.sidebar_bg(),
-        Stroke::new(1.0, theme.border()),
-        egui::StrokeKind::Inside,
-    );
+    // Clean sidebar background without border or rounding
+    painter.rect_filled(sb_rect, 0.0, theme.sidebar_bg());
 
     let sb_origin = sb_rect.min + vec2(16.0, 18.0);
 
