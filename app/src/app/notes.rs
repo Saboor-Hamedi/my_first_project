@@ -2,7 +2,6 @@
 
 use super::{App, OpenNote};
 use crate::db_worker::DbMsg;
-use crate::editor::Editor;
 use crate::mode::Mode;
 use crate::notes::{delete_active_note, quick_save_active_note, rename_active_note, update_search_results};
 use chrono::Local;
@@ -62,26 +61,27 @@ impl App {
     }
 
     pub fn close_tab(&mut self, idx: usize, now: f64) {
+        if self.open_notes.is_empty() {
+            self.show_welcome = true;
+            return;
+        }
+
         if self.open_notes.len() <= 1 {
-            // Last tab: clear to Untitled Note
+            // Last tab closed: clear all open tabs and reveal the Welcome Dashboard
+            self.open_notes.clear();
             self.active_note_id = None;
             self.save_active_note_id();
-            self.active_note_title = "Untitled Note".to_string();
+            self.active_note_title.clear();
             self.ed.clear();
             self.mode = Mode::Normal;
             self.vim.set_mode(crate::vim::VimSubMode::Normal, &mut self.ed);
             self.is_dirty = false;
             self.scroll_y = 0.0;
-            if let Some(tab) = self.open_notes.get_mut(0) {
-                tab.id = 0;
-                tab.title = "Untitled Note".to_string();
-                tab.editor = Editor::new();
-                tab.scroll_y = 0.0;
-                tab.is_dirty = false;
-            }
-            self.show_welcome = false;
+            self.active_tab = 0;
+            self.last_active_tab = 0;
+            self.show_welcome = true;
             self.save_open_tabs();
-            self.set_status("Cleared to new note", now);
+            self.set_status("All tabs closed — Welcome to MindForge", now);
             return;
         }
 
@@ -138,6 +138,7 @@ impl App {
     }
 
     pub fn load_note(&mut self, id: i64, topic: String, body: String, now: f64) {
+        self.show_welcome = false;
         self.sync_active_tab();
 
         // 1. Check if note is already open in an existing tab
@@ -323,12 +324,15 @@ impl App {
         if self.is_dirty && self.mode == Mode::Normal {
             self.quick_save_active_note(now);
         }
-        if let Some(cur) = self.open_notes.get_mut(self.active_tab) {
-            cur.editor = self.ed.clone();
-            cur.title = self.active_note_title.clone();
-            cur.scroll_y = self.scroll_y;
-            cur.is_dirty = self.is_dirty;
+        if !self.open_notes.is_empty() {
+            if let Some(cur) = self.open_notes.get_mut(self.active_tab) {
+                cur.editor = self.ed.clone();
+                cur.title = self.active_note_title.clone();
+                cur.scroll_y = self.scroll_y;
+                cur.is_dirty = self.is_dirty;
+            }
         }
+        self.show_welcome = false;
         self.active_note_id = None;
         self.active_note_title = "Untitled Note".to_string();
         self.ed.clear();
@@ -344,6 +348,7 @@ impl App {
             is_dirty: false,
         });
         self.active_tab = self.open_notes.len() - 1;
+        self.last_active_tab = self.active_tab;
         self.save_open_tabs();
         self.set_status("Created new note", now);
     }
@@ -354,5 +359,68 @@ impl App {
                 self.load_note(note.id, note.topic, note.body, now);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_close_last_tab_reveals_welcome_dashboard() {
+        let mut app = App::new();
+        // Ensure starting with 1 tab
+        app.open_notes.clear();
+        app.create_new_note(1.0);
+        assert_eq!(app.open_notes.len(), 1);
+        assert!(!app.show_welcome);
+
+        // Closing the only/last tab
+        app.close_tab(0, 2.0);
+        assert!(app.open_notes.is_empty(), "open_notes must be empty when last tab is closed");
+        assert!(app.show_welcome, "show_welcome must be true when all tabs are closed");
+        assert_eq!(app.active_note_id, None);
+        assert!(app.active_note_title.is_empty());
+    }
+
+    #[test]
+    fn test_create_new_note_clears_show_welcome() {
+        let mut app = App::new();
+        app.open_notes.clear();
+        app.show_welcome = true;
+
+        app.create_new_note(1.0);
+        assert_eq!(app.open_notes.len(), 1);
+        assert!(!app.show_welcome, "Creating a note must dismiss welcome dashboard");
+        assert_eq!(app.active_note_title, "Untitled Note");
+    }
+
+    #[test]
+    fn test_load_note_clears_show_welcome() {
+        let mut app = App::new();
+        app.open_notes.clear();
+        app.show_welcome = true;
+
+        app.load_note(999, "Obsidian Import".to_string(), "# Hello".to_string(), 1.0);
+        assert_eq!(app.open_notes.len(), 1);
+        assert!(!app.show_welcome, "Loading a note must dismiss welcome dashboard");
+        assert_eq!(app.active_note_id, Some(999));
+        assert_eq!(app.active_note_title, "Obsidian Import");
+    }
+
+    #[test]
+    fn test_closing_one_of_multiple_tabs_keeps_remaining() {
+        let mut app = App::new();
+        app.open_notes.clear();
+        app.create_new_note(1.0);
+        app.create_new_note(2.0);
+        assert_eq!(app.open_notes.len(), 2);
+        assert!(!app.show_welcome);
+
+        // Close active tab (tab 1)
+        app.close_tab(1, 3.0);
+        assert_eq!(app.open_notes.len(), 1);
+        assert!(!app.show_welcome);
+        assert_eq!(app.active_tab, 0);
     }
 }

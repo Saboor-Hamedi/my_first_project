@@ -31,6 +31,7 @@ pub fn render_welcome_dashboard(
     rect: Rect,
     theme: &Theme,
     total_notes: usize,
+    modals_open: bool,
 ) -> Option<DashboardAction> {
     if rect.width() < 120.0 || rect.height() < 80.0 {
         return None;
@@ -44,28 +45,30 @@ pub fn render_welcome_dashboard(
     let center = rect.center();
 
     // ── 1. Keyboard shortcuts dispatch for dashboard ────────────────────────
-    ui.input(|i| {
-        if i.key_pressed(Key::N) && !i.modifiers.ctrl && !i.modifiers.alt {
-            action = Some(DashboardAction::NewNote);
-        } else if i.key_pressed(Key::F) && !i.modifiers.ctrl && !i.modifiers.alt {
-            action = Some(DashboardAction::FindNote);
-        } else if i.key_pressed(Key::T) && !i.modifiers.ctrl && !i.modifiers.alt {
-            action = Some(DashboardAction::OpenTerminal);
-        } else if i.key_pressed(Key::A) && !i.modifiers.ctrl && !i.modifiers.alt {
-            action = Some(DashboardAction::OpenAi);
-        } else if i.key_pressed(Key::D) && !i.modifiers.ctrl && !i.modifiers.alt {
-            action = Some(DashboardAction::OpenDocs);
-        } else if i.key_pressed(Key::S) && !i.modifiers.ctrl && !i.modifiers.alt {
-            action = Some(DashboardAction::OpenSettings);
-        } else if i.key_pressed(Key::Z) && !i.modifiers.ctrl && !i.modifiers.alt {
-            action = Some(DashboardAction::ToggleZen);
-        } else if i.key_pressed(Key::Q) && !i.modifiers.ctrl && !i.modifiers.alt {
-            action = Some(DashboardAction::Quit);
-        }
-    });
+    if !modals_open {
+        ui.input(|i| {
+            if i.key_pressed(Key::N) && !i.modifiers.ctrl && !i.modifiers.alt {
+                action = Some(DashboardAction::NewNote);
+            } else if i.key_pressed(Key::F) && !i.modifiers.ctrl && !i.modifiers.alt {
+                action = Some(DashboardAction::FindNote);
+            } else if i.key_pressed(Key::T) && !i.modifiers.ctrl && !i.modifiers.alt {
+                action = Some(DashboardAction::OpenTerminal);
+            } else if i.key_pressed(Key::A) && !i.modifiers.ctrl && !i.modifiers.alt {
+                action = Some(DashboardAction::OpenAi);
+            } else if i.key_pressed(Key::D) && !i.modifiers.ctrl && !i.modifiers.alt {
+                action = Some(DashboardAction::OpenDocs);
+            } else if i.key_pressed(Key::S) && !i.modifiers.ctrl && !i.modifiers.alt {
+                action = Some(DashboardAction::OpenSettings);
+            } else if i.key_pressed(Key::Z) && !i.modifiers.ctrl && !i.modifiers.alt {
+                action = Some(DashboardAction::ToggleZen);
+            } else if i.key_pressed(Key::Q) && !i.modifiers.ctrl && !i.modifiers.alt {
+                action = Some(DashboardAction::Quit);
+            }
+        });
 
-    if action.is_some() {
-        return action;
+        if action.is_some() {
+            return action;
+        }
     }
 
     let use_ascii = rect.width() >= 520.0 && rect.height() >= 440.0;
@@ -162,7 +165,7 @@ pub fn render_welcome_dashboard(
         let resp = ui.allocate_rect(btn_rect, egui::Sense::click());
         let hovered = resp.hovered() || ui.rect_contains_pointer(btn_rect);
 
-        if hovered {
+        if !modals_open && hovered {
             ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
         }
 
@@ -172,7 +175,7 @@ pub fn render_welcome_dashboard(
             Align2::LEFT_CENTER,
             format!("[{}]", key),
             FontId::monospace(12.0),
-            if hovered { theme.highlight } else { theme.accent },
+            if hovered && !modals_open { theme.highlight } else { theme.accent },
         );
 
         // Action label
@@ -181,7 +184,7 @@ pub fn render_welcome_dashboard(
             Align2::LEFT_CENTER,
             *label,
             FontId::monospace(12.0),
-            if hovered { theme.text } else { theme.muted },
+            if hovered && !modals_open { theme.text } else { theme.muted },
         );
 
         // Shortcut hint (hidden if too narrow)
@@ -195,9 +198,21 @@ pub fn render_welcome_dashboard(
             );
         }
 
-        if resp.clicked() || (hovered && ui.input(|i| i.pointer.primary_clicked())) {
+        if !modals_open && (resp.clicked() || (hovered && ui.input(|i| i.pointer.primary_clicked()))) {
             action = Some(*act);
         }
+    }
+
+    // ── 3. Subtle Obsidian Vault Drag & Drop Hint (Zero background aesthetic) ───
+    if rect.height() >= 330.0 {
+        let hint_y = actions_start_y + visible_actions.len() as f32 * (btn_h + btn_gap) + 14.0;
+        painter.text(
+            pos2(center.x, hint_y),
+            Align2::CENTER_CENTER,
+            "💡 Drag & drop Obsidian vaults or Markdown folders anywhere to import",
+            FontId::monospace(11.0),
+            theme.muted,
+        );
     }
 
     action

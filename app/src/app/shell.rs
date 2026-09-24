@@ -71,7 +71,13 @@ impl App {
                         .unwrap_or("Documentation");
                     (format!("📖 {}", doc_title), false)
                 }
-                Mode::Normal => (self.active_note_title.clone(), self.is_dirty),
+                Mode::Normal => {
+                    if self.open_notes.is_empty() || self.show_welcome {
+                        ("MindForge".to_string(), false)
+                    } else {
+                        (self.active_note_title.clone(), self.is_dirty)
+                    }
+                }
                 Mode::Help => ("✦ Quick Start Guide".to_string(), false),
                 Mode::Stats => ("📊 Daily Story & Statistics".to_string(), false),
                 Mode::ScanReport | Mode::ScanHistory => ("🌐 Security Scanner".to_string(), false),
@@ -109,6 +115,7 @@ impl App {
             || self.rename_open
             || self.delete_confirm_open
             || self.accent_dropdown_open
+            || self.workspace_importer.is_modal_open
             || is_pointer_over_ai;
 
         if let Some(center_x) = layout.splitter_center_x {
@@ -194,6 +201,7 @@ impl App {
                     self.doc_sidebar_focused,
                     &self.theme,
                     self.opacity,
+                    any_modal_open,
                 );
                 if let Some(action) = doc_action {
                     match action {
@@ -332,9 +340,12 @@ impl App {
                     self.sidebar_selected_idx,
                     self.sidebar_focused,
                     self.opacity,
+                    self.sidebar_needs_scroll,
+                    any_modal_open,
                 );
+                self.sidebar_needs_scroll = false;
 
-                if ui.input(|i| i.pointer.primary_clicked()) {
+                if !any_modal_open && ui.input(|i| i.pointer.primary_clicked()) {
                     if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
                         if sb_rect.contains(pos) {
                             self.sidebar_focused = true;
@@ -345,7 +356,8 @@ impl App {
                 }
 
                 if let Some(act) = action {
-                    match act {
+                    if !any_modal_open {
+                        match act {
                         SidebarAction::SwitchMode(idx) => {
                             match idx {
                                 0 => self.mode = Mode::Normal,
@@ -400,6 +412,7 @@ impl App {
                             self.settings_open = true;
                             self.settings_just_opened = true;
                         }
+                    }
                     }
                 }
             }

@@ -60,6 +60,7 @@ impl App {
             sidebar_selected_idx: 0,
             sidebar_width: crate::layout::DEFAULT_SIDEBAR_W,
             is_dragging_sidebar_splitter: false,
+            sidebar_needs_scroll: false,
             settings_open: false,
             settings_just_opened: false,
             active_setting_tab: SettingTab::Carets,
@@ -160,8 +161,10 @@ impl App {
                 app.total_notes_count = count;
             }
 
+            let mut tabs_setting_present = false;
             let mut tabs_restored = false;
             if let Ok(Some(json)) = db.get_setting("open_note_tab_ids") {
+                tabs_setting_present = true;
                 if let Ok(ids) = serde_json::from_str::<Vec<i64>>(&json) {
                     for id in ids {
                         if let Ok(Some(note)) = db.get_note(id) {
@@ -203,11 +206,14 @@ impl App {
                                 app.ed.cur = c.min(app.ed.buf.len());
                             }
                         }
+                    } else {
+                        // User explicitly closed all tabs in previous session
+                        app.show_welcome = true;
                     }
                 }
             }
 
-            if !tabs_restored {
+            if !tabs_setting_present && !tabs_restored {
                 let last_id = db.get_setting("last_active_note_id").ok().flatten().and_then(|s| s.parse::<i64>().ok());
                 let note = match last_id {
                     Some(id) => db.get_note(id).ok().flatten(),
@@ -243,16 +249,7 @@ impl App {
                     app.last_active_tab = 0;
                     app.show_welcome = false;
                 } else {
-                    app.open_notes.push(OpenNote {
-                        id: 0,
-                        title: "Untitled Note".to_string(),
-                        editor: Editor::new(),
-                        scroll_y: 0.0,
-                        is_dirty: false,
-                    });
-                    app.active_tab = 0;
-                    app.last_active_tab = 0;
-                    app.show_welcome = false;
+                    app.show_welcome = true;
                 }
             }
 
@@ -473,6 +470,13 @@ impl App {
         if let Some(ref db) = self.db {
             let _ = db.set_setting("last_caret_pos", &self.ed.cur.to_string());
             let _ = db.set_setting("last_scroll_y", &self.scroll_y.to_string());
+            let _ = db.set_setting("opacity", &format!("{:.2}", self.opacity));
+            let blur_str = match self.blur_effect {
+                crate::blur::BlurEffect::Acrylic => "acrylic",
+                crate::blur::BlurEffect::Mica => "mica",
+                crate::blur::BlurEffect::None => "none",
+            };
+            let _ = db.set_setting("blur", blur_str);
             if let Ok(json) = serde_json::to_string(&self.command_history) {
                 let _ = db.set_setting("command_history", &json);
             }
@@ -496,6 +500,8 @@ impl App {
                     created_id = Some(new_id);
                     let _ = db.set_setting("last_active_note_id", &new_id.to_string());
                 }
+            } else {
+                let _ = db.set_setting("last_active_note_id", "");
             }
         }
         if let Some(new_id) = created_id {

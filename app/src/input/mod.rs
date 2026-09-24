@@ -6,6 +6,7 @@ pub mod global;
 pub use global::window_shortcuts;
 
 use crate::app::App;
+use crate::mode::Mode;
 use eframe::egui;
 
 /// Processes all keyboard shortcuts and text typing.
@@ -48,6 +49,20 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
                 if let Some(ref mut pane) = app.term_pane {
                     pane.feed_event(ev, i.modifiers);
                 }
+            } else if app.mode == Mode::Normal && (app.show_welcome || app.open_notes.is_empty()) {
+                // When on Welcome dashboard, hotkeys are handled directly by the dashboard or modals
+                if app.editor_input_mode == crate::app::EditorInputMode::Vim {
+                    if let egui::Event::Text(ref s) = ev {
+                        if s == ":" {
+                            app.in_command = true;
+                            app.cmd_ed.clear();
+                            app.cmd_selected_idx = 0;
+                            app.cmd_navigated = false;
+                            app.showcmd.set_command("", now);
+                            typed = true;
+                        }
+                    }
+                }
             } else {
                 match ev {
                     egui::Event::Paste(s) => {
@@ -76,7 +91,7 @@ pub fn handle_input(app: &mut App, ctx: &egui::Context, now: f64) -> bool {
         }
     });
 
-    if typed {
+    if typed && !app.open_notes.is_empty() {
         app.show_welcome = false;
     }
 

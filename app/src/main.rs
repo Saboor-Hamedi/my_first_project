@@ -59,7 +59,8 @@ fn main() -> eframe::Result<()> {
             .with_inner_size([1120.0, 740.0])
             .with_min_inner_size([700.0, 500.0])
             .with_max_inner_size([2560.0, 1440.0])
-            .with_resizable(true),
+            .with_resizable(true)
+            .with_drag_and_drop(true),
         vsync: true,
         ..Default::default()
     };

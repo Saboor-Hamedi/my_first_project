@@ -215,7 +215,10 @@ impl App {
         }
 
         // Body area below tab strip (for editor, gutter, preview, help)
-        let body_rect = if are_tabs_visible && (self.mode == Mode::Normal || self.mode == Mode::Doc || self.mode == Mode::Help) {
+        let body_rect = if are_tabs_visible
+            && !self.open_notes.is_empty()
+            && (self.mode == Mode::Normal || self.mode == Mode::Doc || self.mode == Mode::Help)
+        {
             let body_min_y = tab_bar_rect.max.y;
             let body_max_y = top_panel_rect.max.y.max(body_min_y + 30.0);
             Rect::from_min_max(
@@ -270,7 +273,7 @@ impl App {
             }
         }
 
-        let show_dashboard = self.mode == Mode::Normal && self.show_welcome;
+        let show_dashboard = self.mode == Mode::Normal && (self.show_welcome || self.open_notes.is_empty());
 
         let (ed_font_size, ed_cw, ed_lh) = self.zoom.editor_metrics(self.font_size, ui.ctx());
 
@@ -400,6 +403,7 @@ impl App {
                         actual_editor_rect,
                         &self.theme,
                         self.total_notes_count,
+                        modals_open,
                     ) {
                         match dash_action {
                             crate::view_dashboard::DashboardAction::NewNote => {
@@ -508,7 +512,7 @@ impl App {
                 self.render_right_pane_tabs(ui, painter, preview_rect_opt, any_modal_open, ed_font_size);
 
                 // Floating Keystroke Card (Vim showcmd)
-                if self.editor_input_mode == EditorInputMode::Vim {
+                if !show_dashboard && self.editor_input_mode == EditorInputMode::Vim {
                     let card_anchor = pos2(actual_editor_rect.max.x - 16.0, actual_editor_rect.max.y - 20.0);
                     self.showcmd.render_card(painter, card_anchor, &self.theme, now);
                 }

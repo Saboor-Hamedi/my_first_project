@@ -322,8 +322,21 @@ pub fn render_doc_sidebar(
     is_focused: bool,
     theme: &crate::theme::Theme,
     opacity: f32,
+    any_modal_open: bool,
 ) -> Option<DocSidebarAction> {
     let mut action = None;
+
+    if any_modal_open {
+        // Translucent background
+        let sb_bg = Color32::from_rgba_unmultiplied(
+            theme.sidebar_bg().r(),
+            theme.sidebar_bg().g(),
+            theme.sidebar_bg().b(),
+            (opacity * 255.0) as u8,
+        );
+        painter.rect_filled(rect, 0.0, sb_bg);
+        return None;
+    }
 
     // Translucent sidebar background matching desktop backdrop blur
     let sb_bg = Color32::from_rgba_unmultiplied(

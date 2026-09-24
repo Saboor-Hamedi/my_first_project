@@ -225,7 +225,6 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
                 "Doc Reader active (Tab / Ctrl+B to return to Doc List)"
             };
             app.set_status(status, now);
-            app.sound.play();
             return Some(false);
         }
         if app.mode == Mode::Normal {
@@ -238,7 +237,6 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
                     "Editor active (Tab / Ctrl+B to return to Sidebar)"
                 };
                 app.set_status(status, now);
-                app.sound.play();
                 return Some(false);
             }
             let modifiers = if shift_tab_pressed {
@@ -386,32 +384,7 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
     }
 
     if ctrl_n {
-        if app.is_dirty && app.mode == Mode::Normal {
-            app.quick_save_active_note(now);
-        }
-        if let Some(cur) = app.open_notes.get_mut(app.active_tab) {
-            cur.editor = app.ed.clone();
-            cur.title = app.active_note_title.clone();
-            cur.scroll_y = app.scroll_y;
-            cur.is_dirty = app.is_dirty;
-        }
-        app.active_note_id = None;
-        app.active_note_title = "Untitled Note".to_string();
-        app.ed.clear();
-        app.mode = Mode::Normal;
-        app.vim.set_mode(crate::vim::VimSubMode::Normal, &mut app.ed);
-        app.is_dirty = false;
-        app.scroll_y = 0.0;
-        app.open_notes.push(crate::app::OpenNote {
-            id: 0,
-            title: "Untitled Note".to_string(),
-            editor: app.ed.clone(),
-            scroll_y: 0.0,
-            is_dirty: false,
-        });
-        app.active_tab = app.open_notes.len() - 1;
-        app.save_open_tabs();
-        app.set_status("Created new note", now);
+        app.create_new_note(now);
         return Some(false);
     }
 
@@ -495,7 +468,6 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
             "📝 Raw Monospace Mode ON (Ctrl+E to toggle)"
         };
         app.set_status(msg, now);
-        app.sound.play();
         return Some(false);
     }
 
@@ -543,7 +515,6 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
             "Zen Mode OFF (Ctrl+. to toggle)"
         };
         app.set_status(msg, now);
-        app.sound.play();
         return Some(false);
     }
 
@@ -561,12 +532,12 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
                 app.doc_sidebar_focused = false;
                 app.set_status("Doc sidebar collapsed into full-width reader (Ctrl+B to reopen)", now);
             }
-            app.sound.play();
             return Some(false);
         }
         if !app.sidebar_open {
             app.sidebar_open = true;
             app.sidebar_focused = true;
+            app.sidebar_needs_scroll = true;
             if let Some(cur_id) = app.active_note_id {
                 app.sidebar_selected_idx = app.notes_list.iter().position(|n| n.id == cur_id).unwrap_or(0);
             } else {
@@ -575,6 +546,7 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
             app.set_status("Sidebar opened (j/k: move • Enter: load • Tab/l: editor)", now);
         } else if !app.sidebar_focused {
             app.sidebar_focused = true;
+            app.sidebar_needs_scroll = true;
             if let Some(cur_id) = app.active_note_id {
                 app.sidebar_selected_idx = app.notes_list.iter().position(|n| n.id == cur_id).unwrap_or(0);
             }
@@ -588,7 +560,6 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
             key: "sidebar".into(),
             val: sb_val.into(),
         });
-        app.sound.play();
         return Some(false);
     }
 
@@ -622,7 +593,7 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
         if sb_down {
             if !app.notes_list.is_empty() && app.sidebar_selected_idx + 1 < app.notes_list.len() {
                 app.sidebar_selected_idx += 1;
-                app.sound.play();
+                app.sidebar_needs_scroll = true;
             }
             return Some(false);
         }
@@ -630,7 +601,7 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
         if sb_up {
             if app.sidebar_selected_idx > 0 {
                 app.sidebar_selected_idx -= 1;
-                app.sound.play();
+                app.sidebar_needs_scroll = true;
             }
             return Some(false);
         }
@@ -640,7 +611,6 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
                 app.load_note(note.id, note.topic, note.body, now);
                 // Keep focus on the sidebar and on the loaded note as requested!
                 app.sidebar_focused = true;
-                app.sound.play();
                 app.set_status("Loaded note (sidebar active — use j/k to move)", now);
             }
             return Some(false);
@@ -677,7 +647,6 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
             let total_docs = crate::docs::BRAIN_DOCS.len();
             if total_docs > 0 && app.doc_selected_idx + 1 < total_docs {
                 app.doc_selected_idx += 1;
-                app.sound.play();
             }
             return Some(false);
         }
@@ -685,7 +654,6 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
         if doc_up {
             if app.doc_selected_idx > 0 {
                 app.doc_selected_idx -= 1;
-                app.sound.play();
             }
             return Some(false);
         }
@@ -694,7 +662,6 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
             app.load_doc_by_index(app.doc_selected_idx, now);
             // Keep focus on the doc sidebar as requested!
             app.doc_sidebar_focused = true;
-            app.sound.play();
             return Some(false);
         }
 

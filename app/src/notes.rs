@@ -61,22 +61,13 @@ pub fn delete_active_note(app: &mut App, now: f64) {
         let _ = app.db_tx.send(crate::db_worker::DbMsg::DeleteNote { id });
         app.notes_list.retain(|n| n.id != id);
         app.open_notes.retain(|n| n.id != id);
-        if app.open_notes.is_empty() {
-            app.open_notes.push(crate::app::OpenNote {
-                id: 0,
-                title: "Untitled Note".to_string(),
-                editor: crate::editor::Editor::new(),
-                scroll_y: 0.0,
-                is_dirty: false,
-            });
-            app.active_tab = 0;
-        } else if app.active_tab >= app.open_notes.len() {
+        if app.active_tab >= app.open_notes.len() && !app.open_notes.is_empty() {
             app.active_tab = app.open_notes.len() - 1;
         }
         app.save_open_tabs();
         app.active_note_id = None;
         app.save_active_note_id();
-        app.active_note_title = "Untitled Note".to_string();
+        app.active_note_title.clear();
         app.ed.clear();
         app.is_dirty = false;
         app.set_status("Deleted", now);
@@ -98,6 +89,16 @@ pub fn delete_active_note(app: &mut App, now: f64) {
                 .unwrap_or(0);
             app.ed.cur = saved_cur.min(app.ed.buf.len());
             app.is_dirty = false;
+            app.show_welcome = false;
+        } else {
+            app.open_notes.clear();
+            app.active_note_id = None;
+            app.save_active_note_id();
+            app.active_note_title.clear();
+            app.ed.clear();
+            app.is_dirty = false;
+            app.show_welcome = true;
+            app.save_open_tabs();
         }
     } else {
         app.ed.clear();

@@ -11,6 +11,7 @@ pub fn render_sidebar_footer(
     painter: &egui::Painter,
     sb_rect: Rect,
     theme: &Theme,
+    any_modal_open: bool,
 ) -> Option<SidebarAction> {
     let mut action = None;
 
@@ -20,9 +21,10 @@ pub fn render_sidebar_footer(
         vec2(btn_size, btn_size),
     );
 
-    let resp = ui.allocate_rect(btn_rect, egui::Sense::click());
+    let sense = if any_modal_open { egui::Sense::hover() } else { egui::Sense::click() };
+    let resp = ui.allocate_rect(btn_rect, sense);
     let center = btn_rect.center();
-    let is_hovered = resp.hovered() || ui.rect_contains_pointer(btn_rect);
+    let is_hovered = !any_modal_open && (resp.hovered() || ui.rect_contains_pointer(btn_rect));
 
     let bg_color = if is_hovered {
         if theme.is_light() {
@@ -52,7 +54,7 @@ pub fn render_sidebar_footer(
     // Hover tooltip showing shortcut
     let resp = resp.on_hover_text("Settings (Ctrl+,)");
 
-    if resp.clicked() || (is_hovered && ui.input(|inp| inp.pointer.primary_clicked())) {
+    if !any_modal_open && (resp.clicked() || (is_hovered && ui.input(|inp| inp.pointer.primary_clicked()))) {
         action = Some(SidebarAction::OpenSettings);
     }
 

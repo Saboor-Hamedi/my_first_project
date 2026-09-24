@@ -1171,6 +1171,13 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
             app.mode = Mode::ScanHistory;
             app.set_status("Webscan History (↑/↓ to navigate, Enter to view report, Esc to exit)", now);
         }
+        "bd" | "bdelete" | "close" | "tabclose" => {
+            if app.mode == Mode::Doc {
+                app.close_doc_tab(app.active_doc_tab, now);
+            } else {
+                app.close_tab(app.active_tab, now);
+            }
+        }
         "quit" | "q" => {
             if app.mode == Mode::Help {
                 app.mode = Mode::Normal;

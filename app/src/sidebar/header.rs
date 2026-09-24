@@ -13,6 +13,7 @@ pub fn render_sidebar_header(
     sidebar_w: f32,
     active_mode_idx: usize,
     theme: &Theme,
+    any_modal_open: bool,
 ) -> Option<SidebarAction> {
     let mut action = None;
 
@@ -32,7 +33,7 @@ pub fn render_sidebar_header(
         vec2(sidebar_w - 32.0, 26.0),
     );
     let is_sel = active_mode_idx == 1;
-    let is_hovered = ui.rect_contains_pointer(btn_rect);
+    let is_hovered = !any_modal_open && ui.rect_contains_pointer(btn_rect);
 
     if is_hovered || is_sel {
         let btn_bg = if is_sel {
@@ -43,7 +44,7 @@ pub fn render_sidebar_header(
             Color32::from_rgba_unmultiplied(255, 255, 255, 14)
         };
         painter.rect_filled(btn_rect, 5.0, btn_bg);
-        if is_hovered && ui.input(|inp| inp.pointer.primary_clicked()) {
+        if is_hovered && !any_modal_open && ui.input(|inp| inp.pointer.primary_clicked()) {
             action = Some(SidebarAction::SwitchMode(1));
         }
     }

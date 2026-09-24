@@ -20,6 +20,8 @@ pub fn render_sidebar_body(
     theme: &Theme,
     sidebar_selected_idx: usize,
     sidebar_focused: bool,
+    sidebar_needs_scroll: bool,
+    any_modal_open: bool,
 ) -> Option<SidebarAction> {
     let mut action = None;
 
@@ -62,16 +64,18 @@ pub fn render_sidebar_body(
         egui::ScrollArea::vertical()
             .id_salt("sidebar_docs_scroll")
             .auto_shrink([false; 2])
+            .enable_scrolling(!any_modal_open)
             .show(ui, |ui| {
                 for (idx, note) in notes.iter().enumerate() {
                     let is_active = active_note_id == Some(note.id);
                     let is_selected = idx == sidebar_selected_idx;
                     let row_w = ui.available_width();
                     let row_h = 30.0;
-                    let (rect, resp) = ui.allocate_exact_size(vec2(row_w, row_h), egui::Sense::click());
-                    let hovered = resp.hovered();
+                    let sense = if any_modal_open { egui::Sense::hover() } else { egui::Sense::click() };
+                    let (rect, resp) = ui.allocate_exact_size(vec2(row_w, row_h), sense);
+                    let hovered = !any_modal_open && resp.hovered();
 
-                    if is_selected && sidebar_focused {
+                    if is_selected && sidebar_focused && sidebar_needs_scroll {
                         resp.scroll_to_me(Some(egui::Align::Center));
                     }
 
@@ -80,7 +84,7 @@ pub fn render_sidebar_body(
                         pos2(rect.max.x - 14.0, rect.center().y),
                         vec2(del_w, 20.0),
                     );
-                    let del_hover = del_rect.contains(ui.input(|i| i.pointer.hover_pos().unwrap_or_default()));
+                    let del_hover = !any_modal_open && del_rect.contains(ui.input(|i| i.pointer.hover_pos().unwrap_or_default()));
 
                     let pill_rect = Rect::from_min_max(
                         pos2(rect.min.x + 4.0, rect.min.y + 1.5),
@@ -116,7 +120,7 @@ pub fn render_sidebar_body(
                         }
                     }
 
-                    if resp.clicked() && !del_hover {
+                    if !any_modal_open && resp.clicked() && !del_hover {
                         action = Some(SidebarAction::LoadNote {
                             id: note.id,
                             topic: note.topic.clone(),
@@ -186,7 +190,7 @@ pub fn render_sidebar_body(
                         );
                     }
 
-                    if hovered {
+                    if hovered && !any_modal_open {
                         if crate::ui_components::render_close_button_rect(
                             ui,
                             ui.painter(),
@@ -203,8 +207,8 @@ pub fn render_sidebar_body(
                 if notes_limit < 100 && total_notes_count > notes.len() {
                     ui.add_space(6.0);
                     let row_w = ui.available_width();
-                    let (btn_rect, btn_resp) = ui.allocate_exact_size(vec2(row_w, 28.0), egui::Sense::click());
-                    let b_hover = btn_resp.hovered();
+                    let (btn_rect, btn_resp) = ui.allocate_exact_size(vec2(row_w, 28.0), if any_modal_open { egui::Sense::hover() } else { egui::Sense::click() });
+                    let b_hover = !any_modal_open && btn_resp.hovered();
                     let b_bg = if b_hover {
                         theme.surface().lerp_to_gamma(theme.accent, 0.12)
                     } else {
@@ -224,14 +228,14 @@ pub fn render_sidebar_body(
                         FontId::proportional(11.5),
                         theme.accent,
                     );
-                    if btn_resp.clicked() {
+                    if !any_modal_open && btn_resp.clicked() {
                         action = Some(SidebarAction::ToggleNotesLimit);
                     }
                 } else if notes_limit >= 100 {
                     ui.add_space(6.0);
                     let row_w = ui.available_width();
-                    let (btn_rect, btn_resp) = ui.allocate_exact_size(vec2(row_w, 28.0), egui::Sense::click());
-                    let b_hover = btn_resp.hovered();
+                    let (btn_rect, btn_resp) = ui.allocate_exact_size(vec2(row_w, 28.0), if any_modal_open { egui::Sense::hover() } else { egui::Sense::click() });
+                    let b_hover = !any_modal_open && btn_resp.hovered();
                     let b_bg = if b_hover {
                         theme.surface().lerp_to_gamma(theme.accent, 0.12)
                     } else {
@@ -251,7 +255,7 @@ pub fn render_sidebar_body(
                         FontId::proportional(11.5),
                         theme.muted,
                     );
-                    if btn_resp.clicked() {
+                    if !any_modal_open && btn_resp.clicked() {
                         action = Some(SidebarAction::ToggleNotesLimit);
                     }
                 }

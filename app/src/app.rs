@@ -83,6 +83,7 @@ pub struct App {
     pub sidebar_selected_idx: usize,
     pub sidebar_width: f32,
     pub is_dragging_sidebar_splitter: bool,
+    pub sidebar_needs_scroll: bool,
 
     // Two-column Preferences modal (Ctrl+,)
     pub settings_open: bool,

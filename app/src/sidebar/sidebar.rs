@@ -40,6 +40,8 @@ pub fn render_sidebar(
     sidebar_selected_idx: usize,
     sidebar_focused: bool,
     opacity: f32,
+    sidebar_needs_scroll: bool,
+    any_modal_open: bool,
 ) -> Option<SidebarAction> {
     let sidebar_w = sb_rect.width();
 
@@ -62,6 +64,7 @@ pub fn render_sidebar(
         sidebar_w,
         active_mode_idx,
         theme,
+        any_modal_open,
     );
 
     // 2. Sidebar Body (File explorer / SQLite documents)
@@ -78,6 +81,8 @@ pub fn render_sidebar(
         theme,
         sidebar_selected_idx,
         sidebar_focused,
+        sidebar_needs_scroll,
+        any_modal_open,
     );
 
     // 3. Sidebar Footer (Round settings button with tooltip)
@@ -86,7 +91,12 @@ pub fn render_sidebar(
         painter,
         sb_rect,
         theme,
+        any_modal_open,
     );
 
-    header_action.or(body_action).or(footer_action)
+    if any_modal_open {
+        None
+    } else {
+        header_action.or(body_action).or(footer_action)
+    }
 }
