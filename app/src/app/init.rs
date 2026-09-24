@@ -139,6 +139,7 @@ impl App {
             prev_mode_before_term: Mode::Normal,
             clipboard_text: None,
             agent_state: crate::agent::AgentState::new(),
+            zen_mode: false,
         };
 
         app.load_settings();

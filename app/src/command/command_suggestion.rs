@@ -386,11 +386,6 @@ pub fn render_command_suggestions(
             pos2(row_rect.min.x + 6.0, row_rect.center().y - 7.0),
             vec2(28.0, 14.0),
         );
-        painter.rect_filled(
-            badge_rect,
-            2.0,
-            Color32::from_rgba_unmultiplied(badge_color.r(), badge_color.g(), badge_color.b(), 32),
-        );
         painter.text(
             badge_rect.center(),
             Align2::CENTER_CENTER,

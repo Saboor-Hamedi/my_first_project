@@ -499,6 +499,29 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
         return Some(false);
     }
 
+    // Zen Mode Toggle (Ctrl + .)
+    let ctrl_dot = ctx.input(|i| {
+        (i.modifiers.ctrl || i.modifiers.command)
+            && !i.modifiers.alt
+            && !i.modifiers.shift
+            && i.key_pressed(egui::Key::Period)
+    });
+    if ctrl_dot {
+        app.zen_mode = !app.zen_mode;
+        if app.zen_mode {
+            app.sidebar_open = false;
+            app.preview_open = false;
+        }
+        let msg = if app.zen_mode {
+            "Zen Mode ON (Ctrl+. to toggle)"
+        } else {
+            "Zen Mode OFF (Ctrl+. to toggle)"
+        };
+        app.set_status(msg, now);
+        app.sound.play();
+        return Some(false);
+    }
+
     if ctrl_b {
         if app.mode == Mode::Doc {
             if !app.sidebar_open {

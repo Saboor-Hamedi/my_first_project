@@ -28,36 +28,45 @@ impl App {
             egui::StrokeKind::Inside,
         );
 
-        let layout = crate::layout::compute_app_layout(bounds, self.sidebar_open, self.sidebar_width);
+        let layout = if self.zen_mode {
+            crate::layout::compute_zen_layout(bounds, self.sidebar_open, self.sidebar_width)
+        } else {
+            crate::layout::compute_app_layout(bounds, self.sidebar_open, self.sidebar_width)
+        };
         let titlebar_rect = layout.titlebar_rect;
         let cmd_bar_rect = layout.cmd_bar_rect;
         let editor_panel_rect = layout.editor_panel_rect;
 
-        // Full-width modern Titlebar
-        let (header_title, header_dirty) = match self.mode {
-            Mode::Doc => {
-                let doc_title = crate::docs::get_docs()
-                    .get(self.active_doc_idx)
-                    .map(|d| d.title)
-                    .unwrap_or("Documentation");
-                (format!("📖 {}", doc_title), false)
-            }
-            Mode::Normal => (self.active_note_title.clone(), self.is_dirty),
-            Mode::Help => ("✦ Quick Start Guide".to_string(), false),
-            Mode::Stats => ("📊 Daily Story & Statistics".to_string(), false),
-            Mode::ScanReport | Mode::ScanHistory => ("🌐 Security Scanner".to_string(), false),
-            Mode::Terminal => ("💻 Embedded Terminal".to_string(), false),
-        };
+        // Full-width modern Titlebar (hidden in Zen mode)
+        let (titlebar_action, accent_anchor_rect) = if !self.zen_mode {
+            let (header_title, header_dirty) = match self.mode {
+                Mode::Doc => {
+                    let doc_title = crate::docs::get_docs()
+                        .get(self.active_doc_idx)
+                        .map(|d| d.title)
+                        .unwrap_or("Documentation");
+                    (format!("📖 {}", doc_title), false)
+                }
+                Mode::Normal => (self.active_note_title.clone(), self.is_dirty),
+                Mode::Help => ("✦ Quick Start Guide".to_string(), false),
+                Mode::Stats => ("📊 Daily Story & Statistics".to_string(), false),
+                Mode::ScanReport | Mode::ScanHistory => ("🌐 Security Scanner".to_string(), false),
+                Mode::Terminal => ("💻 Embedded Terminal".to_string(), false),
+            };
 
-        let (titlebar_action, accent_anchor_rect) = crate::view_editor::render_full_titlebar(
-            ui,
-            &painter,
-            titlebar_rect,
-            &header_title,
-            header_dirty,
-            &self.theme,
-            self.accent_dropdown_open,
-        );
+            let (action, anchor) = crate::view_editor::render_full_titlebar(
+                ui,
+                &painter,
+                titlebar_rect,
+                &header_title,
+                header_dirty,
+                &self.theme,
+                self.accent_dropdown_open,
+            );
+            (action, anchor)
+        } else {
+            (None, Rect::NOTHING)
+        };
 
         if let Some(crate::view_editor::TitlebarAction::ToggleAccentDropdown) = titlebar_action {
             self.accent_dropdown_open = !self.accent_dropdown_open;

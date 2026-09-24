@@ -147,6 +147,7 @@ pub fn render_shortcuts_tab(
         ("NAVIGATION", &[
             ("Ctrl + P",      "Fuzzy search across notes"),
             ("Ctrl + B",      "Toggle notes sidebar"),
+            ("Ctrl + .",      "Toggle Zen mode (distraction-free editor)"),
             ("Ctrl + J",      "Toggle interactive terminal dock"),
             ("Ctrl + ,",      "Open preferences & keybindings"),
             ("Esc",           "Dismiss modal / return to Normal mode"),

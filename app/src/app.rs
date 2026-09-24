@@ -199,6 +199,9 @@ pub struct App {
     // Right side pane (Preview and AI Agent tabs)
     pub right_pane_tab: RightPaneTab,
     pub ai_focus_requested: bool,
+
+    // Zen Mode (Ctrl+.)
+    pub zen_mode: bool,
 }
 
 impl App {

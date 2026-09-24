@@ -78,9 +78,81 @@ pub fn compute_app_layout(bounds: Rect, sidebar_open: bool, sidebar_w: f32) -> A
     }
 }
 
+/// Computes the distraction-free Zen mode layout:
+/// Titlebar and tabs are omitted, maximizing the editor view while keeping the statusbar.
+/// Allows the sidebar to be opened/collapsed on demand.
+pub fn compute_zen_layout(bounds: Rect, sidebar_open: bool, sidebar_w: f32) -> AppLayout {
+    let cmd_bar_rect = Rect::from_min_max(
+        pos2(bounds.min.x + GAP, bounds.max.y - GAP - CMD_BAR_H),
+        pos2(bounds.max.x - GAP, bounds.max.y - GAP),
+    );
+    let panel_top = bounds.min.y + GAP;
+    let panel_bottom = cmd_bar_rect.min.y - GAP;
+
+    if sidebar_open {
+        let sw = sidebar_w.clamp(MIN_SIDEBAR_W, MAX_SIDEBAR_W);
+        let sb_rect = Rect::from_min_max(
+            pos2(bounds.min.x + GAP, panel_top),
+            pos2(bounds.min.x + GAP + sw, panel_bottom),
+        );
+        let splitter_center_x = sb_rect.max.x + GAP + SPLITTER_BAR_W * 0.5;
+        let split_hit_rect = Rect::from_center_size(
+            pos2(splitter_center_x, (panel_top + panel_bottom) * 0.5),
+            vec2(14.0, (panel_bottom - panel_top).max(0.0)),
+        );
+        let ed_left = sb_rect.max.x + GAP + SPLITTER_BAR_W + GAP;
+        let ed_panel = Rect::from_min_max(
+            pos2(ed_left, panel_top),
+            pos2(bounds.max.x - GAP, panel_bottom),
+        );
+        AppLayout {
+            titlebar_rect: Rect::NOTHING,
+            cmd_bar_rect,
+            sidebar_rect: Some(sb_rect),
+            splitter_hit_rect: Some(split_hit_rect),
+            splitter_center_x: Some(splitter_center_x),
+            editor_panel_rect: ed_panel,
+        }
+    } else {
+        let ed_panel = Rect::from_min_max(
+            pos2(bounds.min.x + GAP, panel_top),
+            pos2(bounds.max.x - GAP, panel_bottom),
+        );
+        AppLayout {
+            titlebar_rect: Rect::NOTHING,
+            cmd_bar_rect,
+            sidebar_rect: None,
+            splitter_hit_rect: None,
+            splitter_center_x: None,
+            editor_panel_rect: ed_panel,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_zen_layout_bounds() {
+        let bounds = Rect::from_min_size(pos2(0.0, 0.0), vec2(1000.0, 700.0));
+        let layout_closed = compute_zen_layout(bounds, false, 230.0);
+
+        assert_eq!(layout_closed.editor_panel_rect.min.x - bounds.min.x, GAP);
+        assert_eq!(layout_closed.editor_panel_rect.min.y - bounds.min.y, GAP);
+        assert_eq!(bounds.max.x - layout_closed.editor_panel_rect.max.x, GAP);
+        assert_eq!(layout_closed.cmd_bar_rect.min.y - layout_closed.editor_panel_rect.max.y, GAP);
+        assert_eq!(bounds.max.y - layout_closed.cmd_bar_rect.max.y, GAP);
+        assert_eq!(layout_closed.sidebar_rect, None);
+        assert_eq!(layout_closed.titlebar_rect, Rect::NOTHING);
+
+        // Zen mode with sidebar opened
+        let layout_open = compute_zen_layout(bounds, true, 230.0);
+        assert!(layout_open.sidebar_rect.is_some());
+        assert_eq!(layout_open.sidebar_rect.unwrap().min.y - bounds.min.y, GAP);
+        assert_eq!(layout_open.sidebar_rect.unwrap().width(), 230.0);
+        assert_eq!(layout_open.titlebar_rect, Rect::NOTHING);
+    }
 
     #[test]
     fn test_uniform_5px_margins_sidebar_open() {

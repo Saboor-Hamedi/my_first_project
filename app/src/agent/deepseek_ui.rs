@@ -152,33 +152,36 @@ pub fn render_ai_pane(
                         let btn_w = (avail_content_w - 16.0).max(80.0);
                         for prompt in &starters {
                             let (p_rect, p_resp) = ui.allocate_exact_size(
-                                vec2(btn_w, 30.0),
+                                vec2(btn_w, 28.0),
                                 egui::Sense::click(),
                             );
                             let h = p_resp.hovered();
+                            if h {
+                                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                            }
                             let bg = if h {
                                 Color32::from_rgba_unmultiplied(
-                                    theme.accent.r(),
-                                    theme.accent.g(),
-                                    theme.accent.b(),
-                                    if theme.is_light() { 24 } else { 35 },
+                                    theme.muted.r(),
+                                    theme.muted.g(),
+                                    theme.muted.b(),
+                                    20,
                                 )
                             } else {
-                                theme.bg
+                                Color32::TRANSPARENT
                             };
                             ui.painter().rect(
                                 p_rect,
                                 5.0,
                                 bg,
-                                Stroke::new(1.0, if h { theme.accent } else { Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 50) }),
+                                Stroke::NONE,
                                 egui::StrokeKind::Inside,
                             );
                             ui.painter().with_clip_rect(p_rect.intersect(ui.clip_rect())).text(
                                 p_rect.center(),
                                 Align2::CENTER_CENTER,
                                 format!("\"{}\"", prompt),
-                                FontId::proportional(font_size * 0.92),
-                                if h { theme.accent } else { theme.text },
+                                FontId::proportional(font_size * 0.90),
+                                if h { theme.text } else { theme.muted },
                             );
 
                             if p_resp.clicked() {

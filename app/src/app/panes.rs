@@ -20,7 +20,7 @@ impl App {
         typed: bool,
     ) {
         // Docked bottom terminal layout: splits editor_panel_rect vertically so terminal sits under editor & preview
-        let (top_panel_rect, bottom_terminal_rect, term_splitter_rect_opt) = if self.terminal_open && (self.mode == Mode::Normal || self.mode == Mode::Doc) {
+        let (top_panel_rect, bottom_terminal_rect, term_splitter_rect_opt) = if !self.zen_mode && self.terminal_open && (self.mode == Mode::Normal || self.mode == Mode::Doc) {
             let total_h = editor_panel_rect.height();
             let divider_h = 10.0;
             let tab_bar_h = crate::view_editor::TAB_ROW_H;
@@ -101,112 +101,114 @@ impl App {
             None
         };
 
-        if self.mode == Mode::Normal {
-            self.sync_active_tab();
-            let tab_items: Vec<crate::view_editor::TabItem> = self
-                .open_notes
-                .iter()
-                .enumerate()
-                .map(|(idx, note)| crate::view_editor::TabItem {
-                    title: &note.title,
-                    is_dirty: note.is_dirty,
-                    is_active: idx == self.active_tab,
-                })
-                .collect();
+        if !self.zen_mode {
+            if self.mode == Mode::Normal {
+                self.sync_active_tab();
+                let tab_items: Vec<crate::view_editor::TabItem> = self
+                    .open_notes
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, note)| crate::view_editor::TabItem {
+                        title: &note.title,
+                        is_dirty: note.is_dirty,
+                        is_active: idx == self.active_tab,
+                    })
+                    .collect();
 
-            let active_changed = self.active_tab != self.last_active_tab;
-            if active_changed {
-                self.last_active_tab = self.active_tab;
-            }
+                let active_changed = self.active_tab != self.last_active_tab;
+                if active_changed {
+                    self.last_active_tab = self.active_tab;
+                }
 
-            if let Some(action) = crate::view_editor::render_tab_bar(
-                ui,
-                painter,
-                tab_bar_rect,
-                &tab_items,
-                &self.theme,
-                &mut self.tab_scroll_offset,
-                active_changed,
-                tab_occluded_rect,
-            ) {
-                match action {
-                    crate::view_editor::TabAction::Select(idx) => {
-                        self.switch_tab(idx, now);
-                    }
-                    crate::view_editor::TabAction::Close(idx) => {
-                        self.close_tab(idx, now);
+                if let Some(action) = crate::view_editor::render_tab_bar(
+                    ui,
+                    painter,
+                    tab_bar_rect,
+                    &tab_items,
+                    &self.theme,
+                    &mut self.tab_scroll_offset,
+                    active_changed,
+                    tab_occluded_rect,
+                ) {
+                    match action {
+                        crate::view_editor::TabAction::Select(idx) => {
+                            self.switch_tab(idx, now);
+                        }
+                        crate::view_editor::TabAction::Close(idx) => {
+                            self.close_tab(idx, now);
+                        }
                     }
                 }
-            }
-        } else if self.mode == Mode::Doc {
-            let docs = crate::docs::get_docs();
-            let tab_items: Vec<crate::view_editor::TabItem> = self
-                .open_doc_tabs
-                .iter()
-                .enumerate()
-                .map(|(idx, &doc_idx)| {
-                    let title = docs.get(doc_idx).map(|d| d.title).unwrap_or("Guide");
-                    crate::view_editor::TabItem {
-                        title,
-                        is_dirty: false,
-                        is_active: idx == self.active_doc_tab,
-                    }
-                })
-                .collect();
+            } else if self.mode == Mode::Doc {
+                let docs = crate::docs::get_docs();
+                let tab_items: Vec<crate::view_editor::TabItem> = self
+                    .open_doc_tabs
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, &doc_idx)| {
+                        let title = docs.get(doc_idx).map(|d| d.title).unwrap_or("Guide");
+                        crate::view_editor::TabItem {
+                            title,
+                            is_dirty: false,
+                            is_active: idx == self.active_doc_tab,
+                        }
+                    })
+                    .collect();
 
-            let active_doc_changed = self.active_doc_tab != self.last_active_doc_tab;
-            if active_doc_changed {
-                self.last_active_doc_tab = self.active_doc_tab;
-            }
+                let active_doc_changed = self.active_doc_tab != self.last_active_doc_tab;
+                if active_doc_changed {
+                    self.last_active_doc_tab = self.active_doc_tab;
+                }
 
-            if let Some(action) = crate::view_editor::render_tab_bar(
-                ui,
-                painter,
-                tab_bar_rect,
-                &tab_items,
-                &self.theme,
-                &mut self.doc_tab_scroll_offset,
-                active_doc_changed,
-                tab_occluded_rect,
-            ) {
-                match action {
-                    crate::view_editor::TabAction::Select(idx) => {
-                        self.switch_doc_tab(idx, now);
-                    }
-                    crate::view_editor::TabAction::Close(idx) => {
-                        self.close_doc_tab(idx, now);
+                if let Some(action) = crate::view_editor::render_tab_bar(
+                    ui,
+                    painter,
+                    tab_bar_rect,
+                    &tab_items,
+                    &self.theme,
+                    &mut self.doc_tab_scroll_offset,
+                    active_doc_changed,
+                    tab_occluded_rect,
+                ) {
+                    match action {
+                        crate::view_editor::TabAction::Select(idx) => {
+                            self.switch_doc_tab(idx, now);
+                        }
+                        crate::view_editor::TabAction::Close(idx) => {
+                            self.close_doc_tab(idx, now);
+                        }
                     }
                 }
-            }
-        } else if self.mode == Mode::Help {
-            let tab_items = [crate::view_editor::TabItem {
-                title: "⚡ Quick Start",
-                is_dirty: false,
-                is_active: true,
-            }];
+            } else if self.mode == Mode::Help {
+                let tab_items = [crate::view_editor::TabItem {
+                    title: "⚡ Quick Start",
+                    is_dirty: false,
+                    is_active: true,
+                }];
 
-            if let Some(action) = crate::view_editor::render_tab_bar(
-                ui,
-                painter,
-                tab_bar_rect,
-                &tab_items,
-                &self.theme,
-                &mut self.help_tab_scroll_offset,
-                false,
-                tab_occluded_rect,
-            ) {
-                match action {
-                    crate::view_editor::TabAction::Select(_) => {}
-                    crate::view_editor::TabAction::Close(_) => {
-                        self.mode = Mode::Normal;
-                        self.set_status("Closed Quick Start", now);
+                if let Some(action) = crate::view_editor::render_tab_bar(
+                    ui,
+                    painter,
+                    tab_bar_rect,
+                    &tab_items,
+                    &self.theme,
+                    &mut self.help_tab_scroll_offset,
+                    false,
+                    tab_occluded_rect,
+                ) {
+                    match action {
+                        crate::view_editor::TabAction::Select(_) => {}
+                        crate::view_editor::TabAction::Close(_) => {
+                            self.mode = Mode::Normal;
+                            self.set_status("Closed Quick Start", now);
+                        }
                     }
                 }
             }
         }
 
         // Body area below tab strip (for editor, gutter, preview, help)
-        let body_rect = if self.mode == Mode::Normal || self.mode == Mode::Doc || self.mode == Mode::Help {
+        let body_rect = if !self.zen_mode && (self.mode == Mode::Normal || self.mode == Mode::Doc || self.mode == Mode::Help) {
             let body_min_y = tab_bar_rect.max.y;
             let body_max_y = top_panel_rect.max.y.max(body_min_y + 30.0);
             Rect::from_min_max(
@@ -449,14 +451,16 @@ impl App {
                 }
 
                 // Render Bottom-Docked Embedded Terminal Drawer
-                self.render_terminal_drawer(
-                    ui,
-                    painter,
-                    editor_panel_rect,
-                    bottom_terminal_rect,
-                    term_splitter_rect_opt,
-                    now,
-                );
+                if !self.zen_mode {
+                    self.render_terminal_drawer(
+                        ui,
+                        painter,
+                        editor_panel_rect,
+                        bottom_terminal_rect,
+                        term_splitter_rect_opt,
+                        now,
+                    );
+                }
             }
             Mode::Help => {
                 let action = crate::help_panel::render_help_tab_view(
