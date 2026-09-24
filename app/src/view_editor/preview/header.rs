@@ -51,18 +51,10 @@ pub fn render_right_pane_header(
         }
 
         if is_active {
-            // Elevated active tab chip matching editor tab style
-            painter.rect(
-                tab_rect,
-                6.0,
-                theme.surface(),
-                Stroke::new(1.0, theme.border()),
-                egui::StrokeKind::Inside,
-            );
             // Discrete bottom accent indicator pill
-            let accent_w = (tab_rect.width() - 24.0).max(18.0);
+            let accent_w = (tab_rect.width() - 20.0).max(18.0);
             let accent_bar = Rect::from_center_size(
-                pos2(tab_rect.center().x, tab_rect.max.y - 2.5),
+                pos2(tab_rect.center().x, tab_rect.max.y - 1.5),
                 vec2(accent_w, 2.0),
             );
             painter.rect_filled(accent_bar, 1.0, theme.accent);
@@ -72,7 +64,7 @@ pub fn render_right_pane_header(
             } else {
                 Color32::from_rgba_unmultiplied(255, 255, 255, 12)
             };
-            painter.rect_filled(tab_rect, 6.0, bg);
+            painter.rect_filled(tab_rect, 5.0, bg);
         }
 
         let text_color = if is_active {

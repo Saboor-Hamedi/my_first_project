@@ -19,12 +19,12 @@ pub fn render_full_titlebar(
     theme: &Theme,
     accent_dropdown_open: bool,
 ) -> (Option<TitlebarAction>, Rect) {
-    // 1. Sleek card surface with 5px radius and subtle 1px border derived from theme
+    // 1. Sleek card surface with 5px radius and seamless borderless continuity
     painter.rect(
         titlebar_rect,
         5.0,
         theme.surface(),
-        Stroke::new(1.0, theme.border()),
+        Stroke::NONE,
         egui::StrokeKind::Inside,
     );
 

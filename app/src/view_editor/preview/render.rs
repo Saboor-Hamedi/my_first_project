@@ -95,9 +95,14 @@ pub fn render_markdown_view_inner(
 
     let blocks = parse_markdown(content);
 
-    // Inner padding & content area aligned with editor body (body.rs uses pad_y = 10.0)
-    let pad_x = 24.0;
-    let pad_y = if show_header { 12.0 } else { 10.0 };
+    // Generous, comfortable reading margins (target width ~680px for 60-80 character line length)
+    let max_reading_w = 680.0f32;
+    let pad_x = if content_rect.width() > max_reading_w + 64.0 {
+        ((content_rect.width() - max_reading_w) * 0.5).round()
+    } else {
+        32.0f32.min(content_rect.width() * 0.08).max(18.0)
+    };
+    let pad_y = if show_header { 16.0 } else { 14.0 };
     let content_painter = painter.with_clip_rect(content_rect);
     let max_text_w = (content_rect.width() - pad_x * 2.0).max(60.0);
 
@@ -232,7 +237,7 @@ pub fn render_markdown_view_inner(
                 if current_y + text_h >= rect.min.y && current_y <= rect.max.y {
                     content_painter.galley(pos2(start_x, current_y), galley, theme.text);
                 }
-                current_y += text_h + 10.0;
+                current_y += text_h + 14.0;
             }
             MdBlock::Quote { depth, text } => {
                 if b_idx > 0 {

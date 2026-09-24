@@ -171,8 +171,7 @@ pub fn render_active_line(
             InlineSpanKind::Code => {
                 let m = span.marker_len;
                 let fmt_marker = TextFormat::simple(syntax_font.clone(), syntax_color);
-                let mut fmt_body = TextFormat::simple(FontId::monospace(font_size * 0.95), theme.accent);
-                fmt_body.background = Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 22);
+                let fmt_body = TextFormat::simple(FontId::monospace(font_size * 0.95), theme.accent);
 
                 append_run_and_map(job, charmap, chars, abs_start..abs_start + m, fmt_marker.clone());
                 if abs_end >= abs_start + 2 * m {

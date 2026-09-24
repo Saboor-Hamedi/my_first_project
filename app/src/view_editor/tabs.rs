@@ -153,32 +153,24 @@ pub fn render_tab_bar(
             vec2(btn_w, btn_h),
         );
         let is_close_hovered = mouse_in_bar && ui.rect_contains_pointer(close_rect);
+        let show_close = is_tab_hovered && (tabs.len() > 1 || tab.is_dirty);
 
-        // Tab chip surface styling
+        // Tab chip surface styling: single crisp active signal (bottom accent pill)
         if tab.is_active {
-            // Elevated active tab chip with crisp subtle border
-            clip_painter.rect(
-                tab_rect,
-                6.0,
-                theme.surface(),
-                Stroke::new(1.0, theme.border()),
-                egui::StrokeKind::Inside,
-            );
-            // Discrete bottom accent indicator pill
-            let accent_w = (tab_rect.width() - 24.0).max(18.0);
+            let accent_w = (tab_rect.width() - 20.0).max(18.0);
             let accent_bar = Rect::from_center_size(
-                pos2(tab_rect.center().x, tab_rect.max.y - 2.5),
+                pos2(tab_rect.center().x, tab_rect.max.y - 1.5),
                 vec2(accent_w, 2.0),
             );
             clip_painter.rect_filled(accent_bar, 1.0, theme.accent);
         } else if is_tab_hovered {
-            // Subtle, soft faded hover background
+            // Subtle, soft hover background
             let bg = if theme.is_light() {
                 Color32::from_rgba_unmultiplied(0, 0, 0, 10)
             } else {
                 Color32::from_rgba_unmultiplied(255, 255, 255, 12)
             };
-            clip_painter.rect_filled(tab_rect, 6.0, bg);
+            clip_painter.rect_filled(tab_rect, 5.0, bg);
         }
 
         // Title and dirty indicator
@@ -205,12 +197,10 @@ pub fn render_tab_bar(
             text_color,
         );
 
-        // Close button (×)
-        if tabs.len() > 1 || tab.is_dirty {
+        // Close button (×) — visible ONLY on hover of this tab
+        if show_close {
             let close_color = if is_close_hovered {
                 Color32::from_rgb(235, 90, 90)
-            } else if tab.is_active {
-                theme.text.lerp_to_gamma(theme.muted, 0.4)
             } else {
                 theme.muted
             };
@@ -240,7 +230,7 @@ pub fn render_tab_bar(
         if primary_clicked && mouse_in_bar {
             if let Some(pos) = mouse_pos {
                 if visible_tab_area.contains(pos) {
-                    if close_rect.contains(pos) && (tabs.len() > 1 || tab.is_dirty) {
+                    if show_close && close_rect.contains(pos) {
                         action = Some(TabAction::Close(idx));
                     } else if tab_rect.contains(pos) {
                         action = Some(TabAction::Select(idx));

@@ -17,12 +17,21 @@ impl App {
         if let (Some(term_rect), Some(divider_rect)) = (bottom_terminal_rect, term_splitter_rect_opt) {
             let divider_h = 10.0;
             let available_h = (editor_panel_rect.height() - divider_h).max(140.0);
-            let divider_hit_rect = divider_rect.expand2(vec2(0.0, 8.0));
-            let is_divider_hovered = ui.rect_contains_pointer(divider_hit_rect);
+            let mid_y = divider_rect.center().y;
+            let panel_left = divider_rect.min.x;
+            let panel_right = divider_rect.max.x;
+            let knob_mid = pos2((panel_left + panel_right) * 0.5, mid_y);
+            let is_dragging = self.is_dragging_terminal_splitter;
+            let knob_w = 36.0;
+            let knob_h = if is_dragging { 6.0 } else { 4.0 };
+            let knob_rect = Rect::from_center_size(knob_mid, vec2(knob_w, knob_h));
+            let knob_hit_rect = Rect::from_center_size(knob_mid, vec2(44.0, 16.0));
+
+            let is_knob_hovered = ui.rect_contains_pointer(knob_hit_rect);
             let primary_down = ui.input(|i| i.pointer.primary_down());
             let primary_pressed = ui.input(|i| i.pointer.primary_clicked() || i.pointer.button_pressed(egui::PointerButton::Primary));
 
-            if is_divider_hovered && primary_pressed {
+            if is_knob_hovered && primary_pressed {
                 self.is_dragging_terminal_splitter = true;
             }
 
@@ -38,27 +47,21 @@ impl App {
                 } else {
                     self.is_dragging_terminal_splitter = false;
                 }
-            } else if is_divider_hovered {
+            } else if is_knob_hovered {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeRow);
             }
 
-            let is_active = is_divider_hovered || self.is_dragging_terminal_splitter;
-            let mid_y = divider_rect.center().y;
-            let panel_left = divider_rect.min.x;
-            let panel_right = divider_rect.max.x;
-            if is_active {
-                let line_rect = Rect::from_center_size(
-                    pos2((panel_left + panel_right) * 0.5, mid_y),
-                    vec2((panel_right - panel_left).max(0.0), 5.0),
-                );
-                painter.rect_filled(line_rect, 2.5, self.theme.accent);
-            }
-            let knob_w = 42.0;
-            let knob_h = if is_active { 7.0 } else { 5.0 };
-            let knob_rect = Rect::from_center_size(pos2((panel_left + panel_right) * 0.5, mid_y), vec2(knob_w, knob_h));
+            let is_active = is_knob_hovered || self.is_dragging_terminal_splitter;
+
+            // Render tactile knob only — no harsh full-width line
+            let active_knob_rect = if is_active {
+                Rect::from_center_size(knob_mid, vec2(38.0, 6.0))
+            } else {
+                knob_rect
+            };
             painter.rect_filled(
-                knob_rect,
-                3.0,
+                active_knob_rect,
+                2.5,
                 if is_active {
                     self.theme.accent
                 } else {
@@ -66,11 +69,10 @@ impl App {
                 },
             );
 
-            let knob_mid = knob_rect.center();
             let grip_color = self.theme.bg;
-            for dx in [-6.0, 0.0, 6.0] {
+            for dx in [-5.0, 0.0, 5.0] {
                 painter.line_segment(
-                    [pos2(knob_mid.x + dx, knob_mid.y - 1.5), pos2(knob_mid.x + dx, knob_mid.y + 1.5)],
+                    [pos2(knob_mid.x + dx, knob_mid.y - 1.2), pos2(knob_mid.x + dx, knob_mid.y + 1.2)],
                     Stroke::new(1.0, grip_color),
                 );
             }

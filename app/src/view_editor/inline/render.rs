@@ -355,17 +355,17 @@ pub fn render_inline_editor(
 
                     let is_active_match = m_idx == ed.cur;
                     let match_color = if is_active_match {
-                        Color32::from_rgba_unmultiplied(255, 195, 45, 130)
+                        theme.accent
                     } else {
-                        Color32::from_rgba_unmultiplied(255, 215, 60, 55)
+                        theme.highlight
                     };
 
                     let galley_y_pad = ((line.height - line.galley.size().y) * 0.5).round().max(0.0);
-                    let m_rect = Rect::from_min_max(
-                        pos2(text_left + r1.min.x, line_y + galley_y_pad + r1.min.y),
-                        pos2(text_left + r2.max.x.max(r1.min.x + 6.0), line_y + galley_y_pad + r1.min.y + r1.height().max(16.0)),
+                    let underline_y = line_y + galley_y_pad + r1.min.y + r1.height().max(16.0) - 2.0;
+                    editor_painter.line_segment(
+                        [pos2(text_left + r1.min.x, underline_y), pos2(text_left + r2.max.x.max(r1.min.x + 6.0), underline_y)],
+                        Stroke::new(if is_active_match { 1.5 } else { 1.0 }, match_color),
                     );
-                    editor_painter.rect_filled(m_rect, 2.0, match_color);
                 }
             }
         }

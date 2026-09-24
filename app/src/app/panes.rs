@@ -73,11 +73,10 @@ impl App {
             None
         };
 
-        // Draw card surfaces
-        let panel_stroke = Stroke::new(1.0, self.theme.border());
-        painter.rect(ed_card_rect, 5.0, self.theme.bg, panel_stroke, egui::StrokeKind::Inside);
+        // Draw card surfaces: subtle background-value contrast instead of hard borders
+        painter.rect(ed_card_rect, 5.0, self.theme.bg, Stroke::NONE, egui::StrokeKind::Inside);
         if let Some(p_card) = preview_card_rect {
-            painter.rect(p_card, 5.0, self.theme.bg, panel_stroke, egui::StrokeKind::Inside);
+            painter.rect(p_card, 5.0, self.theme.surface(), Stroke::NONE, egui::StrokeKind::Inside);
         }
 
         // Tab strip on the editor card
@@ -294,13 +293,22 @@ impl App {
 
                 if let (Some(_), Some(divider_rect)) = (preview_rect_opt, divider_rect_opt) {
                     let available_w = (top_panel_rect.width() - divider_w).max(200.0);
-                    let divider_hit_rect = divider_rect.expand2(vec2(8.0, 0.0));
-                    let is_divider_hovered = !any_modal_open && ui.rect_contains_pointer(divider_hit_rect);
+                    let panel_top = top_panel_rect.min.y;
+                    let panel_bottom = top_panel_rect.max.y;
+                    let mid_x = divider_rect.center().x;
+                    let knob_mid = pos2(mid_x, (panel_top + panel_bottom) * 0.5);
+                    let is_dragging = self.is_dragging_splitter;
+                    let knob_w = if is_dragging { 6.0 } else { 4.0 };
+                    let knob_h = 36.0;
+                    let knob_rect = Rect::from_center_size(knob_mid, vec2(knob_w, knob_h));
+                    let knob_hit_rect = Rect::from_center_size(knob_mid, vec2(16.0, 44.0));
+
+                    let is_knob_hovered = !any_modal_open && ui.rect_contains_pointer(knob_hit_rect);
 
                     let primary_down = ui.input(|i| i.pointer.primary_down());
                     let primary_pressed = ui.input(|i| i.pointer.primary_clicked() || i.pointer.button_pressed(egui::PointerButton::Primary));
 
-                    if is_divider_hovered && primary_pressed {
+                    if is_knob_hovered && primary_pressed {
                         self.is_dragging_splitter = true;
                     }
 
@@ -326,27 +334,21 @@ impl App {
                         } else {
                             self.is_dragging_splitter = false;
                         }
-                    } else if is_divider_hovered {
+                    } else if is_knob_hovered {
                         ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
                     }
 
-                    let is_active = is_divider_hovered || self.is_dragging_splitter;
-                    let panel_top = top_panel_rect.min.y;
-                    let panel_bottom = top_panel_rect.max.y;
-                    let mid_x = divider_rect.center().x;
-                    if is_active {
-                        let line_rect = Rect::from_center_size(
-                            pos2(mid_x, (panel_top + panel_bottom) * 0.5),
-                            vec2(5.0, (panel_bottom - panel_top).max(0.0)),
-                        );
-                        painter.rect_filled(line_rect, 2.5, self.theme.accent);
-                    }
-                    let knob_w = if is_active { 7.0 } else { 5.0 };
-                    let knob_h = 42.0;
-                    let knob_rect = Rect::from_center_size(pos2(mid_x, (panel_top + panel_bottom) * 0.5), vec2(knob_w, knob_h));
+                    let is_active = is_knob_hovered || self.is_dragging_splitter;
+
+                    // Render tactile knob only — no harsh full-height line
+                    let active_knob_rect = if is_active {
+                        Rect::from_center_size(knob_mid, vec2(6.0, 38.0))
+                    } else {
+                        knob_rect
+                    };
                     painter.rect_filled(
-                        knob_rect,
-                        3.0,
+                        active_knob_rect,
+                        2.5,
                         if is_active {
                             self.theme.accent
                         } else {
@@ -354,11 +356,10 @@ impl App {
                         },
                     );
 
-                    let knob_mid = knob_rect.center();
                     let grip_color = self.theme.bg;
-                    for dy in [-6.0, 0.0, 6.0] {
+                    for dy in [-5.0, 0.0, 5.0] {
                         painter.line_segment(
-                            [pos2(knob_mid.x - 1.5, knob_mid.y + dy), pos2(knob_mid.x + 1.5, knob_mid.y + dy)],
+                            [pos2(knob_mid.x - 1.2, knob_mid.y + dy), pos2(knob_mid.x + 1.2, knob_mid.y + dy)],
                             Stroke::new(1.0, grip_color),
                         );
                     }

@@ -231,14 +231,14 @@ pub fn render_editor_body(
                         let match_w = (end_col - start_col) as f32 * cw;
                         let is_current = m_idx == ed.cur;
                         let match_color = if is_current {
-                            Color32::from_rgba_unmultiplied(255, 195, 45, 120) // brighter amber for active match
+                            theme.accent
                         } else {
-                            Color32::from_rgba_unmultiplied(255, 215, 60, 50)  // soft subtle amber
+                            theme.highlight
                         };
-                        editor_painter.rect_filled(
-                            Rect::from_min_size(pos2(match_x, line_y), vec2(match_w, lh)),
-                            2.0,
-                            match_color,
+                        let underline_y = line_y + lh - 2.0;
+                        editor_painter.line_segment(
+                            [pos2(match_x, underline_y), pos2(match_x + match_w, underline_y)],
+                            Stroke::new(if is_current { 1.5 } else { 1.0 }, match_color),
                         );
                     }
                 }

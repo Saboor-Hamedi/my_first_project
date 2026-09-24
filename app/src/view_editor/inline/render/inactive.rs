@@ -223,8 +223,7 @@ pub fn render_inactive_line(
                 append_run_and_map(job, charmap, chars, abs_start + 1..abs_end, fmt);
             }
             InlineSpanKind::Code => {
-                let mut fmt = TextFormat::simple(FontId::monospace(font_size * 0.95), theme.accent);
-                fmt.background = Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 22);
+                let fmt = TextFormat::simple(FontId::monospace(font_size * 0.95), theme.accent);
                 if abs_end >= abs_start + 2 * m {
                     append_run_and_map(job, charmap, chars, abs_start + m..abs_end - m, fmt);
                 }

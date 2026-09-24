@@ -88,33 +88,31 @@ pub fn render_sidebar_body(
                     );
 
                     if is_active || (is_selected && sidebar_focused) || hovered {
-                        let bg_color = if is_selected && sidebar_focused && is_active {
-                            Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 40)
-                        } else if is_selected && sidebar_focused {
+                        let is_active_or_selected = is_active || (is_selected && sidebar_focused);
+                        // Very subtle background tint (or none on rest), letting the left bar carry the emphasis
+                        let bg_color = if is_active_or_selected {
                             if theme.is_light() {
-                                Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 28)
+                                Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 16)
                             } else {
-                                theme.surface().lerp_to_gamma(theme.accent, 0.20)
+                                Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 20)
                             }
-                        } else if is_active {
-                            Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 24)
                         } else {
-                            // Soft, transparent hover background: never harsh black on light theme
+                            // Soft, transparent hover background
                             if theme.is_light() {
-                                Color32::from_rgba_unmultiplied(0, 0, 0, 13)
+                                Color32::from_rgba_unmultiplied(0, 0, 0, 10)
                             } else {
-                                Color32::from_rgba_unmultiplied(255, 255, 255, 14)
+                                Color32::from_rgba_unmultiplied(255, 255, 255, 12)
                             }
                         };
-                        ui.painter().rect_filled(pill_rect, 6.0, bg_color);
+                        ui.painter().rect_filled(pill_rect, 5.0, bg_color);
 
-                        // Left accent bar on active or focused/selected note
-                        if is_active || (is_selected && sidebar_focused) {
+                        // Thin 2.5px left-edge accent bar for active or selected item
+                        if is_active_or_selected {
                             let bar = Rect::from_min_size(
-                                pos2(pill_rect.min.x + 1.0, pill_rect.min.y + 5.0),
-                                vec2(3.0, pill_rect.height() - 10.0),
+                                pos2(pill_rect.min.x + 1.5, pill_rect.min.y + 4.0),
+                                vec2(2.5, pill_rect.height() - 8.0),
                             );
-                            ui.painter().rect_filled(bar, 1.5, theme.accent);
+                            ui.painter().rect_filled(bar, 1.25, theme.accent);
                         }
                     }
 

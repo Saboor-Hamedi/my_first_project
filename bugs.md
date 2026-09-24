@@ -1,210 +1,287 @@
-# Prompt for coding agent: sleek pass — from "code IDE" to "knowledge hub"
+# Prompt for coding agent: Harpoon-style quick-jump + CodeSnap-style export
 
-Paste this whole file to the agent. This is a visual-design pass, not a features
-pass — no new functionality, no behavior changes, only how existing things look.
-The agent will need to locate the actual render code for each area named below
-(sidebar, tab bar, preview pane, terminal/sessions panel, search/suggestion
-highlighting) since those files weren't shared in this conversation — read them
-first, then apply the patterns here.
+Paste this whole file to the agent. Two features, both drawn from a well-known
+Neovim note-taking workflow (`harpoon2` + `codesnap.nvim`), adapted to Mindforge.
+Inline markdown rendering (the third plugin in that reference, `render-markdown.nvim`)
+already exists in Mindforge as `:live` mode — nothing to add there.
 
-## Why: what's currently making Mindforge read as "IDE" instead of "knowledge hub"
+## Feature 1: pinned quick-jump between notes ("Harpoon")
 
-Mindforge's current look is a competent, VS-Code-style code editor: monospace
-type everywhere, hard 1px borders around every pane, a terminal occupying
-prominent screen real estate, boxy tab chrome. That's the right look for an
-editing *tool*. It's the wrong look for a *knowledge hub* — something meant to
-feel like reading and thinking, not building and compiling. Specifically, these
-choices work against that:
+**The idea:** instead of hunting through the sidebar, pin your current 3-6
+active notes to numbered slots, then jump to any of them with one keystroke —
+no menu, no search, instant. This is the single most-loved part of the Harpoon
+workflow: it turns "where was that note" into a reflex.
 
-- **Monospace type in prose panes.** Code editors use monospace because code has
-  meaningful alignment. Prose doesn't — monospace in the preview pane makes
-  reading notes feel like reading a diff.
-- **A terminal is visually load-bearing.** Its presence, fixed height, and full
-  border treatment give it the same visual weight as the content itself, even
-  though for a "knowledge hub" use case it's a secondary, occasional tool.
-- **Hard borders on every pane** turn the window into a grid of boxes. The eye
-  reads "separate applications glued together" rather than "one considered
-  surface."
-- **Two competing accent hues** (violet in the chrome, magenta in preview
-  headings) reads as two unfinished design passes rather than one intentional
-  palette.
-- **Background-fill highlighting on matched/suggested text** (see the dedicated
-  section below) makes scanning content feel like reading redacted documents —
-  every match/suggestion becomes a colored box competing with the text itself,
-  rather than the text quietly standing out on its own.
-
-None of this requires restructuring the app — it's a treatment pass. The fixes
-below are ordered by visual impact per unit of effort; do them in this order.
-
-## 1. Proportional type in the preview pane (highest impact)
-
-The **editor** pane can and should stay monospace — that's correct for a
-text/code-editing surface and matches the app's CLI-typing identity. The
-**preview** pane (the rendered, read-only view) should switch to a proportional
-font with more generous line-height and margins, so it reads as a document, not
-a code diff. This single change does more for "feels like a knowledge hub" than
-anything else in this list.
-
-- Body text: a proportional font (bundle one — Inter, or whatever this app's
-  design system already leans toward if it has an opinion elsewhere), not the
-  monospace font currently shared with the editor.
-- Line-height: increase from the editor's tighter code-appropriate spacing to
-  something closer to 1.6-1.7x font size — prose needs more breathing room than
-  code.
-- Margins: wider side margins in the preview than the editor uses, so
-  paragraph line-length stays comfortable (roughly 60-80 characters per line is
-  the classic readability target) rather than stretching edge-to-edge.
-- Code spans and code blocks *within* the preview should still render
-  monospace — that's still correct, since that content genuinely is code.
-
-## 2. One accent color, used consistently everywhere
-
-Audit every place `theme.accent` (or a hardcoded color that should be it) is
-used across: tab underline/active-tab indicator, sidebar selection state,
-terminal prompt color, cursor, heading colors in the preview pane, link colors.
-They should all resolve to the *same* hue family from the active theme — not
-independently chosen colors that happen to be in the same general area of the
-palette. If preview headings are currently using a separate hardcoded
-magenta/pink rather than `theme.accent` or `theme.highlight`, that's the bug to
-find and fix.
-
-## 3. Remove background-highlight boxes behind matched/suggested text — text color only
-
-**This is a specific, deliberate rule, not a general aesthetic preference:** for
-anything that is *content being read* — search matches, command-bar
-suggestions, autocomplete matches, syntax-highlighted spans, matched substrings
-in a filtered list — the emphasis must come from **text color alone**, never a
-background fill layered behind the glyphs. A colored box behind text turns
-every match into a small redaction-looking rectangle competing with the words
-themselves; a color change on the text itself is quieter and still perfectly
-scannable.
-
-This rule applies to *content*, not to UI chrome. A sidebar item's selected
-state, a button's hover state, a card's active border — those are controls
-being scanned, not text being read, and can keep a background treatment (see
-section 5 for how the sidebar selection specifically should look).
-
-**Find every instance of this pattern and fix it:**
+### Data model (add to `core`)
 
 ```rust
-// BEFORE — background box behind matched/highlighted text.
-// Look for this shape anywhere search matches, autocomplete/command
-// suggestions, or syntax spans are drawn: a `rect_filled` sized to the text,
-// drawn immediately before/after the text itself.
-painter.rect_filled(
-    match_rect,
-    2.0,
-    Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 60),
-);
-painter.text(pos, Align2::LEFT_TOP, &matched_text, font, theme.text);
+pub struct PinnedNote {
+    pub slot: u8,       // 1-based, display order
+    pub note_id: i64,
+}
+```
+New table: `pinned_notes(slot INTEGER PRIMARY KEY, note_id INTEGER NOT NULL)`.
+Small and simple on purpose — this isn't a general bookmarking system, it's a
+fixed-size quick-access list (cap at 6 slots, matching Harpoon's usual feel;
+more than that and it stops being "instant recall" and becomes another list to
+search).
+
+### Commands
+
+- `:pin` — pins the currently open note to the next empty slot (1-6). If all
+  slots are full, replace the oldest pin (slot 1) and shift the rest down, or
+  show a status message telling the user to unpin one first — either is fine,
+  pick whichever is less surprising given how the rest of this app handles
+  "list is full" situations elsewhere.
+- `:unpin` — removes the current note from its slot if pinned.
+- `Ctrl+1` through `Ctrl+6` — jump directly to the note in that slot (open it
+  in the editor, same as clicking it in the sidebar). This is the actual payoff
+  — should feel instant, no confirmation, no animation delay.
+- `:pins` — opens a small floating list (same visual language as the rest of
+  the app: painter-drawn, monospace, theme-colored) showing all 6 slots, empty
+  ones shown as `[empty]`, each row showing slot number + note title. Arrow
+  keys to move selection, Enter to jump, `x` to unpin the selected slot,
+  `Ctrl+Up`/`Ctrl+Down` (or `J`/`K`) to reorder — this mirrors Harpoon's own
+  floating quick-menu, which is core to why the workflow feels good: you can
+  glance at your 6 pins and reorganize them without leaving the keyboard.
+
+### Sketch
+
+```rust
+// core: persistence
+impl Database {
+    pub fn set_pin(&self, slot: u8, note_id: i64) -> rusqlite::Result<()> {
+        self.conn.execute(
+            "INSERT INTO pinned_notes (slot, note_id) VALUES (?1, ?2)
+             ON CONFLICT(slot) DO UPDATE SET note_id = excluded.note_id",
+            rusqlite::params![slot, note_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn unset_pin(&self, slot: u8) -> rusqlite::Result<()> {
+        self.conn.execute("DELETE FROM pinned_notes WHERE slot = ?1", [slot])?;
+        Ok(())
+    }
+
+    pub fn list_pins(&self) -> rusqlite::Result<Vec<PinnedNote>> {
+        let mut stmt = self.conn.prepare("SELECT slot, note_id FROM pinned_notes ORDER BY slot")?;
+        let rows = stmt.query_map([], |r| Ok(PinnedNote { slot: r.get(0)?, note_id: r.get(1)? }))?;
+        rows.collect()
+    }
+}
 ```
 
 ```rust
-// AFTER — accent color on the text itself carries the emphasis. No background
-// layer at all. If a match still needs to be scannable at a glance without
-// reading every word (e.g. search-result highlighting in a long document),
-// use a thin underline instead of a filled box — still lightweight, doesn't
-// compete with the text's own shape.
-painter.text(pos, Align2::LEFT_TOP, &matched_text, font, theme.accent);
-
-// Optional, only where a match genuinely needs to be spottable without
-// reading (e.g. :noh search highlighting across a long scroll):
-painter.line_segment(
-    [pos2(rect.min.x, rect.max.y), pos2(rect.max.x, rect.max.y)],
-    Stroke::new(1.0, theme.accent),
-);
+// commands.rs — add alongside the existing arms
+"pin" => {
+    if let Some(note_id) = app.active_note_id {
+        let pins = app.db.as_ref().and_then(|db| db.list_pins().ok()).unwrap_or_default();
+        let next_slot = (1..=6u8).find(|s| !pins.iter().any(|p| p.slot == *s));
+        match next_slot {
+            Some(slot) => {
+                if let Some(ref db) = app.db { let _ = db.set_pin(slot, note_id); }
+                app.set_status(format!("Pinned to slot {slot}"), now);
+            }
+            None => app.set_status("All 6 pin slots full — :unpin one first, or use :pins to reorder", now),
+        }
+    } else {
+        app.set_status("No active note to pin", now);
+    }
+}
+"unpin" => {
+    if let Some(note_id) = app.active_note_id {
+        if let Some(ref db) = app.db {
+            if let Ok(pins) = db.list_pins() {
+                if let Some(p) = pins.iter().find(|p| p.note_id == note_id) {
+                    let _ = db.unset_pin(p.slot);
+                    app.set_status(format!("Unpinned from slot {}", p.slot), now);
+                }
+            }
+        }
+    }
+}
+"pins" => {
+    app.pins_open = true;
+    app.pins_selected = 0;
+}
 ```
 
-**Specific places to check** (locate the actual render code for each — these
-weren't shared in this conversation):
-- Search-match highlighting (wherever `:noh`/search results are drawn).
-- The command-bar suggestion list, if it currently fills a background behind
-  the matched prefix of each suggested command name.
-- Any inline markdown match/emphasis rendering that uses a filled rect rather
-  than just a text color (bold/code spans should already be text-color-only per
-  the earlier markdown work — confirm they are, since that work predates this
-  design pass and may not have had this rule stated explicitly).
-- Task-checkbox rows, if the checked state currently draws a background tint
-  behind the row rather than just coloring the checkbox glyph itself.
+```rust
+// Ctrl+1..6 handling — wherever global key shortcuts (not the command bar,
+// not vim keys — app-level shortcuts) are already read:
+if modifiers.ctrl {
+    let slot = match key {
+        Key::Num1 => Some(1), Key::Num2 => Some(2), Key::Num3 => Some(3),
+        Key::Num4 => Some(4), Key::Num5 => Some(5), Key::Num6 => Some(6),
+        _ => None,
+    };
+    if let Some(slot) = slot {
+        if let Some(ref db) = app.db {
+            if let Ok(pins) = db.list_pins() {
+                if let Some(p) = pins.iter().find(|p| p.slot == slot) {
+                    app.open_note(p.note_id); // reuse whatever function the sidebar click already calls
+                }
+            }
+        }
+    }
+}
+```
 
-## 4. Drop hard borders between panes — use background-value shift instead
+**The floating `:pins` list** (`app/src/pins_view.rs` or similar) should follow
+the same painter+`ui.interact`+`animate_bool` pattern as the theme tab and
+accent picker built earlier in this project — a small centered card, not a
+separate window. Not written out in full here since it's a straightforward
+list-with-selection UI matching patterns already established elsewhere in this
+codebase; the agent should build it consistently with those, not introduce a
+new visual style for it.
 
-Replace visible 1px borders between sidebar/editor/preview/terminal with a
-subtle difference in background value (each region a few percent darker or
-lighter than its neighbor) instead of a drawn line. The eye reads adjacent
-regions as separate from value contrast alone — a border is redundant most of
-the time and is what's making the window look like a grid of boxes.
+## Feature 2: polished image export ("CodeSnap")
 
-**Keep a visible border only where it does real work**: the pane-resize drag
-handles (the divider a user can actually grab and drag) should stay visibly
-distinct, since that's the one place a hard line communicates something
-functional ("this is draggable") rather than just separating regions.
+**The idea:** select some text (or export the whole active note), get back a
+nicely styled PNG — rounded corners, padding, the app's own syntax/markdown
+rendering, maybe a subtle drop shadow — suitable for sharing on social media or
+in a chat, the way `codesnap.nvim`/Carbon/Ray.so do for code.
 
-## 5. Sidebar selection: left-edge accent bar, not a flat fill
+### Approach: render through the same pipeline the app already has, not a new one
 
-Replace the current flat full-rectangle fill on the selected sidebar item with:
-a thin (2-3px) accent-colored bar on the left edge of the row, plus a much
-lighter background tint than currently used (or none at all, if the left bar
-alone reads clearly against the sidebar's own background). This is the pattern
-most reading-focused sidebars (Linear, Notion, VS Code's own explorer) converge
-on — legible without visually dominating the row.
+Mindforge already renders styled text via `LayoutJob` (from the markdown work)
+onto an `egui::Painter`. The export should reuse that exact rendering path —
+build the same `LayoutJob`s for the selected text, then paint them into an
+**offscreen** render target sized to fit the content, instead of the visible
+window, and save that as a PNG. This guarantees the exported image always looks
+exactly like what's on screen (same fonts, same theme colors, same markdown
+styling) with zero duplicated rendering logic — the single most important
+design decision here, since a separate hand-built "export renderer" would
+inevitably drift out of sync with the real editor's look over time.
 
-## 6. Tab bar: reduce competing signals
+```rust
+// app/src/snap.rs — sketch; adapt exact egui/eframe offscreen-render API to
+// whatever version this project is pinned to (egui's offscreen rendering
+// approach has changed across versions — confirm current API before writing
+// this for real, similar caution as with egui_term earlier in this project).
 
-Currently the active tab is marked by an underline, a text-color change, *and*
-an always-visible `×`, all at once. Simplify to:
-- Active tab indicated by **either** the underline **or** a background tint —
-  pick one, drop the other, so there's a single clear signal instead of three.
-- Close icon (`×`) fades in only on hover of that specific tab, not shown at
-  rest — reduces visual noise across a full row of tabs when most aren't being
-  interacted with.
+use eframe::egui;
+use image::{ImageBuffer, Rgba};
 
-## 7. Sessions panel: collapse when trivial
+pub struct SnapOptions {
+    pub padding: f32,        // outer padding around content, e.g. 48.0
+    pub corner_radius: f32,  // e.g. 12.0
+    pub max_width: f32,      // wrap width for the content, e.g. 720.0
+    pub watermark: bool,     // small "Made with Mindforge" footer, off by default
+}
 
-The terminal sessions list currently reserves a fixed-width column regardless
-of session count. When there's exactly one session, collapse it to a slim strip
-(or hide it entirely, showing just the active session's label in the terminal
-header) — only expand to a full list once there are 2+ sessions to actually
-choose between. Right now it reserves real estate for a feature that isn't
-being used in the common case.
+impl Default for SnapOptions {
+    fn default() -> Self {
+        Self { padding: 48.0, corner_radius: 12.0, max_width: 720.0, watermark: false }
+    }
+}
 
-## 8. Merge the top bar and tab bar visually
+/// Renders `text` (already-selected content, or the full active note) using
+/// the app's normal markdown LayoutJob pipeline, onto an offscreen surface,
+/// and returns PNG bytes ready to write to disk.
+pub fn render_snap(
+    text: &str,
+    theme: &crate::theme::Theme,
+    opts: &SnapOptions,
+) -> anyhow::Result<Vec<u8>> {
+    // 1. Reuse the existing markdown parse + layout functions (from the
+    //    markdown module built earlier) to get per-line LayoutJobs, exactly
+    //    as the preview pane does — do not reimplement text styling here.
+    let doc = markdown::parse_document(text);
 
-If there's currently a visible seam (a hard color/border break) between the
-window's top bar and the tab row directly below it, either remove that seam
-(same background value across both) or make it deliberately subtle, so the top
-of the window reads as one continuous surface rather than two stacked bands.
+    // 2. Measure total content size by laying out each line against
+    //    `opts.max_width`, summing line heights — same measurement egui
+    //    already does when painting the preview pane, just captured instead
+    //    of drawn to the visible window.
+
+    // 3. Create an offscreen render target sized to (content width/height +
+    //    2*padding). Paint: rounded-rect background at theme.bg, then each
+    //    line's LayoutJob via a Painter targeting that offscreen surface.
+
+    // 4. Read back the rendered pixels into an `image::ImageBuffer<Rgba<u8>, _>`
+    //    and encode as PNG.
+
+    todo!("confirm exact offscreen-render API against the pinned egui/eframe version before implementing")
+}
+```
+
+```toml
+# app/Cargo.toml — if not already present
+image = "0.25"
+```
+
+### Command
+
+- `:snap` — if there's an active text selection, export just that; otherwise
+  export the whole active note. Opens a native save dialog (same `rfd`
+  pattern already used by `:export`/`:import`) defaulting to
+  `{note-title}-snap.png`.
+- `:snap --watermark` — includes the small "Made with Mindforge" footer;
+  off by default so exported images aren't unexpectedly branded.
+
+```rust
+// commands.rs
+"snap" => {
+    let text = app.ed.selected_text().unwrap_or_else(|| app.ed.text());
+    let watermark = args.trim() == "--watermark";
+    let opts = snap::SnapOptions { watermark, ..Default::default() };
+    match snap::render_snap(&text, &app.theme, &opts) {
+        Ok(png_bytes) => {
+            let default_name = format!("{}-snap.png", app.active_note_title.replace(' ', "-"));
+            if let Some(path) = rfd::FileDialog::new()
+                .set_file_name(&default_name)
+                .add_filter("PNG Image", &["png"])
+                .save_file()
+            {
+                match std::fs::write(&path, png_bytes) {
+                    Ok(_) => app.set_status(format!("Saved snap: {}", path.display()), now),
+                    Err(e) => app.set_status(format!("Snap save failed: {e}"), now),
+                }
+            }
+        }
+        Err(e) => app.set_status(format!("Snap render failed: {e}"), now),
+    }
+}
+```
+
+**This one has a genuine open question flagged as `todo!()`, not glossed
+over:** the exact offscreen-rendering API differs across egui/eframe versions
+and setups (render-to-texture vs. a headless `egui::Context` run, vs. using
+`wgpu`/`glow` directly to capture a framebuffer). Confirm which approach fits
+this project's actual rendering backend before writing the real
+implementation — this is the one place in this feature where guessing wrong
+would cost real rework, so it's called out explicitly rather than papered over
+with invented API calls.
 
 ## Build order
 
-1. Section 1 (preview typography) — biggest single visual shift, do it first
-   and look at the result before touching anything else.
-2. Section 3 (remove background highlights) — second-highest impact, and
-   likely touches several different files (search, suggestions, syntax
-   rendering), so worth doing as its own focused pass.
-3. Section 2 (unify accent color) — should be mostly a find-and-replace once
-   the offending hardcoded colors are located.
-4. Sections 4-8 (borders, sidebar, tabs, sessions, top-bar seam) — smaller,
-   independent, can be done in any order or split across multiple sessions.
+1. Feature 1 data model + `:pin`/`:unpin`/`Ctrl+1..6` — get the core jump
+   working end to end before building the floating list UI.
+2. `:pins` floating list (view + reorder + unpin from the list).
+3. Feature 2: confirm the offscreen-render approach against the real egui
+   version (the flagged unknown above) before writing anything else.
+4. `render_snap` using the confirmed approach, reusing the markdown layout
+   pipeline.
+5. `:snap` command + save dialog.
 
 ## Definition of done
 
-- Preview pane reads visibly differently from the editor pane — proportional
-  type, more breathing room — while the editor keeps its monospace/CLI identity.
-- No content (search matches, suggestions, syntax spans) is drawn with a
-  background fill behind it anywhere in the app — text color only.
-- Every accent-colored UI element (tabs, sidebar, cursor, terminal prompt,
-  preview headings/links) resolves to the same hue.
-- Pane boundaries read from background-value contrast, not drawn borders,
-  except at actual drag handles.
-- Sidebar selection uses the left-edge-bar pattern, not a flat fill.
-- Tab bar has one active-tab signal, not three; close icons appear on hover only.
+- Pinning 6 notes and jumping between them with `Ctrl+1`..`Ctrl+6` feels
+  instant — no visible delay, no confirmation dialog.
+- `:pins` shows all 6 slots (empty ones marked), supports reorder and unpin.
+- Pins persist across restart.
+- `:snap` produces a PNG that visually matches what's on screen — same fonts,
+  same theme colors, same markdown styling — because it reuses the real
+  rendering pipeline rather than a separate one.
+- Exporting a selection vs. the whole note both work correctly.
 
 ## Rules for the agent
 
-- This is a visual pass only — no behavior, data model, or feature changes.
-- Where a pattern described here (e.g. the background-highlight rule) appears
-  in code not shown in this conversation, find every instance across the
-  codebase, not just the first one — a partial fix that leaves some highlights
-  as boxes and others as text-color defeats the point of the rule.
-- After each build step, give a 3-line summary of what changed and what to look at.
+- Feature 2's offscreen-rendering approach must be confirmed against the real
+  egui/eframe version before implementation — don't guess at the API the way
+  the `todo!()` above flags.
+- Both features should visually match the app's existing UI language (painter,
+  `ui.interact`, `animate_bool`) — don't introduce a new widget style for
+  either.
+- After each build step, give a 3-line summary of what changed and what to try.

@@ -426,15 +426,21 @@ impl TerminalPane {
             action = TerminalAction::RequestFocus;
         }
 
-        // Sessions right sidebar layout with resizable width
+        // Sessions right sidebar layout with resizable width (collapsed when 1 or fewer sessions)
+        let show_sessions_sidebar = self.sessions.len() > 1;
         let min_sidebar_w = 110.0f32;
         let max_sidebar_w = (rect.width() * 0.50).max(min_sidebar_w);
         let sidebar_w = self.sessions_sidebar_w.clamp(min_sidebar_w, max_sidebar_w);
         let splitter_w = 6.0f32;
 
-        let term_rect = Rect::from_min_max(rect.min, pos2(rect.max.x - sidebar_w - splitter_w, rect.max.y));
-        let splitter_rect = Rect::from_min_max(pos2(rect.max.x - sidebar_w - splitter_w, rect.min.y), pos2(rect.max.x - sidebar_w, rect.max.y));
-        let sessions_rect = Rect::from_min_max(pos2(rect.max.x - sidebar_w, rect.min.y), rect.max);
+        let (term_rect, splitter_rect_opt, sessions_rect_opt) = if show_sessions_sidebar {
+            let term_rect = Rect::from_min_max(rect.min, pos2(rect.max.x - sidebar_w - splitter_w, rect.max.y));
+            let splitter_rect = Rect::from_min_max(pos2(rect.max.x - sidebar_w - splitter_w, rect.min.y), pos2(rect.max.x - sidebar_w, rect.max.y));
+            let sessions_rect = Rect::from_min_max(pos2(rect.max.x - sidebar_w, rect.min.y), rect.max);
+            (term_rect, Some(splitter_rect), Some(sessions_rect))
+        } else {
+            (rect, None, None)
+        };
 
         let header_h = 28.0;
 
@@ -478,7 +484,7 @@ impl TerminalPane {
             "○ READY (Click to focus • Ctrl+J)"
         };
         painter.text(
-            pos2(term_header_rect.max.x - 44.0, term_header_rect.center().y),
+            pos2(term_header_rect.max.x - 62.0, term_header_rect.center().y),
             Align2::RIGHT_CENTER,
             status_text,
             FontId::proportional(font_size * 0.70),
@@ -487,6 +493,25 @@ impl TerminalPane {
             } else {
                 theme.muted
             },
+        );
+
+        // New session (+) button in header (easy access when collapsed)
+        let add_btn_center = pos2(term_header_rect.max.x - 40.0, term_header_rect.center().y);
+        let add_btn_rect = Rect::from_center_size(add_btn_center, vec2(18.0, 18.0));
+        let is_add_hover = ui.rect_contains_pointer(add_btn_rect);
+        if is_add_hover {
+            painter.rect_filled(add_btn_rect, 3.0, theme.surface().lerp_to_gamma(theme.accent, 0.15));
+            if ui.input(|i| i.pointer.primary_clicked()) {
+                self.new_session(ui.ctx());
+                action = TerminalAction::RequestFocus;
+            }
+        }
+        painter.text(
+            add_btn_center,
+            Align2::CENTER_CENTER,
+            "+",
+            FontId::proportional(14.0),
+            if is_add_hover { theme.accent } else { theme.muted },
         );
 
         // Unified sleek close button on far right of terminal header
@@ -525,66 +550,62 @@ impl TerminalPane {
             }
         }
 
-        // --- 2. SESSIONS RESIZE SPLITTER (Between Terminal & Sessions Sidebar) ---
-        let splitter_hit_rect = splitter_rect.expand2(vec2(4.0, 0.0));
-        let is_splitter_hovered = ui.rect_contains_pointer(splitter_hit_rect);
-        let primary_down = ui.input(|i| i.pointer.primary_down());
-        let primary_pressed = ui.input(|i| i.pointer.primary_clicked() || i.pointer.button_pressed(egui::PointerButton::Primary));
+        if let (Some(splitter_rect), Some(sessions_rect)) = (splitter_rect_opt, sessions_rect_opt) {
+            // --- 2. SESSIONS RESIZE SPLITTER (Between Terminal & Sessions Sidebar) ---
+            let mid_x = splitter_rect.center().x;
+            let knob_mid = pos2(mid_x, splitter_rect.center().y);
+            let knob_h = 32.0;
+            let is_dragging = self.is_dragging_sessions_splitter;
+            let knob_w = if is_dragging { 6.0 } else { 4.0 };
+            let knob_rect = Rect::from_center_size(knob_mid, vec2(knob_w, knob_h));
+            let knob_hit_rect = Rect::from_center_size(knob_mid, vec2(16.0, 40.0));
 
-        if is_splitter_hovered && primary_pressed {
-            self.is_dragging_sessions_splitter = true;
-        }
+            let is_splitter_hovered = ui.rect_contains_pointer(knob_hit_rect);
+            let primary_down = ui.input(|i| i.pointer.primary_down());
+            let primary_pressed = ui.input(|i| i.pointer.primary_clicked() || i.pointer.button_pressed(egui::PointerButton::Primary));
 
-        if self.is_dragging_sessions_splitter {
-            if primary_down {
-                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
-                if let Some(pos) = ui.input(|i| i.pointer.interact_pos().or_else(|| i.pointer.hover_pos())) {
-                    let desired_w = rect.max.x - pos.x;
-                    self.sessions_sidebar_w = desired_w.clamp(min_sidebar_w, max_sidebar_w);
-                    ui.ctx().request_repaint();
-                }
-            } else {
-                self.is_dragging_sessions_splitter = false;
+            if is_splitter_hovered && primary_pressed {
+                self.is_dragging_sessions_splitter = true;
             }
-        } else if is_splitter_hovered {
-            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
-        }
 
-        let is_splitter_active = is_splitter_hovered || self.is_dragging_sessions_splitter;
-        let mid_x = splitter_rect.center().x;
-        if is_splitter_active {
-            let line_rect = Rect::from_center_size(
-                pos2(mid_x, splitter_rect.center().y),
-                vec2(4.0, splitter_rect.height()),
-            );
-            painter.rect_filled(line_rect, 2.0, theme.accent);
-        } else {
-            painter.line_segment(
-                [pos2(mid_x, splitter_rect.min.y), pos2(mid_x, splitter_rect.max.y)],
-                Stroke::new(1.0, theme.border()),
-            );
-        }
+            if self.is_dragging_sessions_splitter {
+                if primary_down {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
+                    if let Some(pos) = ui.input(|i| i.pointer.interact_pos().or_else(|| i.pointer.hover_pos())) {
+                        let desired_w = rect.max.x - pos.x;
+                        self.sessions_sidebar_w = desired_w.clamp(min_sidebar_w, max_sidebar_w);
+                        ui.ctx().request_repaint();
+                    }
+                } else {
+                    self.is_dragging_sessions_splitter = false;
+                }
+            } else if is_splitter_hovered {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
+            }
 
-        // Tactile knob on the sessions splitter
-        let knob_h = 32.0;
-        let knob_w = if is_splitter_active { 6.0 } else { 4.0 };
-        let knob_rect = Rect::from_center_size(pos2(mid_x, splitter_rect.center().y), vec2(knob_w, knob_h));
-        painter.rect_filled(
-            knob_rect,
-            2.0,
-            if is_splitter_active {
-                theme.accent
+            let is_splitter_active = is_splitter_hovered || self.is_dragging_sessions_splitter;
+
+            // Tactile knob on the sessions splitter — no harsh full-height line
+            let active_knob_rect = if is_splitter_active {
+                Rect::from_center_size(knob_mid, vec2(6.0, 34.0))
             } else {
-                Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 110)
-            },
-        );
-        let knob_mid = knob_rect.center();
-        for dy in [-5.0, 0.0, 5.0] {
-            painter.line_segment(
-                [pos2(knob_mid.x - 1.0, knob_mid.y + dy), pos2(knob_mid.x + 1.0, knob_mid.y + dy)],
-                Stroke::new(1.0, theme.bg),
+                knob_rect
+            };
+            painter.rect_filled(
+                active_knob_rect,
+                2.0,
+                if is_splitter_active {
+                    theme.accent
+                } else {
+                    Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 110)
+                },
             );
-        }
+            for dy in [-5.0, 0.0, 5.0] {
+                painter.line_segment(
+                    [pos2(knob_mid.x - 1.0, knob_mid.y + dy), pos2(knob_mid.x + 1.0, knob_mid.y + dy)],
+                    Stroke::new(1.0, theme.bg),
+                );
+            }
 
         // --- 3. RIGHT SIDEBAR: SESSIONS LIST ---
         painter.rect_filled(sessions_rect, 0.0, theme.surface());
@@ -763,6 +784,7 @@ impl TerminalPane {
                 action = TerminalAction::Close;
             }
         }
+    }
 
         action
     }
