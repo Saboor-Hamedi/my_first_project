@@ -1,294 +1,210 @@
-# Diagnosis: Why `:` freezes the app
+# Prompt for coding agent: sleek pass — from "code IDE" to "knowledge hub"
 
-The freeze happens the moment you type `:` because the command bar's renderer and handler have **no fast path** — every keystroke goes through the same heavyweight path. There are three specific causes, and one of them is almost certainly the freeze.
+Paste this whole file to the agent. This is a visual-design pass, not a features
+pass — no new functionality, no behavior changes, only how existing things look.
+The agent will need to locate the actual render code for each area named below
+(sidebar, tab bar, preview pane, terminal/sessions panel, search/suggestion
+highlighting) since those files weren't shared in this conversation — read them
+first, then apply the patterns here.
 
-## Root causes
+## Why: what's currently making Mindforge read as "IDE" instead of "knowledge hub"
 
-### 1. `handle_command_text` / `handle_command_paste` call `app.showcmd.set_command(..., now)` on **every** char
+Mindforge's current look is a competent, VS-Code-style code editor: monospace
+type everywhere, hard 1px borders around every pane, a terminal occupying
+prominent screen real estate, boxy tab chrome. That's the right look for an
+editing *tool*. It's the wrong look for a *knowledge hub* — something meant to
+feel like reading and thinking, not building and compiling. Specifically, these
+choices work against that:
 
-Look at the per-char loop:
+- **Monospace type in prose panes.** Code editors use monospace because code has
+  meaningful alignment. Prose doesn't — monospace in the preview pane makes
+  reading notes feel like reading a diff.
+- **A terminal is visually load-bearing.** Its presence, fixed height, and full
+  border treatment give it the same visual weight as the content itself, even
+  though for a "knowledge hub" use case it's a secondary, occasional tool.
+- **Hard borders on every pane** turn the window into a grid of boxes. The eye
+  reads "separate applications glued together" rather than "one considered
+  surface."
+- **Two competing accent hues** (violet in the chrome, magenta in preview
+  headings) reads as two unfinished design passes rather than one intentional
+  palette.
+- **Background-fill highlighting on matched/suggested text** (see the dedicated
+  section below) makes scanning content feel like reading redacted documents —
+  every match/suggestion becomes a colored box competing with the text itself,
+  rather than the text quietly standing out on its own.
 
-```rust
-pub fn handle_command_text(app: &mut App, s: &str, now: f64, ctx: &Context) {
-    for c in s.chars() {
-        app.cmd_ed.insert(c);
-    }
-    app.showcmd.set_command(&app.cmd_ed.text(), now);  // ← clones full String
-    app.last_char_time = now;
-    ctx.request_repaint();
-}
-```
+None of this requires restructuring the app — it's a treatment pass. The fixes
+below are ordered by visual impact per unit of effort; do them in this order.
 
-`set_command` almost certainly does a full `String::clone()` of `cmd_ed.text()` plus a `layout_no_wrap` call somewhere downstream (via the renderer). For a 1-char command that's cheap, but the moment `:` is typed, the **rendering** path runs `layout_no_wrap` on every frame — and if `showcmd` also calls `ctx.request_repaint()`, you get a **repaint storm**: one keypress → repaint → render → repaint → render → …
+## 1. Proportional type in the preview pane (highest impact)
 
-Combined with `ctx.request_repaint()` at the end of the handler, and `in_command` being set true only **after** the `:` char is fully processed, the very first frame where `in_command == true` triggers the `[:CMD]` badge branch in `render_bottom_dock`, which calls `painter.layout_no_wrap` **multiple times per frame** on the growing command text. If `cmd_text` is empty, `layout_no_wrap("")` can loop or produce a zero-size galley that egui re-lays-out forever.
+The **editor** pane can and should stay monospace — that's correct for a
+text/code-editing surface and matches the app's CLI-typing identity. The
+**preview** pane (the rendered, read-only view) should switch to a proportional
+font with more generous line-height and margins, so it reads as a document, not
+a code diff. This single change does more for "feels like a knowledge hub" than
+anything else in this list.
 
-### 2. `render_bottom_dock` computes `layout_no_wrap` **5× per frame**
+- Body text: a proportional font (bundle one — Inter, or whatever this app's
+  design system already leans toward if it has an opinion elsewhere), not the
+  monospace font currently shared with the editor.
+- Line-height: increase from the editor's tighter code-appropriate spacing to
+  something closer to 1.6-1.7x font size — prose needs more breathing room than
+  code.
+- Margins: wider side margins in the preview than the editor uses, so
+  paragraph line-length stays comfortable (roughly 60-80 characters per line is
+  the classic readability target) rather than stretching edge-to-edge.
+- Code spans and code blocks *within* the preview should still render
+  monospace — that's still correct, since that content genuinely is code.
 
-```rust
-let before_cur = &cmd_text[..valid_cur];
-let cursor_offset_x = painter.layout_no_wrap(before_cur.to_string(), font.clone(), theme.text).size().x;
-let total_text_w    = painter.layout_no_wrap(cmd_text.to_string(),      font.clone(), theme.text).size().x;
-// …
-let x_off = cmd_painter.layout_no_wrap(prefix.to_string(),         font.clone(), theme.text).size().x;
-let sel_w = cmd_painter.layout_no_wrap(selected_part.to_string(), font.clone(), theme.text).size().x;
-// …
-let galley = cmd_painter.layout_no_wrap(cmd_text.to_string(), font.clone(), theme.text);
-```
+## 2. One accent color, used consistently everywhere
 
-Each call allocates a `String`, hashes it, and runs the full text shaper. On a 1-char command this is ~microseconds, but combined with #1 (repaint storm) it's thousands of times per second. That is the freeze.
+Audit every place `theme.accent` (or a hardcoded color that should be it) is
+used across: tab underline/active-tab indicator, sidebar selection state,
+terminal prompt color, cursor, heading colors in the preview pane, link colors.
+They should all resolve to the *same* hue family from the active theme — not
+independently chosen colors that happen to be in the same general area of the
+palette. If preview headings are currently using a separate hardcoded
+magenta/pink rather than `theme.accent` or `theme.highlight`, that's the bug to
+find and fix.
 
-### 3. `handle_command_key` has **no `Key::Colon` arm** and no `Key::Semicolon` shift arm
+## 3. Remove background-highlight boxes behind matched/suggested text — text color only
 
-The `:` character arrives via `handle_command_text` — but only if the caller sets `in_command = true` **before** dispatching text. If the caller sets `in_command = true` *after* the text event, then the first `:` triggers a full re-render of the whole app **with** `in_command = false` (no cmd bar), then a second render with `in_command = true`. Two renders per keystroke. If the caller then *also* calls `handle_command_text` on the next frame, you get the same double work. If any of these paths calls `ctx.request_repaint()` unconditionally (which they do), you enter a loop where every frame schedules another frame.
+**This is a specific, deliberate rule, not a general aesthetic preference:** for
+anything that is *content being read* — search matches, command-bar
+suggestions, autocomplete matches, syntax-highlighted spans, matched substrings
+in a filtered list — the emphasis must come from **text color alone**, never a
+background fill layered behind the glyphs. A colored box behind text turns
+every match into a small redaction-looking rectangle competing with the words
+themselves; a color change on the text itself is quieter and still perfectly
+scannable.
 
-**The actual freeze is almost certainly:** `ctx.request_repaint()` is called from inside the key handler, which runs during input processing, which schedules a new frame; that frame's `render_bottom_dock` runs `layout_no_wrap` on a galley that includes the just-inserted `:` — and because `painter.layout_no_wrap` on an empty `before_cur` (`&cmd_text[..0]`) produces a zero-width galley with a NaN or infinite advance in some egui versions, egui's layout pass **panics internally or loops** trying to place the caret at `cmd_input_left - scroll_x` where `scroll_x` is `NaN`. That single NaN poisons the whole layout, and egui retries the frame → repaint → same NaN → **freeze**.
+This rule applies to *content*, not to UI chrome. A sidebar item's selected
+state, a button's hover state, a card's active border — those are controls
+being scanned, not text being read, and can keep a background treatment (see
+section 5 for how the sidebar selection specifically should look).
 
-The NaN comes from:
-
-```rust
-let scroll_x = if total_text_w > cmd_avail_w {
-    let max_scroll = (total_text_w - cmd_avail_w + 24.0).max(0.0);
-    (cursor_offset_x - (cmd_avail_w - 24.0)).clamp(0.0, max_scroll)
-} else {
-    0.0
-};
-```
-
-If `cmd_avail_w < 24.0` (which it is when `dock_rect` is narrow, or `ai_btn_rect.min.x - 16.0 < cmd_input_left + 24.0`), then `(cmd_avail_w - 24.0)` is negative, and `clamp(0.0, max_scroll)` with `max_scroll` computed from a negative `cmd_avail_w` can produce `NaN` if `cursor_offset_x` is also `NaN`. `painter.layout_no_wrap("", ...)` returns a galley whose `size().x` is `0.0`, so `cursor_offset_x` is `0.0` — fine. But `max_scroll` can be negative before the `.max(0.0)` if `cmd_avail_w` is negative, and then `.max(0.0)` returns `0.0`. So `scroll_x = (0.0 - negative).clamp(0.0, 0.0)` — that's `0.0` or a NaN depending on `f32::clamp` semantics with `min > max`. **`f32::clamp` panics if `min > max`.** That is the freeze: a **panic inside the paint callback**, which egui catches and re-raises every frame in a loop.
-
-## The fix — three files, all small
-
-### Fix A — `handle_command_text`: drop `request_repaint`, drop `showcmd` on every char
-
-```rust
-// src/input/command.rs
-
-pub fn handle_command_paste(app: &mut App, s: &str, _now: f64, ctx: &Context) {
-    for c in s.chars() {
-        if c != '\n' && c != '\r' {
-            app.cmd_ed.insert(c);
-        }
-    }
-    app.last_char_time = ctx.input(|i| i.time);
-    // Single repaint, not one per char. Do NOT touch showcmd here;
-    // the dock reads cmd_ed directly.
-    ctx.request_repaint();
-}
-
-pub fn handle_command_text(app: &mut App, s: &str, _now: f64, ctx: &Context) {
-    if s.is_empty() { return; }
-    for c in s.chars() {
-        app.cmd_ed.insert(c);
-    }
-    app.last_char_time = ctx.input(|i| i.time);
-    ctx.request_repaint();
-}
-```
-
-**Key changes:**
-- `showcmd.set_command` is removed from the per-char path. The dock already has `cmd_text: &str` — it should render `cmd_ed.text()` directly.
-- `ctx.request_repaint()` stays, but it's now the *only* one.
-
-### Fix B — `handle_command_key`: guard `Enter` on empty, don't `request_repaint` redundantly
+**Find every instance of this pattern and fix it:**
 
 ```rust
-// src/input/command.rs
-
-pub fn handle_command_key(
-    app: &mut App,
-    key: Key,
-    modifiers: Modifiers,
-    _now: f64,
-    ctx: &Context,
-) {
-    match key {
-        Key::Enter => {
-            let cmd = app.cmd_ed.text();
-            app.in_command = false;
-            app.cmd_ed.clear();
-            app.showcmd.record_action(&format!(":{}", cmd), ctx.input(|i| i.time));
-            execute_command(app, &cmd, ctx.input(|i| i.time));
-        }
-        Key::Escape => {
-            app.in_command = false;
-            app.cmd_ed.clear();
-            app.showcmd.clear();
-        }
-        // … all the other arms unchanged, but:
-        // REMOVE every `ctx.request_repaint()` from this function.
-        // The top-level input loop already requests a repaint after handling
-        // any key event. Adding one per arm is the repaint storm.
-        _ => {}
-    }
-    // One repaint at the end, only if the command bar was actually used.
-    if app.in_command || key == Key::Enter || key == Key::Escape {
-        ctx.request_repaint();
-    }
-}
+// BEFORE — background box behind matched/highlighted text.
+// Look for this shape anywhere search matches, autocomplete/command
+// suggestions, or syntax spans are drawn: a `rect_filled` sized to the text,
+// drawn immediately before/after the text itself.
+painter.rect_filled(
+    match_rect,
+    2.0,
+    Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 60),
+);
+painter.text(pos, Align2::LEFT_TOP, &matched_text, font, theme.text);
 ```
-
-**Key change:** a single `ctx.request_repaint()` at the bottom, and only when the command bar is involved. Currently every arm calls `ctx.request_repaint()`, and the caller likely also calls it — that's 2+ repaints per keystroke.
-
-### Fix C — `render_bottom_dock`: cache galleys, guard the NaN, single layout
-
-This is the important one. Replace the `in_command` branch with:
 
 ```rust
-if in_command {
-    // [:CMD] badge (unchanged)
+// AFTER — accent color on the text itself carries the emphasis. No background
+// layer at all. If a match still needs to be scannable at a glance without
+// reading every word (e.g. search-result highlighting in a long document),
+// use a thin underline instead of a filled box — still lightweight, doesn't
+// compete with the text's own shape.
+painter.text(pos, Align2::LEFT_TOP, &matched_text, font, theme.accent);
 
-    let font = FontId::monospace(14.0);
-    let cmd_avail_w = (max_cmd_x - cmd_input_left).max(40.0);
-
-    // Clamp cmd_cur to a valid char boundary.
-    let mut valid_cur = cmd_cur.min(cmd_text.len());
-    while valid_cur > 0 && !cmd_text.is_char_boundary(valid_cur) {
-        valid_cur -= 1;
-    }
-
-    // Lay out the WHOLE text once. Derive cursor offset from the same galley
-    // by counting the advance of the prefix — no second layout call.
-    let galley = painter.layout_no_wrap(cmd_text.to_string(), font.clone(), theme.text);
-    let total_text_w = galley.size().x;
-
-    // Cursor offset: sum the advances of the first `valid_cur` chars.
-    // `galley.rows[0].glyphs` gives per-glyph positions; use the x of the
-    // glyph at index valid_cur if it exists, else the galley's right edge.
-    let cursor_offset_x = if valid_cur == 0 {
-        0.0
-    } else {
-        let row = &galley.rows[0];
-        let mut x = 0.0_f32;
-        let mut count = 0usize;
-        for g in &row.glyphs {
-            if count >= valid_cur { break; }
-            x += g.advance_width;
-            count += 1;
-        }
-        x
-    };
-
-    // Auto-scroll — guard against min > max, which panics in f32::clamp.
-    let scroll_x = if total_text_w > cmd_avail_w {
-        let max_scroll = (total_text_w - cmd_avail_w + 24.0).max(0.0);
-        let min_scroll = 0.0_f32;
-        let target = (cursor_offset_x - (cmd_avail_w - 24.0)).max(0.0);
-        if max_scroll >= min_scroll { target.min(max_scroll) } else { 0.0 }
-    } else {
-        0.0
-    };
-
-    let cmd_clip_rect = Rect::from_min_max(
-        pos2(cmd_input_left, dock_rect.min.y),
-        pos2(max_cmd_x, dock_rect.max.y),
-    );
-    let cmd_painter = painter.with_clip_rect(cmd_clip_rect);
-    let text_origin = pos2(cmd_input_left - scroll_x, cmd_y);
-
-    // Selection background — reuse `galley` advances instead of a second layout.
-    if let Some((start, end)) = cmd_selection {
-        let s_min = start.min(end).min(cmd_text.len());
-        let s_max = start.max(end).min(cmd_text.len());
-        let mut vmin = s_min;
-        while vmin > 0 && !cmd_text.is_char_boundary(vmin) { vmin -= 1; }
-        let mut vmax = s_max;
-        while vmax > 0 && !cmd_text.is_char_boundary(vmax) { vmax -= 1; }
-        if vmax > vmin {
-            let x_off = advance_of_prefix(&galley, vmin);
-            let x_end = advance_of_prefix(&galley, vmax);
-            let sel_w = (x_end - x_off).max(0.0);
-            cmd_painter.rect_filled(
-                Rect::from_min_size(pos2(text_origin.x + x_off, text_origin.y), vec2(sel_w, 18.0)),
-                2.0,
-                Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 90),
-            );
-        }
-    }
-
-    // Draw text (reuse the galley).
-    cmd_painter.galley(text_origin, galley, theme.text);
-
-    // Cursor beam — reuse cursor_offset_x.
-    let cursor_x = text_origin.x + cursor_offset_x;
-    let blink = ((now * 2.5).sin() > -0.2);
-    if blink {
-        cmd_painter.rect_filled(
-            Rect::from_min_size(pos2(cursor_x, text_origin.y), vec2(2.0, 16.0)),
-            1.0,
-            accent,
-        );
-    }
-}
+// Optional, only where a match genuinely needs to be spottable without
+// reading (e.g. :noh search highlighting across a long scroll):
+painter.line_segment(
+    [pos2(rect.min.x, rect.max.y), pos2(rect.max.x, rect.max.y)],
+    Stroke::new(1.0, theme.accent),
+);
 ```
 
-Add this helper at the bottom of `render_bottom_dock.rs`:
+**Specific places to check** (locate the actual render code for each — these
+weren't shared in this conversation):
+- Search-match highlighting (wherever `:noh`/search results are drawn).
+- The command-bar suggestion list, if it currently fills a background behind
+  the matched prefix of each suggested command name.
+- Any inline markdown match/emphasis rendering that uses a filled rect rather
+  than just a text color (bold/code spans should already be text-color-only per
+  the earlier markdown work — confirm they are, since that work predates this
+  design pass and may not have had this rule stated explicitly).
+- Task-checkbox rows, if the checked state currently draws a background tint
+  behind the row rather than just coloring the checkbox glyph itself.
 
-```rust
-/// Sum of advances for the first `n` chars of `galley`.
-/// Falls back to `galley.size().x` if `n` exceeds the glyph count.
-fn advance_of_prefix(galley: &egui::Galley, n: usize) -> f32 {
-    if n == 0 { return 0.0; }
-    let mut x = 0.0_f32;
-    let mut count = 0usize;
-    for row in &galley.rows {
-        for g in &row.glyphs {
-            if count >= n { return x; }
-            x += g.advance_width;
-            count += 1;
-        }
-    }
-    x
-}
-```
+## 4. Drop hard borders between panes — use background-value shift instead
 
-**Key changes:**
-- **One** `layout_no_wrap` per frame, not five.
-- Cursor offset derived from the same galley's glyph advances — no second layout.
-- `f32::clamp` replaced with a guarded `min`/`max` chain so `min > max` cannot panic.
-- `valid_cur` clamped before use.
-- Selection background reuses the same galley.
+Replace visible 1px borders between sidebar/editor/preview/terminal with a
+subtle difference in background value (each region a few percent darker or
+lighter than its neighbor) instead of a drawn line. The eye reads adjacent
+regions as separate from value contrast alone — a border is redundant most of
+the time and is what's making the window look like a grid of boxes.
 
-### Fix D — The caller must not re-dispatch `:`
+**Keep a visible border only where it does real work**: the pane-resize drag
+handles (the divider a user can actually grab and drag) should stay visibly
+distinct, since that's the one place a hard line communicates something
+functional ("this is draggable") rather than just separating regions.
 
-Wherever you detect "user pressed `:`", the order must be:
+## 5. Sidebar selection: left-edge accent bar, not a flat fill
 
-```rust
-// Pseudo-code in your top-level input handler:
-if !app.in_command && is_colon_key(&event) {
-    app.in_command = true;
-    app.cmd_ed.clear();
-    // DO NOT insert ':' into cmd_ed. The dock draws the ':' badge for you.
-    ctx.request_repaint();
-    return; // consume the event
-}
-if app.in_command {
-    // route ALL subsequent keys through handle_command_key / handle_command_text
-}
-```
+Replace the current flat full-rectangle fill on the selected sidebar item with:
+a thin (2-3px) accent-colored bar on the left edge of the row, plus a much
+lighter background tint than currently used (or none at all, if the left bar
+alone reads clearly against the sidebar's own background). This is the pattern
+most reading-focused sidebars (Linear, Notion, VS Code's own explorer) converge
+on — legible without visually dominating the row.
 
-If your current code inserts `:` into `cmd_ed` **and** sets `in_command = true` **and** then also calls `handle_command_text(":")`, you insert `:` twice and re-layout twice. Pick one: the badge shows `:CMD`, the text shows only the *command* (e.g. `w`), not `:w`. Your `execute_command` already strips a leading `:` (`strip_prefix(':')`), so passing `w` is fine. If you want to keep the leading `:` in `cmd_ed`, then the badge must not draw `:CMD` — but your badge does, so strip it from `cmd_ed`.
+## 6. Tab bar: reduce competing signals
 
-## Why this fixes the freeze
+Currently the active tab is marked by an underline, a text-color change, *and*
+an always-visible `×`, all at once. Simplify to:
+- Active tab indicated by **either** the underline **or** a background tint —
+  pick one, drop the other, so there's a single clear signal instead of three.
+- Close icon (`×`) fades in only on hover of that specific tab, not shown at
+  rest — reduces visual noise across a full row of tabs when most aren't being
+  interacted with.
 
-| Cause | Fix |
-|---|---|
-| Repaint storm: every arm calls `ctx.request_repaint()` | One repaint at the bottom of `handle_command_key`, guarded on `in_command` |
-| `showcmd.set_command` clones the full command text on every char | Removed from `handle_command_text` / `handle_command_paste`; dock reads `cmd_ed.text()` directly |
-| `painter.layout_no_wrap` called 5× per frame | Called once; cursor/selection offsets derived from the same galley |
-| `f32::clamp(0.0, max_scroll)` panics when `max_scroll < 0` | Replaced with guarded `min`/`max` chain |
-| `:` inserted twice (once by caller, once by handler) | Caller must not insert `:`; only set `in_command = true` |
+## 7. Sessions panel: collapse when trivial
 
-## Test this in 3 steps
+The terminal sessions list currently reserves a fixed-width column regardless
+of session count. When there's exactly one session, collapse it to a slim strip
+(or hide it entirely, showing just the active session's label in the terminal
+header) — only expand to a full list once there are 2+ sessions to actually
+choose between. Right now it reserves real estate for a feature that isn't
+being used in the common case.
 
-1. **Type `:`.** If the freeze is gone, all of the above is confirmed. If it still freezes, add `log::warn!` inside `render_bottom_dock` at each `layout_no_wrap` call and check the console — the freeze will be at the first one that receives a `NaN`.
-2. **Type `:w`.** Confirm the badge shows `:CMD`, the text shows `w`, and `Enter` saves.
-3. **Type `:help`.** Confirm `Enter` opens help.
+## 8. Merge the top bar and tab bar visually
 
-## One more thing — your `now` parameter
+If there's currently a visible seam (a hard color/border break) between the
+window's top bar and the tab row directly below it, either remove that seam
+(same background value across both) or make it deliberately subtle, so the top
+of the window reads as one continuous surface rather than two stacked bands.
 
-`handle_command_paste` and `handle_command_text` take `now: f64` but you pass `app.last_char_time` (or a similar wall clock). Prefer `ctx.input(|i| i.time)` for consistency with egui's animation clock. Mixing wall-clock and egui time causes blink phase mismatches (`((now * 2.5).sin() > -0.2)`) and can make the caret look stuck even when it isn't.
+## Build order
 
----
+1. Section 1 (preview typography) — biggest single visual shift, do it first
+   and look at the result before touching anything else.
+2. Section 3 (remove background highlights) — second-highest impact, and
+   likely touches several different files (search, suggestions, syntax
+   rendering), so worth doing as its own focused pass.
+3. Section 2 (unify accent color) — should be mostly a find-and-replace once
+   the offending hardcoded colors are located.
+4. Sections 4-8 (borders, sidebar, tabs, sessions, top-bar seam) — smaller,
+   independent, can be done in any order or split across multiple sessions.
 
-**Apply Fix C first.** It is the actual freeze. Fixes A, B, D are hygiene that prevent the same class of bug from recurring.
+## Definition of done
+
+- Preview pane reads visibly differently from the editor pane — proportional
+  type, more breathing room — while the editor keeps its monospace/CLI identity.
+- No content (search matches, suggestions, syntax spans) is drawn with a
+  background fill behind it anywhere in the app — text color only.
+- Every accent-colored UI element (tabs, sidebar, cursor, terminal prompt,
+  preview headings/links) resolves to the same hue.
+- Pane boundaries read from background-value contrast, not drawn borders,
+  except at actual drag handles.
+- Sidebar selection uses the left-edge-bar pattern, not a flat fill.
+- Tab bar has one active-tab signal, not three; close icons appear on hover only.
+
+## Rules for the agent
+
+- This is a visual pass only — no behavior, data model, or feature changes.
+- Where a pattern described here (e.g. the background-highlight rule) appears
+  in code not shown in this conversation, find every instance across the
+  codebase, not just the first one — a partial fix that leaves some highlights
+  as boxes and others as text-color defeats the point of the rule.
+- After each build step, give a 3-line summary of what changed and what to look at.

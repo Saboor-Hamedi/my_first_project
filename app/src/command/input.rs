@@ -1,60 +1,78 @@
 //! Command bar (`:`) input handling (typing, navigation, backspace, and execution).
 
 use crate::app::App;
-use crate::command::dispatch::execute_command;
+use crate::command::command_suggestion;
 use eframe::egui::{Key, Modifiers};
 
+/// Handles pasting text into the command bar buffer.
 pub fn handle_command_paste(app: &mut App, s: &str, now: f64) {
     for c in s.chars() {
         if c != '\n' && c != '\r' {
             app.cmd_ed.insert(c);
         }
     }
+    app.cmd_selected_idx = 0;
+    app.cmd_navigated = false;
     app.showcmd.set_command(&app.cmd_ed.text(), now);
     app.last_char_time = now;
 }
 
+/// Handles character typing into the command bar buffer.
 pub fn handle_command_text(app: &mut App, s: &str, now: f64) {
     for c in s.chars() {
         app.cmd_ed.insert(c);
     }
+    app.cmd_selected_idx = 0;
+    app.cmd_navigated = false;
     app.showcmd.set_command(&app.cmd_ed.text(), now);
     app.last_char_time = now;
 }
 
+/// Dispatches keystrokes in command mode: autocompletion, cursor movement, editing.
 pub fn handle_command_key(app: &mut App, key: Key, modifiers: Modifiers, now: f64) {
+    // 1. Suggestion navigation & execution (Enter, Tab, Ctrl+J/K, ArrowUp/Down)
+    if command_suggestion::handle_suggestion_key(app, key, modifiers, now) {
+        return;
+    }
+
+    // 2. Standard command line editing & navigation
     match key {
-        Key::Enter => {
-            let cmd = app.cmd_ed.text();
-            app.in_command = false;
-            app.cmd_ed.clear();
-            app.showcmd.record_action(&format!(":{}", cmd), now);
-            execute_command(app, &cmd, now);
-        }
         Key::Escape => {
             app.in_command = false;
+            app.cmd_navigated = false;
+            app.cmd_selected_idx = 0;
             app.cmd_ed.clear();
             app.showcmd.clear();
         }
         Key::Backspace if modifiers.ctrl => {
             app.cmd_ed.delete_word();
+            app.cmd_selected_idx = 0;
+            app.cmd_navigated = false;
             app.showcmd.set_command(&app.cmd_ed.text(), now);
         }
         Key::Backspace => {
             if app.cmd_ed.cur == 0 && !app.cmd_ed.has_selection() {
                 app.in_command = false;
+                app.cmd_selected_idx = 0;
+                app.cmd_navigated = false;
                 app.showcmd.clear();
             } else {
                 app.cmd_ed.backspace();
+                app.cmd_selected_idx = 0;
+                app.cmd_navigated = false;
                 app.showcmd.set_command(&app.cmd_ed.text(), now);
             }
         }
         Key::Delete if modifiers.ctrl => {
             app.cmd_ed.delete_word_forward();
+            app.cmd_selected_idx = 0;
+            app.cmd_navigated = false;
             app.showcmd.set_command(&app.cmd_ed.text(), now);
         }
         Key::Delete => {
             app.cmd_ed.delete();
+            app.cmd_selected_idx = 0;
+            app.cmd_navigated = false;
             app.showcmd.set_command(&app.cmd_ed.text(), now);
         }
         Key::ArrowLeft if modifiers.ctrl && modifiers.shift => {
@@ -123,7 +141,7 @@ mod tests {
         assert_eq!(app.cmd_ed.text(), "set n");
 
         handle_command_key(&mut app, Key::Escape, Modifiers::NONE, 0.0);
-        assert_eq!(app.in_command, false);
+        assert!(!app.in_command);
         assert_eq!(app.cmd_ed.text(), "");
     }
 
@@ -135,5 +153,26 @@ mod tests {
         assert_eq!(app.cmd_ed.text(), ":");
         handle_command_text(&mut app, "w", 0.0);
         assert_eq!(app.cmd_ed.text(), ":w");
+    }
+
+    #[test]
+    fn test_command_navigation_and_tab_complete() {
+        let mut app = App::new();
+        app.in_command = true;
+        handle_command_text(&mut app, "s", 0.0);
+
+        // Ctrl+J navigates down
+        handle_command_key(&mut app, Key::J, Modifiers::CTRL, 0.0);
+        assert!(app.cmd_navigated);
+
+        // Tab completes the selection
+        handle_command_key(&mut app, Key::Tab, Modifiers::NONE, 0.0);
+        assert!(!app.cmd_ed.text().is_empty());
+        assert!(app.cmd_ed.text().starts_with("s"));
+
+        // Enter records to history
+        handle_command_key(&mut app, Key::Enter, Modifiers::NONE, 0.0);
+        assert!(!app.in_command);
+        assert!(!app.command_history.is_empty());
     }
 }

@@ -43,7 +43,7 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
     }
 
     // Global terminal toggle shortcut: Ctrl+J or Ctrl+` (Backtick / Tilde)
-    let toggle_term = ctx.input(|i| {
+    let toggle_term = !app.in_command && ctx.input(|i| {
         (i.modifiers.ctrl && !i.modifiers.shift && !i.modifiers.alt && i.key_pressed(egui::Key::J))
             || (i.modifiers.ctrl && i.key_pressed(egui::Key::Backtick))
     });

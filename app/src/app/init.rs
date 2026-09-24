@@ -260,6 +260,11 @@ impl App {
             if let Ok(scans) = db.list_scans() {
                 app.past_scans = scans;
             }
+            if let Ok(Some(json)) = db.get_setting("command_history") {
+                if let Ok(hist) = serde_json::from_str::<Vec<String>>(&json) {
+                    app.command_history = hist;
+                }
+            }
         } else {
             app.open_notes.push(OpenNote {
                 id: 0,
@@ -429,6 +434,9 @@ impl App {
         if let Some(ref db) = self.db {
             let _ = db.set_setting("last_caret_pos", &self.ed.cur.to_string());
             let _ = db.set_setting("last_scroll_y", &self.scroll_y.to_string());
+            if let Ok(json) = serde_json::to_string(&self.command_history) {
+                let _ = db.set_setting("command_history", &json);
+            }
             if let Some(id) = self.active_note_id {
                 let _ = db.set_setting("last_active_note_id", &id.to_string());
                 let _ = db.set_setting(&format!("note_caret_{}", id), &self.ed.cur.to_string());

@@ -366,6 +366,15 @@ impl App {
         }
 
 
+        // Command Autocomplete Popup (Pops above bottom dock, rendered on top of sidebar)
+        crate::command::command_suggestion::render_command_suggestions_overlay(
+            self,
+            ui,
+            &painter,
+            cmd_bar_rect,
+            now,
+        );
+
         // Render Modal dialogs (Preferences, Search, Rename, Delete, Accent dropdown)
         self.render_modals(ui, &painter, bounds, accent_anchor_rect, now);
 
