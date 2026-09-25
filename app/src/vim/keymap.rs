@@ -112,9 +112,11 @@ impl VimKeymap {
 
         // ── Operators (Prefixes) ─────────────────────────────────────────────
         normal.insert('d'.into(), VimAction::Operator(VimOperator::Delete));
+        normal.insert('D'.into(), VimAction::OperatorToEndOfLine(VimOperator::Delete));
         normal.insert('y'.into(), VimAction::Operator(VimOperator::Yank));
         normal.insert('Y'.into(), VimAction::OperatorLine(VimOperator::Yank));
         normal.insert('c'.into(), VimAction::Operator(VimOperator::Change));
+        normal.insert('C'.into(), VimAction::OperatorToEndOfLine(VimOperator::Change));
 
         // ── In-Buffer Search ─────────────────────────────────────────────────
         normal.insert('/'.into(), VimAction::EnterSearch { backward: false });
@@ -155,8 +157,10 @@ impl VimKeymap {
         visual.insert('y'.into(), VimAction::Operator(VimOperator::Yank));
         visual.insert('Y'.into(), VimAction::Operator(VimOperator::Yank));
         visual.insert('d'.into(), VimAction::Operator(VimOperator::Delete));
+        visual.insert('D'.into(), VimAction::Operator(VimOperator::Delete));
         visual.insert('x'.into(), VimAction::Operator(VimOperator::Delete));
         visual.insert('c'.into(), VimAction::Operator(VimOperator::Change));
+        visual.insert('C'.into(), VimAction::Operator(VimOperator::Change));
         visual.insert(KeyStroke::Key { key: Key::C, ctrl: true, shift: false, alt: false }, VimAction::Operator(VimOperator::Yank));
         visual.insert(
             KeyStroke::Key { key: Key::X, ctrl: true, shift: true, alt: false },

@@ -184,28 +184,49 @@ impl App {
                     }
                     crate::fuzzy::PaletteAction::ToggleRightSidebar => {
                         self.search_open = false;
-                        self.right_sidebar_open = !self.right_sidebar_open;
-                        self.set_status(if self.right_sidebar_open { "Right Sidebar (Outline / Backlinks) opened" } else { "Right Sidebar closed" }, now);
+                        self.preview_open = !self.preview_open;
+                        let val = if self.preview_open { "true" } else { "false" };
+                        let _ = self.db_tx.send(DbMsg::SaveSetting {
+                            key: "preview".into(),
+                            val: val.into(),
+                        });
+                        self.set_status(if self.preview_open { "Right Pane opened" } else { "Right Pane closed" }, now);
                     }
                     crate::fuzzy::PaletteAction::ToggleBacklinks => {
                         self.search_open = false;
-                        if self.right_sidebar_open && self.right_sidebar_state.active_tab == crate::rightsidebar::RightSidebarTab::Backlinks {
-                            self.right_sidebar_open = false;
+                        if self.preview_open && self.right_pane_tab == crate::app::RightPaneTab::Backlinks {
+                            self.preview_open = false;
+                            let _ = self.db_tx.send(DbMsg::SaveSetting {
+                                key: "preview".into(),
+                                val: "false".into(),
+                            });
                             self.set_status("Backlinks panel closed", now);
                         } else {
-                            self.right_sidebar_open = true;
-                            self.right_sidebar_state.active_tab = crate::rightsidebar::RightSidebarTab::Backlinks;
+                            self.preview_open = true;
+                            self.right_pane_tab = crate::app::RightPaneTab::Backlinks;
+                            let _ = self.db_tx.send(DbMsg::SaveSetting {
+                                key: "preview".into(),
+                                val: "true".into(),
+                            });
                             self.set_status("Backlinks panel opened (Ctrl+I)", now);
                         }
                     }
                     crate::fuzzy::PaletteAction::ToggleOutline => {
                         self.search_open = false;
-                        if self.right_sidebar_open && self.right_sidebar_state.active_tab == crate::rightsidebar::RightSidebarTab::Outline {
-                            self.right_sidebar_open = false;
+                        if self.preview_open && self.right_pane_tab == crate::app::RightPaneTab::Outline {
+                            self.preview_open = false;
+                            let _ = self.db_tx.send(DbMsg::SaveSetting {
+                                key: "preview".into(),
+                                val: "false".into(),
+                            });
                             self.set_status("Outline panel closed", now);
                         } else {
-                            self.right_sidebar_open = true;
-                            self.right_sidebar_state.active_tab = crate::rightsidebar::RightSidebarTab::Outline;
+                            self.preview_open = true;
+                            self.right_pane_tab = crate::app::RightPaneTab::Outline;
+                            let _ = self.db_tx.send(DbMsg::SaveSetting {
+                                key: "preview".into(),
+                                val: "true".into(),
+                            });
                             self.set_status("Outline panel opened (Ctrl+Shift+O)", now);
                         }
                     }

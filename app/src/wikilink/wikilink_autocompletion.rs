@@ -17,6 +17,8 @@ pub struct WikiLinkAutocompleteState {
     pub selected_index: usize,
     /// Exact pixel position on screen right under the `[[` trigger
     pub trigger_screen_pos: Pos2,
+    /// Caret position where user explicitly dismissed autocomplete (via Escape, Enter, or Click Outside)
+    pub dismissed_cur: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -148,6 +150,16 @@ impl WikiLinkAutocompleteState {
         self.query.clear();
         self.filtered_items.clear();
         self.selected_index = 0;
+        self.dismissed_cur = None;
+    }
+
+    /// Explicitly closes the autocomplete popup and prevents re-triggering at the current caret position.
+    pub fn dismiss(&mut self, cur: usize) {
+        self.is_active = false;
+        self.dismissed_cur = Some(cur);
+        self.query.clear();
+        self.filtered_items.clear();
+        self.selected_index = 0;
     }
 
     /// Checks editor text before caret for an open `[[` without a closing `]]`.
@@ -156,6 +168,15 @@ impl WikiLinkAutocompleteState {
         if cur == 0 || cur > ed.buf.len() {
             self.clear();
             return;
+        }
+
+        // If the user explicitly dismissed autocomplete at this exact caret position (via Escape, Enter, or Click Outside),
+        // keep it closed until the caret moves or buffer changes!
+        if self.dismissed_cur == Some(cur) {
+            return;
+        }
+        if self.dismissed_cur.is_some() && self.dismissed_cur != Some(cur) {
+            self.dismissed_cur = None;
         }
 
         // Look back up to 60 characters for `[[` on the current line
@@ -180,6 +201,27 @@ impl WikiLinkAutocompleteState {
             // If already closed by `]]` before caret, not active
             let is_closed = typed_slice.windows(2).any(|w| w[0] == ']' && w[1] == ']');
             if is_closed {
+                self.clear();
+                return;
+            }
+
+            // Also check if caret is navigating inside an already closed link with trailing text
+            // e.g. `[[Arch|itecture]]` - trailing "itecture" before `]]` means it's an existing link
+            let lookahead_limit = (cur + 80).min(ed.buf.len());
+            let lookahead = &ed.buf[cur..lookahead_limit];
+            let mut lookahead_closed = false;
+            for j in 0..lookahead.len().saturating_sub(1) {
+                if lookahead[j] == '\n' || (lookahead[j] == '[' && lookahead[j + 1] == '[') {
+                    break;
+                }
+                if lookahead[j] == ']' && lookahead[j + 1] == ']' {
+                    if j > 0 {
+                        lookahead_closed = true;
+                    }
+                    break;
+                }
+            }
+            if lookahead_closed {
                 self.clear();
                 return;
             }
@@ -334,6 +376,16 @@ pub fn render_wikilink_autocomplete(
 
     let menu_rect = Rect::from_min_size(pos2(menu_x, menu_y), vec2(menu_w, list_h));
 
+    // Dismiss dropdown immediately if the user touches or clicks anywhere else on screen
+    let clicked_outside = ui.input(|i| {
+        (i.pointer.primary_clicked() || i.pointer.button_pressed(egui::PointerButton::Primary))
+            && i.pointer.interact_pos().or_else(|| i.pointer.hover_pos()).map_or(false, |p| !menu_rect.contains(p))
+    });
+    if clicked_outside {
+        state.dismiss(ed.cur);
+        return None;
+    }
+
     // Handle keyboard navigation before rendering
     let (nav_up, nav_down, nav_enter, nav_esc) = ui.input_mut(|i| {
         let ctrl_k = i.modifiers.ctrl && i.key_pressed(egui::Key::K);
@@ -360,7 +412,7 @@ pub fn render_wikilink_autocomplete(
     });
 
     if nav_esc {
-        state.clear();
+        state.dismiss(ed.cur);
         return None;
     }
 
@@ -383,8 +435,11 @@ pub fn render_wikilink_autocomplete(
         if let Some(item) = state.filtered_items.get(state.selected_index) {
             let target = item.insert_target.clone();
             let inserted = apply_autocomplete_insertion(ed, state.trigger_start, &target);
-            state.clear();
+            state.dismiss(ed.cur);
             return Some(AutocompleteAction::Inserted { inserted_text: inserted });
+        } else {
+            state.dismiss(ed.cur);
+            return None;
         }
     }
 
@@ -410,7 +465,7 @@ pub fn render_wikilink_autocomplete(
             state.selected_index = idx;
             let target = item.insert_target.clone();
             let inserted = apply_autocomplete_insertion(ed, state.trigger_start, &target);
-            state.clear();
+            state.dismiss(ed.cur);
             return Some(AutocompleteAction::Inserted { inserted_text: inserted });
         }
 
@@ -533,5 +588,35 @@ mod tests {
         ed3.cur = 11;
         apply_autocomplete_insertion(&mut ed3, 6, target);
         assert_eq!(ed3.text(), "Hello [[Architecture]] world");
+    }
+
+    #[test]
+    fn test_wikilink_autocomplete_dismissal_suppression() {
+        let now = chrono::Utc::now().naive_utc();
+        let notes = vec![
+            Note { id: 1, topic: "Architecture".into(), body: "".into(), struggled_with: None, created_at: now },
+        ];
+
+        let mut ed = Editor::new();
+        ed.set_text("Reading [[arch");
+        ed.cur = ed.buf.len();
+
+        let mut state = WikiLinkAutocompleteState::default();
+        state.check_trigger(&ed, &notes);
+        assert!(state.is_active);
+
+        // User dismisses via Escape or clicking outside
+        state.dismiss(ed.cur);
+        assert!(!state.is_active);
+
+        // Next frame check_trigger with identical caret must NOT reopen
+        state.check_trigger(&ed, &notes);
+        assert!(!state.is_active, "Autocomplete must remain dismissed while cursor is at the same position");
+
+        // Moving cursor away resets suppression and allows re-triggering
+        ed.set_text("Reading [[archite");
+        ed.cur = ed.buf.len();
+        state.check_trigger(&ed, &notes);
+        assert!(state.is_active, "Autocomplete must reactivate when user types or moves cursor");
     }
 }

@@ -5,7 +5,7 @@ use crate::view_editor::render_markdown_preview;
 use eframe::egui::{pos2, Painter, Rect, Ui};
 
 impl App {
-    /// Renders the right split pane tabs: Markdown Preview or DeepSeek AI Assistant.
+    /// Renders the right split pane tabs: Markdown Preview, DeepSeek AI Assistant, Backlinks, or Outline.
     pub fn render_right_pane_tabs(
         &mut self,
         ui: &mut Ui,
@@ -13,8 +13,11 @@ impl App {
         preview_rect_opt: Option<Rect>,
         any_modal_open: bool,
         ed_font_size: f32,
+        now: f64,
     ) {
         if let Some(p_rect) = preview_rect_opt {
+            painter.rect_filled(p_rect, 0.0, self.theme.surface());
+
             let r_header_h = crate::view_editor::TAB_ROW_H;
             let r_header_rect = Rect::from_min_max(
                 p_rect.min,
@@ -25,12 +28,20 @@ impl App {
                 p_rect.max,
             );
 
+            // Keep cached backlinks fresh
+            self.right_sidebar_state.cached_backlinks = crate::wikilink::find_backlinks(
+                &self.active_note_title,
+                &self.notes_list,
+                self.active_note_id,
+            );
+
             let header_action = crate::view_editor::preview::render_right_pane_header(
                 ui,
                 painter,
                 r_header_rect,
                 self.right_pane_tab,
                 &self.theme,
+                self.right_sidebar_state.cached_backlinks.len(),
             );
             if let Some(action) = header_action {
                 match action {
@@ -93,6 +104,52 @@ impl App {
                             || self.is_dragging_sidebar_splitter,
                         self.opacity,
                     );
+                }
+                RightPaneTab::Backlinks => {
+                    let action = crate::rightsidebar::backlinks::render_backlinks_panel(
+                        ui,
+                        r_content_rect,
+                        &self.right_sidebar_state.cached_backlinks,
+                        &mut self.right_sidebar_state.backlinks_selected_idx,
+                        &self.theme,
+                    );
+                    if let Some(act) = action {
+                        match act {
+                            crate::rightsidebar::backlinks::BacklinkAction::OpenNote { id, title } => {
+                                if id > 0 {
+                                    self.open_note_by_id(id, now);
+                                } else if let Some(note) = crate::wikilink::resolve_wikilink(&title, &self.notes_list) {
+                                    self.open_note_by_id(note.id, now);
+                                } else {
+                                    self.create_new_note(now);
+                                    crate::notes::rename_active_note(self, &title, now);
+                                }
+                            }
+                        }
+                    }
+                }
+                RightPaneTab::Outline => {
+                    self.right_sidebar_state.cached_headings = crate::rightsidebar::outline::extract_outline_headings(&self.ed);
+                    let action = crate::rightsidebar::outline::render_outline_panel(
+                        ui,
+                        r_content_rect,
+                        &self.right_sidebar_state.cached_headings,
+                        &mut self.right_sidebar_state.outline_selected_idx,
+                        &self.theme,
+                        self.ed.cur,
+                    );
+                    if let Some(act) = action {
+                        match act {
+                            crate::rightsidebar::outline::OutlineAction::JumpToChar(pos) => {
+                                let target_pos = pos.min(self.ed.buf.len());
+                                self.ed.cur = target_pos;
+                                self.ed.desired_col = None;
+                                let (row, _) = self.ed.row_col_of(target_pos);
+                                let line_h = self.font_size * 1.55;
+                                self.scroll_y = (row as f32 * line_h - 40.0).max(0.0);
+                            }
+                        }
+                    }
                 }
             }
         }

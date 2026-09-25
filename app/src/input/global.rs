@@ -43,7 +43,7 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
     }
     if app.wikilink_autocomplete.is_active {
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            app.wikilink_autocomplete.clear();
+            app.wikilink_autocomplete.dismiss(app.ed.cur);
             return Some(false);
         }
     }
@@ -55,11 +55,17 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
     }
 
     // Global terminal toggle shortcut: Ctrl+J or Ctrl+` (Backtick / Tilde)
-    // IMPORTANT: Suppressed when wikilink autocomplete or hover wikilink is active,
+    // IMPORTANT: Suppressed when wikilink autocomplete, hover wikilink, or right pane lists (Outline/Backlinks) are active,
     // so Ctrl+J navigates items / scrolls preview instead of toggling terminal.
+    let is_panel_nav_active = app.wikilink_autocomplete.is_active
+        || app.hover_wikilink.is_active()
+        || (app.preview_open && (
+            app.right_pane_tab == crate::app::RightPaneTab::Backlinks
+            || app.right_pane_tab == crate::app::RightPaneTab::Outline
+        ));
+
     let toggle_term = !app.in_command
-        && !app.wikilink_autocomplete.is_active
-        && !app.hover_wikilink.is_active()
+        && !is_panel_nav_active
         && ctx.input(|i| {
             (i.modifiers.ctrl && !i.modifiers.shift && !i.modifiers.alt && i.key_pressed(egui::Key::J))
                 || (i.modifiers.ctrl && i.key_pressed(egui::Key::Backtick))
@@ -78,7 +84,7 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
 
     // Global AI Agent right pane toggle: Ctrl+Shift+I
     let toggle_ai = ctx.input(|i| {
-        i.modifiers.ctrl && i.modifiers.shift && !i.modifiers.alt && i.key_pressed(egui::Key::I)
+        (i.modifiers.ctrl || i.modifiers.command) && i.modifiers.shift && !i.modifiers.alt && i.key_pressed(egui::Key::I)
     });
     if toggle_ai {
         if app.preview_open && app.right_pane_tab == crate::app::RightPaneTab::AiAgent {
@@ -93,6 +99,60 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
             app.agent_state.is_open = true;
             ctx.memory_mut(|m| m.request_focus(egui::Id::new("deepseek_prompt_input")));
             app.set_status("AI Assistant opened (Ctrl+Shift+I to toggle)", now);
+        }
+        return Some(false);
+    }
+
+    // Toggle Backlinks Panel in Right Pane: Ctrl+I
+    let ctrl_i = ctx.input(|i| {
+        (i.modifiers.ctrl || i.modifiers.command)
+            && !i.modifiers.shift
+            && !i.modifiers.alt
+            && i.key_pressed(egui::Key::I)
+    });
+    if ctrl_i {
+        if app.preview_open && app.right_pane_tab == crate::app::RightPaneTab::Backlinks {
+            app.preview_open = false;
+            let _ = app.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+                key: "preview".into(),
+                val: "false".into(),
+            });
+            app.set_status("Backlinks panel closed (Ctrl+I)", now);
+        } else {
+            app.preview_open = true;
+            app.right_pane_tab = crate::app::RightPaneTab::Backlinks;
+            let _ = app.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+                key: "preview".into(),
+                val: "true".into(),
+            });
+            app.set_status("Backlinks panel opened (Ctrl+I)", now);
+        }
+        return Some(false);
+    }
+
+    // Toggle Outline Panel in Right Pane: Ctrl+Shift+O
+    let ctrl_shift_o = ctx.input(|i| {
+        (i.modifiers.ctrl || i.modifiers.command)
+            && i.modifiers.shift
+            && !i.modifiers.alt
+            && i.key_pressed(egui::Key::O)
+    });
+    if ctrl_shift_o {
+        if app.preview_open && app.right_pane_tab == crate::app::RightPaneTab::Outline {
+            app.preview_open = false;
+            let _ = app.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+                key: "preview".into(),
+                val: "false".into(),
+            });
+            app.set_status("Outline panel closed (Ctrl+Shift+O)", now);
+        } else {
+            app.preview_open = true;
+            app.right_pane_tab = crate::app::RightPaneTab::Outline;
+            let _ = app.db_tx.send(crate::db_worker::DbMsg::SaveSetting {
+                key: "preview".into(),
+                val: "true".into(),
+            });
+            app.set_status("Outline panel opened (Ctrl+Shift+O)", now);
         }
         return Some(false);
     }
@@ -307,6 +367,9 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
             app.cmd_ed.select_all();
         } else {
             app.ed.select_all();
+            if app.editor_input_mode == crate::app::EditorInputMode::Vim {
+                app.vim.set_mode(crate::vim::types::VimSubMode::Visual, &mut app.ed);
+            }
             return Some(true);
         }
         return Some(false);
@@ -430,6 +493,62 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
             app.close_doc_tab(app.active_doc_tab, now);
         } else {
             app.close_tab(app.active_tab, now);
+        }
+        return Some(false);
+    }
+
+    // Direct tab jump with Ctrl+1 .. Ctrl+9
+    if ctx.input(|i| i.modifiers.ctrl && !i.modifiers.alt) {
+        let num_target = ctx.input(|i| {
+            if i.key_pressed(egui::Key::Num1) { Some(0) }
+            else if i.key_pressed(egui::Key::Num2) { Some(1) }
+            else if i.key_pressed(egui::Key::Num3) { Some(2) }
+            else if i.key_pressed(egui::Key::Num4) { Some(3) }
+            else if i.key_pressed(egui::Key::Num5) { Some(4) }
+            else if i.key_pressed(egui::Key::Num6) { Some(5) }
+            else if i.key_pressed(egui::Key::Num7) { Some(6) }
+            else if i.key_pressed(egui::Key::Num8) { Some(7) }
+            else if i.key_pressed(egui::Key::Num9) { Some(8) }
+            else { None }
+        });
+        if let Some(target_idx) = num_target {
+            if app.mode == Mode::Doc {
+                if !app.open_doc_tabs.is_empty() {
+                    let idx = target_idx.min(app.open_doc_tabs.len() - 1);
+                    app.switch_doc_tab(idx, now);
+                }
+            } else if !app.open_notes.is_empty() {
+                let idx = target_idx.min(app.open_notes.len() - 1);
+                app.switch_tab(idx, now);
+            }
+            return Some(false);
+        }
+    }
+
+    // Tab cycling with Ctrl+Tab (next) and Ctrl+Shift+Tab (previous)
+    let ctrl_tab = ctx.input(|i| i.modifiers.ctrl && !i.modifiers.alt && i.key_pressed(egui::Key::Tab));
+    if ctrl_tab {
+        let is_shift = ctx.input(|i| i.modifiers.shift);
+        if app.mode == Mode::Doc {
+            let n = app.open_doc_tabs.len();
+            if n > 1 {
+                let next = if is_shift {
+                    if app.active_doc_tab == 0 { n - 1 } else { app.active_doc_tab - 1 }
+                } else {
+                    (app.active_doc_tab + 1) % n
+                };
+                app.switch_doc_tab(next, now);
+            }
+        } else {
+            let n = app.open_notes.len();
+            if n > 1 {
+                let next = if is_shift {
+                    if app.active_tab == 0 { n - 1 } else { app.active_tab - 1 }
+                } else {
+                    (app.active_tab + 1) % n
+                };
+                app.switch_tab(next, now);
+            }
         }
         return Some(false);
     }
@@ -605,44 +724,6 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
             key: "sidebar".into(),
             val: sb_val.into(),
         });
-        return Some(false);
-    }
-
-    // Toggle Backlinks Sidebar: Ctrl+I
-    let ctrl_i = ctx.input(|i| {
-        (i.modifiers.ctrl || i.modifiers.command)
-            && !i.modifiers.shift
-            && !i.modifiers.alt
-            && i.key_pressed(egui::Key::I)
-    });
-    if ctrl_i {
-        if app.right_sidebar_open && app.right_sidebar_state.active_tab == crate::rightsidebar::RightSidebarTab::Backlinks {
-            app.right_sidebar_open = false;
-            app.set_status("Backlinks panel closed (Ctrl+I)", now);
-        } else {
-            app.right_sidebar_open = true;
-            app.right_sidebar_state.active_tab = crate::rightsidebar::RightSidebarTab::Backlinks;
-            app.set_status("Backlinks panel opened (Ctrl+I)", now);
-        }
-        return Some(false);
-    }
-
-    // Toggle Outline Sidebar: Ctrl+Shift+O
-    let ctrl_shift_o = ctx.input(|i| {
-        (i.modifiers.ctrl || i.modifiers.command)
-            && i.modifiers.shift
-            && !i.modifiers.alt
-            && i.key_pressed(egui::Key::O)
-    });
-    if ctrl_shift_o {
-        if app.right_sidebar_open && app.right_sidebar_state.active_tab == crate::rightsidebar::RightSidebarTab::Outline {
-            app.right_sidebar_open = false;
-            app.set_status("Outline panel closed (Ctrl+Shift+O)", now);
-        } else {
-            app.right_sidebar_open = true;
-            app.right_sidebar_state.active_tab = crate::rightsidebar::RightSidebarTab::Outline;
-            app.set_status("Outline panel opened (Ctrl+Shift+O)", now);
-        }
         return Some(false);
     }
 

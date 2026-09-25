@@ -662,4 +662,46 @@ fn test_vim_cip_changes_paragraph() {
     assert_eq!(ed.text(), "Header\n\nNew replacement paragraph.\nFooter");
 }
 
+#[test]
+fn test_vim_shift_d_delete_to_end_of_line() {
+    let mut ed = Editor::new();
+    ed.insert_str("Hello World Foo Bar");
+    ed.cur = 6; // At 'W' in "World"
+    let mut vim = VimEngine::new();
+
+    // 'D' deletes from cursor to line end
+    assert!(vim.handle_char(&mut ed, &[], 'D'));
+    assert_eq!(ed.text(), "Hello ");
+    assert_eq!(vim.register, "World Foo Bar");
+    assert_eq!(vim.mode, VimSubMode::Normal);
+}
+
+#[test]
+fn test_vim_shift_c_change_to_end_of_line() {
+    let mut ed = Editor::new();
+    ed.insert_str("Hello World Foo Bar");
+    ed.cur = 6; // At 'W' in "World"
+    let mut vim = VimEngine::new();
+
+    // 'C' deletes to end of line and transitions to Insert mode
+    assert!(vim.handle_char(&mut ed, &[], 'C'));
+    assert_eq!(ed.text(), "Hello ");
+    assert_eq!(vim.register, "World Foo Bar");
+    assert_eq!(vim.mode, VimSubMode::Insert);
+}
+
+#[test]
+fn test_vim_selection_delete_with_d() {
+    let mut ed = Editor::new();
+    ed.insert_str("Line 1\nLine 2\nLine 3");
+    ed.select_all(); // Select all text
+    let mut vim = VimEngine::new();
+
+    // Pressing 'd' while selection is active deletes all selected content
+    assert!(vim.handle_char(&mut ed, &[], 'd'));
+    assert_eq!(ed.text(), "");
+    assert_eq!(vim.mode, VimSubMode::Normal);
+}
+
+
 

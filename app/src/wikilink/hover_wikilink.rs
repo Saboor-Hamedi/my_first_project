@@ -36,6 +36,8 @@ pub struct HoverWikiLinkState {
     pub dismissed_target: Option<String>,
     /// Last recorded pointer position to detect actual mouse motion
     pub last_pointer_pos: Option<Pos2>,
+    /// Last timestamp when hover or bridge was active (for graceful bridge transition)
+    pub last_hover_time: f64,
 }
 
 impl HoverWikiLinkState {
@@ -64,6 +66,8 @@ impl HoverWikiLinkState {
         if self.dismissed_target.as_deref() == Some(target) {
             return;
         }
+
+        self.last_hover_time = now;
 
         // If already active on this target, update anchor pos
         if self.target.as_deref() == Some(target) {

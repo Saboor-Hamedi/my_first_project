@@ -277,24 +277,40 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
                     let msg = if app.sidebar_open { ":set sidebar (Sidebar visible)" } else { ":set nosidebar (Sidebar hidden)" };
                     app.set_status(msg, now);
                 }
-                "backlinks" | "bl" | "backlink" | "backlinks!" | "bl!" => {
-                    if app.right_sidebar_open && app.right_sidebar_state.active_tab == crate::rightsidebar::RightSidebarTab::Backlinks {
-                        app.right_sidebar_open = false;
-                        app.set_status(":backlinks (Backlinks panel closed)", now);
+                "backlinks" | "bl" | "backlink" | "backlinks!" | "bl!" | "links" => {
+                    if app.preview_open && app.right_pane_tab == crate::app::RightPaneTab::Backlinks {
+                        app.preview_open = false;
+                        let _ = app.db_tx.send(DbMsg::SaveSetting {
+                            key: "preview".into(),
+                            val: "false".into(),
+                        });
+                        app.set_status(":set nobacklinks (Backlinks panel closed)", now);
                     } else {
-                        app.right_sidebar_open = true;
-                        app.right_sidebar_state.active_tab = crate::rightsidebar::RightSidebarTab::Backlinks;
-                        app.set_status(":backlinks (Backlinks panel opened - Ctrl+I)", now);
+                        app.preview_open = true;
+                        app.right_pane_tab = crate::app::RightPaneTab::Backlinks;
+                        let _ = app.db_tx.send(DbMsg::SaveSetting {
+                            key: "preview".into(),
+                            val: "true".into(),
+                        });
+                        app.set_status(":set backlinks (Backlinks panel opened - Ctrl+I)", now);
                     }
                 }
-                "outline" | "ol" | "outline!" | "ol!" => {
-                    if app.right_sidebar_open && app.right_sidebar_state.active_tab == crate::rightsidebar::RightSidebarTab::Outline {
-                        app.right_sidebar_open = false;
-                        app.set_status(":outline (Outline panel closed)", now);
+                "outline" | "ol" | "outline!" | "ol!" | "headings" => {
+                    if app.preview_open && app.right_pane_tab == crate::app::RightPaneTab::Outline {
+                        app.preview_open = false;
+                        let _ = app.db_tx.send(DbMsg::SaveSetting {
+                            key: "preview".into(),
+                            val: "false".into(),
+                        });
+                        app.set_status(":set nooutline (Outline panel closed)", now);
                     } else {
-                        app.right_sidebar_open = true;
-                        app.right_sidebar_state.active_tab = crate::rightsidebar::RightSidebarTab::Outline;
-                        app.set_status(":outline (Outline panel opened - Ctrl+Shift+O)", now);
+                        app.preview_open = true;
+                        app.right_pane_tab = crate::app::RightPaneTab::Outline;
+                        let _ = app.db_tx.send(DbMsg::SaveSetting {
+                            key: "preview".into(),
+                            val: "true".into(),
+                        });
+                        app.set_status(":set outline (Outline panel opened - Ctrl+Shift+O)", now);
                     }
                 }
                 "notabs" | "notab" | "tabs off" | "tabs=off" | "tabs 0" => {
@@ -615,6 +631,88 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
                         "Sidebar: OFF (hidden)"
                     };
                     app.set_status(msg, now);
+                }
+            }
+        }
+        "backlinks" | "bl" | "backlink" | "links" => {
+            match args.to_lowercase().trim() {
+                "off" | "disable" | "0" | "false" => {
+                    if app.preview_open && app.right_pane_tab == crate::app::RightPaneTab::Backlinks {
+                        app.preview_open = false;
+                        let _ = app.db_tx.send(DbMsg::SaveSetting {
+                            key: "preview".into(),
+                            val: "false".into(),
+                        });
+                    }
+                    app.set_status("Backlinks panel closed", now);
+                }
+                "on" | "enable" | "1" | "true" => {
+                    app.preview_open = true;
+                    app.right_pane_tab = crate::app::RightPaneTab::Backlinks;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "preview".into(),
+                        val: "true".into(),
+                    });
+                    app.set_status("Backlinks panel opened (Ctrl+I)", now);
+                }
+                _ => {
+                    if app.preview_open && app.right_pane_tab == crate::app::RightPaneTab::Backlinks {
+                        app.preview_open = false;
+                        let _ = app.db_tx.send(DbMsg::SaveSetting {
+                            key: "preview".into(),
+                            val: "false".into(),
+                        });
+                        app.set_status("Backlinks panel closed", now);
+                    } else {
+                        app.preview_open = true;
+                        app.right_pane_tab = crate::app::RightPaneTab::Backlinks;
+                        let _ = app.db_tx.send(DbMsg::SaveSetting {
+                            key: "preview".into(),
+                            val: "true".into(),
+                        });
+                        app.set_status("Backlinks panel opened (Ctrl+I)", now);
+                    }
+                }
+            }
+        }
+        "outline" | "ol" | "headings" => {
+            match args.to_lowercase().trim() {
+                "off" | "disable" | "0" | "false" => {
+                    if app.preview_open && app.right_pane_tab == crate::app::RightPaneTab::Outline {
+                        app.preview_open = false;
+                        let _ = app.db_tx.send(DbMsg::SaveSetting {
+                            key: "preview".into(),
+                            val: "false".into(),
+                        });
+                    }
+                    app.set_status("Outline panel closed", now);
+                }
+                "on" | "enable" | "1" | "true" => {
+                    app.preview_open = true;
+                    app.right_pane_tab = crate::app::RightPaneTab::Outline;
+                    let _ = app.db_tx.send(DbMsg::SaveSetting {
+                        key: "preview".into(),
+                        val: "true".into(),
+                    });
+                    app.set_status("Outline panel opened (Ctrl+Shift+O)", now);
+                }
+                _ => {
+                    if app.preview_open && app.right_pane_tab == crate::app::RightPaneTab::Outline {
+                        app.preview_open = false;
+                        let _ = app.db_tx.send(DbMsg::SaveSetting {
+                            key: "preview".into(),
+                            val: "false".into(),
+                        });
+                        app.set_status("Outline panel closed", now);
+                    } else {
+                        app.preview_open = true;
+                        app.right_pane_tab = crate::app::RightPaneTab::Outline;
+                        let _ = app.db_tx.send(DbMsg::SaveSetting {
+                            key: "preview".into(),
+                            val: "true".into(),
+                        });
+                        app.set_status("Outline panel opened (Ctrl+Shift+O)", now);
+                    }
                 }
             }
         }
@@ -1292,3 +1390,15 @@ fn parse_scan_args(raw_args: &str) -> Result<(String, webscan::ScanOptions), Str
 
     Ok((url, opts))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_backlinks_and_outline_command_catalog() {
+        assert!(COMMAND_CATALOG.iter().any(|c| c.name == "backlinks"));
+        assert!(COMMAND_CATALOG.iter().any(|c| c.name == "outline"));
+    }
+}
+

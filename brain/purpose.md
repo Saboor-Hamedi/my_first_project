@@ -33,6 +33,30 @@ Modern note-taking tools are often weighed down by cloud synchronization lag, sl
 - **Granular Surface Toggle**: Every individual component of the application (`:titlebar`, `:sidebar`, `:tabs`, `:ai`, `:preview`, `:settings`) can be toggled on or off independently on demand, both in Zen mode and normal mode.
 - **Adaptive Modular Layout**: The layout engine dynamically recomputes panel dimensions so that when the titlebar is hidden, the canvas smoothly extends all the way to the top border (`bounds.min.y + 5.0`).
 
+### Bidirectional Wikilinks & Autocompletion
+- **Interconnected Knowledge**: Support for `[[Note Title]]` and nested directory links `[[folder/sub/topic]]`.
+- **Intelligent Autocompletion**: Typing `[[` in Insert mode displays a sleek, clean title dropdown positioned right beneath the trigger.
+- **Smart Bracket Lookahead**: Avoids duplicate `]]` when typing within auto-paired brackets, closing unclosed links seamlessly upon Enter or Tab.
+- **Title-Focused Typography**: Autocomplete highlights clean note titles with text-only accents, free from raw URL noise or metadata clutter.
+- **Keyboard Navigation**: Navigate suggestions with `Ctrl+J` / `Ctrl+K` or arrow keys, confirm with `Enter` / `Tab`, and dismiss with `Esc`.
+
+### Floating Hover Wikilink Preview
+- **Instant Non-Destructive Reading**: Resting the cursor over any `[[link]]` for 150ms reveals a sleek floating preview card with full markdown rendering, tables, and code syntax highlighting.
+- **Safe Bridge Corridor & Grace Window**: A 400ms travel grace window lets the user smoothly transition their mouse into the preview card without premature dismissal.
+- **Scroll Isolation**: Mouse wheel scrolling inside the preview card never scrolls or disturbs the background editor.
+- **Direct Navigation & Dismissal**: Click the link icon on the header to immediately jump to the note, or dismiss via the `×` button, pressing `Esc`, or moving the cursor with keyboard motions (`h, j, k, l`).
+
+### Unified Right Split Pane: Preview, AI, Backlinks & Outline
+- **Unified 4-Tab Suite**: Houses Markdown Live Preview (`Ctrl+\`), DeepSeek AI Assistant (`Ctrl+Shift+I`), Backlinks (`Ctrl+I`), and Document Outline (`Ctrl+Shift+O`) within a single, cohesive split pane (`app/src/app/right_pane.rs`).
+- **Zero Conflict Architecture**: Sharing the exact same split-ratio, resize knob, and theme surface ensures that live preview, assistant interactions, and document inspectors never collide or occlude each other.
+- **Automated Backlink Indexing**: Dynamically queries notes referencing the active document (`:backlinks`, `:bl`, `:links`, or `Ctrl+I`), displaying context snippets, line numbers, and live reference counts (`Links (N)`).
+- **Live Document Outline**: Automatically parses and lists headings H1–H6 (`:outline`, `:ol`, `:headings`, or `Ctrl+Shift+O`) with hierarchical indentations and instant jump-to-heading navigation.
+
+### Tab Management & Rapid Navigation
+- **Direct Numbered Tab Jump**: `Ctrl+1` through `Ctrl+9` instantly jumps to the corresponding open tab.
+- **Seamless Tab Cycling**: `Ctrl+Tab` cycles forward through open notes; `Ctrl+Shift+Tab` cycles backward.
+- **Tab Closing**: `Ctrl+W` closes the active tab, saving caret and scroll positions automatically.
+
 ### The Docked Terminal Drawer
 - Integrated cross-platform shell dock (`PowerShell`, `cmd`, `bash`, `zsh`) accessible via `Ctrl+J`.
 - Tabbed multi-session support that collapses to a single clean indicator when only one terminal is active.
@@ -61,7 +85,6 @@ MindForge embraces a quiet, focused aesthetic that respects attention and minimi
 
 ## 4. What We Are Building Next
 
-1. **Expanded Knowledge Graph**: Backlinks, tag taxonomies, and visual relationship webs linking interconnected notes.
-2. **Deep Semantic Search**: Local vector embeddings to surface conceptually related notes and code snippets without exact keyword matches.
-3. **Enhanced AI Tooling**: Granular file attachments, diff-based note suggestions, and autonomous code execution in the sandbox terminal.
-4. **Custom Extensibility**: User script hooks and personalized theme definitions allowing complete visual and functional adaptation.
+1. **Deep Semantic Search**: Local vector embeddings to surface conceptually related notes and code snippets without exact keyword matches.
+2. **Enhanced AI Tooling**: Granular file attachments, diff-based note suggestions, and autonomous code execution in the sandbox terminal.
+3. **Custom Extensibility**: User script hooks and personalized theme definitions allowing complete visual and functional adaptation.

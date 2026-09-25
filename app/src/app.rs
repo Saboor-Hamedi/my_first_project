@@ -50,6 +50,8 @@ pub struct OpenNote {
 pub enum RightPaneTab {
     Preview,
     AiAgent,
+    Backlinks,
+    Outline,
 }
 
 pub struct App {

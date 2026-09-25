@@ -13,27 +13,43 @@ pub struct OutlineHeading {
     pub line_number: usize,
 }
 
-/// Extracts all H1-H6 headings from editor buffer.
+/// Extracts all H1-H6 headings from editor buffer, strictly ignoring code fences and paragraphs.
 pub fn extract_outline_headings(ed: &Editor) -> Vec<OutlineHeading> {
     let mut headings = Vec::new();
     let text = ed.text();
     let mut char_count = 0;
+    let mut in_code_block = false;
 
     for (line_idx, line) in text.lines().enumerate() {
+        let trimmed_all = line.trim();
+        if trimmed_all.starts_with("```") || trimmed_all.starts_with("~~~") {
+            in_code_block = !in_code_block;
+            char_count += line.chars().count() + 1;
+            continue;
+        }
+
+        if in_code_block {
+            char_count += line.chars().count() + 1;
+            continue;
+        }
+
         let trimmed = line.trim_start();
         if trimmed.starts_with('#') {
             let hash_count = trimmed.chars().take_while(|&c| c == '#').count();
             if (1..=6).contains(&hash_count) {
                 let rest = &trimmed[hash_count..];
-                if rest.starts_with(' ') || rest.is_empty() {
-                    let title = rest.trim().to_string();
-                    let leading_spaces = line.len() - trimmed.len();
-                    headings.push(OutlineHeading {
-                        level: hash_count as u8,
-                        title: if title.is_empty() { "Untitled section".into() } else { title },
-                        char_offset: char_count + leading_spaces,
-                        line_number: line_idx + 1,
-                    });
+                // Heading MUST have at least one space or tab immediately after the hash symbols
+                if rest.starts_with(' ') || rest.starts_with('\t') {
+                    let title = rest.trim();
+                    if !title.is_empty() {
+                        let leading_spaces = line.chars().count() - trimmed.chars().count();
+                        headings.push(OutlineHeading {
+                            level: hash_count as u8,
+                            title: title.to_string(),
+                            char_offset: char_count + leading_spaces,
+                            line_number: line_idx + 1,
+                        });
+                    }
                 }
             }
         }
@@ -243,5 +259,27 @@ mod tests {
         assert_eq!(headings[3].level, 6);
         assert_eq!(headings[3].title, "Level 6 Detail");
         assert_eq!(headings[3].line_number, 5);
+    }
+
+    #[test]
+    fn test_extract_outline_ignores_code_blocks_and_paragraphs() {
+        let mut ed = Editor::new();
+        let markdown = r#"# Real Heading
+This is regular paragraph text with #hashtag and no heading.
+
+```rust
+// Code block comment
+# [derive(Debug)]
+pub struct Example;
+```
+
+## Subheading Outside Code
+Normal text
+"#;
+        ed.set_text(markdown);
+        let headings = extract_outline_headings(&ed);
+        assert_eq!(headings.len(), 2);
+        assert_eq!(headings[0].title, "Real Heading");
+        assert_eq!(headings[1].title, "Subheading Outside Code");
     }
 }

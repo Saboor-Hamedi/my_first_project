@@ -111,6 +111,8 @@ pub enum VimAction {
     Operator(VimOperator),
     /// Execute an operator on the entire current line (`dd`, `yy`, `cc`).
     OperatorLine(VimOperator),
+    /// Execute an operator from cursor to end of current line (`D` = `d$`, `C` = `c$`).
+    OperatorToEndOfLine(VimOperator),
     /// Execute an operation on a targeted text object (`di"`, `ci(`, `da{`, etc.).
     TextObject {
         op: VimOperator,

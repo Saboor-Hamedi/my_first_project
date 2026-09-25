@@ -8,19 +8,27 @@ MindForge provides an extensive suite of intuitive, ergonomic keyboard shortcuts
 
 - **Ctrl + N**: Create a new blank note
 - **Ctrl + S**: Quick save active note to local SQLite database
+- **Ctrl + W**: Close active tab
+- **Ctrl + 1 .. 9**: Switch directly to tab 1 through 9
+- **Ctrl + Tab**: Switch to next open tab
+- **Ctrl + Shift + Tab**: Switch to previous open tab
 - **Ctrl + B**: Toggle notes sidebar open or closed
-- **Ctrl + I**: Toggle Backlinks reference sidebar
-- **Ctrl + Shift + O**: Toggle Outline (H1-H6) headings sidebar
+- **Ctrl + I**: Toggle Backlinks reference tab in Right Pane (`:backlinks`, `:bl`, `:links`)
+- **Ctrl + Shift + O**: Toggle Document Outline (H1-H6) tab in Right Pane (`:outline`, `:ol`, `:headings`)
 - **Ctrl + .**: Toggle Zen Mode (distraction-free editor)
 - **Ctrl + P**: Open fast fuzzy search across all notes
 - **Ctrl + R**: Quick rename active note
 - **Ctrl + E**: Toggle Inline Live Markdown Mode vs Raw Monospace Editor
-- **Ctrl + J**: Toggle integrated interactive Terminal dock
+- **Ctrl + J**: Toggle integrated interactive Terminal dock (when autocomplete/hover inactive)
 - **Ctrl + \\**: Toggle side-by-side Live Markdown Preview split
 - **Ctrl + Shift + I**: Toggle DeepSeek AI Assistant right pane
 - **Ctrl + ,**: Open Settings & Preferences modal
 - **Ctrl + Shift + D**: Safely delete active note (with confirmation modal)
-- **Esc**: Dismiss active modal, cancel key recording, or return to Normal mode
+- **[[**: Open Wikilink Autocomplete popup in Insert mode
+- **Ctrl + J / Ctrl + K** (in Autocomplete / Lists): Navigate suggestions down / up (does not conflict with Terminal)
+- **Enter / Tab** (in Autocomplete): Insert clean wikilink without duplicate brackets
+- **Enter on `[[link]]`**: When cursor is placed on or inside any wikilink in Normal mode, pressing `Enter` follows/opens the target note (hovering strictly displays preview, never opens a tab)
+- **Esc**: Dismiss autocomplete, close hover preview, close modal, or return to Normal mode
 
 ---
 
@@ -32,6 +40,8 @@ MindForge gives you full control over every single piece of the interface. Hide 
 - `:sidebar` (or `:sb`, `:set sidebar` / `:set nosidebar`): Toggle notes sidebar
 - `:tabs` (or `:tabbar`, `:set tabs` / `:set notabs`): Toggle document tabs strip
 - `:ai` (or `:agent`, `:set ai` / `:set noai`): Toggle AI Assistant pane
+- `:backlinks` (or `:bl`, `:links`, `:set backlinks`): Toggle Backlinks panel in right pane (Ctrl+I)
+- `:outline` (or `:ol`, `:headings`, `:set outline`): Toggle Document Outline in right pane (Ctrl+Shift+O)
 - `:preview` (or `:set preview` / `:set nopreview`): Toggle live Markdown preview
 - `:dashboard` (or `:welcome`): Toggle the Neovim-style ASCII dashboard
 - `:blur` (or `:acrylic`, `:mica`, `:noblur`): Toggle Windows DWM Acrylic/Mica backdrop blur
@@ -81,9 +91,10 @@ Every shortcut in MindForge can be dynamically customized in the Settings panel:
 - **Ctrl + C**: Copy selected text to system clipboard
 - **Ctrl + X**: Cut selected text to system clipboard
 - **Ctrl + V**: Paste text from system clipboard
-- **Ctrl + Z**: Undo last edit
-- **Ctrl + Y**: Redo last undone edit
-- **Ctrl + A**: Select all text in active note
+- **Ctrl + A**: Select all text in active note (automatically switches Vim into Visual mode)
+- **d / x after selection or Ctrl+A**: Deletes entire selected range immediately in Vim mode
+- **Shift + D (`D`) in Vim**: Delete from cursor to end of current line (`d$`)
+- **Shift + C (`C`) in Vim**: Change from cursor to end of current line (`c$`) and switch to Insert mode
 
 ---
 

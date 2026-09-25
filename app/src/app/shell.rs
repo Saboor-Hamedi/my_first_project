@@ -49,13 +49,12 @@ impl App {
             }
         }
         let sidebar_visible = self.sidebar_open;
-        let right_sidebar_visible = self.right_sidebar_open && self.mode == Mode::Normal && !self.zen_mode;
         let layout = crate::layout::compute_modular_layout_ex(
             bounds,
             sidebar_visible,
             self.sidebar_width,
-            right_sidebar_visible,
-            self.right_sidebar_width,
+            false,
+            0.0,
             is_titlebar_visible,
             true,
         );
@@ -247,41 +246,7 @@ impl App {
             typed,
         );
 
-        // Render Right Sidebar (Outline & Backlinks)
-        if let Some(right_sb_rect) = layout.right_sidebar_rect {
-            if self.mode == Mode::Normal && !self.zen_mode {
-                let rsb_action = crate::rightsidebar::render_right_sidebar(
-                    ui,
-                    right_sb_rect,
-                    &mut self.right_sidebar_state,
-                    &self.ed,
-                    &self.theme,
-                    self.opacity,
-                    &self.active_note_title,
-                    &self.notes_list,
-                    self.active_note_id,
-                );
 
-                if let Some(act) = rsb_action {
-                    match act {
-                        crate::rightsidebar::RightSidebarAction::JumpToChar(pos) => {
-                            self.ed.cur = pos.min(self.ed.buf.len());
-                            self.ed.desired_col = None;
-                        }
-                        crate::rightsidebar::RightSidebarAction::OpenNote { id, title } => {
-                            if id > 0 {
-                                self.open_note_by_id(id, now);
-                            } else if let Some(note) = crate::wikilink::resolve_wikilink(&title, &self.notes_list) {
-                                self.open_note_by_id(note.id, now);
-                            } else {
-                                self.create_new_note(now);
-                                crate::notes::rename_active_note(self, &title, now);
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
         // Update Vim keystroke HUD and ShowCmd card timeout
         if self.editor_input_mode == EditorInputMode::Vim {
@@ -492,6 +457,36 @@ impl App {
 
         // Wikilink Autocomplete & Hover Preview Popups
         if self.mode == Mode::Normal && !any_modal_open {
+            let are_tabs_visible = self.show_tabs && !self.zen_mode;
+            let tab_bar_h = if are_tabs_visible && !self.open_notes.is_empty() {
+                crate::view_editor::TAB_ROW_H
+            } else {
+                0.0
+            };
+            let body_min_y = editor_panel_rect.min.y + tab_bar_h;
+            let body_rect = Rect::from_min_max(
+                pos2(editor_panel_rect.min.x, body_min_y),
+                editor_panel_rect.max,
+            );
+
+            let is_preview_active = (self.preview_open
+                || self.right_pane_tab == crate::app::RightPaneTab::AiAgent)
+                && !self.show_welcome
+                && !self.open_notes.is_empty();
+
+            let actual_editor_rect = if is_preview_active {
+                let divider_w = 11.0;
+                let total_w = editor_panel_rect.width();
+                let available_w = (total_w - divider_w).max(300.0);
+                let min_w = 150.0f32;
+                let min_right_w = 150.0f32;
+                let max_w = (available_w - min_right_w).max(min_w);
+                let left_w = (available_w * self.split_ratio).clamp(min_w, max_w);
+                Rect::from_min_max(body_rect.min, pos2(editor_panel_rect.min.x + left_w, body_rect.max.y))
+            } else {
+                body_rect
+            };
+
             let gutter_w = if self.show_line_numbers {
                 let total_lines = (self.ed.buf.iter().filter(|&&c| c == '\n').count() + 1).max(1);
                 let digits = total_lines.to_string().len().max(2);
@@ -501,10 +496,10 @@ impl App {
             };
             let pad_x = if self.show_line_numbers { 16.0 } else { 24.0 };
             let pad_y = 10.0;
-            let effective_gutter_w = if editor_panel_rect.width() > gutter_w + 40.0 { gutter_w } else { 0.0 };
-            let text_left = (editor_panel_rect.min.x + effective_gutter_w + pad_x).min(editor_panel_rect.max.x);
-            let ed_origin = pos2(text_left, editor_panel_rect.min.y - self.scroll_y + pad_y);
-            let wrap_w = (editor_panel_rect.max.x - text_left - 24.0).max(120.0);
+            let effective_gutter_w = if actual_editor_rect.width() > gutter_w + 40.0 { gutter_w } else { 0.0 };
+            let text_left = (actual_editor_rect.min.x + effective_gutter_w + pad_x).min(actual_editor_rect.max.x);
+            let ed_origin = pos2(text_left, actual_editor_rect.min.y - self.scroll_y + pad_y);
+            let wrap_w = (actual_editor_rect.max.x - text_left - 24.0).max(120.0);
 
             let inline_layout = crate::view_editor::inline::compute_inline_layout_ctx(
                 ui.ctx(),
@@ -515,29 +510,38 @@ impl App {
                 text_left,
             );
 
-            self.wikilink_autocomplete.check_trigger(&self.ed, &self.notes_list);
+            let is_inserting = match self.editor_input_mode {
+                EditorInputMode::Vim => self.vim.mode == crate::vim::VimSubMode::Insert,
+                EditorInputMode::Hybrid => true,
+            };
 
-            if self.wikilink_autocomplete.is_active {
-                let (trigger_pos, trigger_lh) = inline_layout.pos_for_char(self.wikilink_autocomplete.trigger_start, ed_origin);
-                self.wikilink_autocomplete.trigger_screen_pos = pos2(trigger_pos.x, trigger_pos.y + trigger_lh + 2.0);
-            }
+            if is_inserting {
+                self.wikilink_autocomplete.check_trigger(&self.ed, &self.notes_list);
 
-            if let Some(crate::wikilink::wikilink_autocompletion::AutocompleteAction::Inserted { inserted_text: _ }) =
-                crate::wikilink::wikilink_autocompletion::render_wikilink_autocomplete(
-                    ui,
-                    &painter,
-                    &mut self.wikilink_autocomplete,
-                    &mut self.ed,
-                    &self.theme,
-                    bounds,
-                )
-            {
-                self.is_dirty = true;
-                self.sound.play();
+                if self.wikilink_autocomplete.is_active {
+                    let (trigger_pos, trigger_lh) = inline_layout.pos_for_char(self.wikilink_autocomplete.trigger_start, ed_origin);
+                    self.wikilink_autocomplete.trigger_screen_pos = pos2(trigger_pos.x, trigger_pos.y + trigger_lh + 2.0);
+                }
+
+                if let Some(crate::wikilink::wikilink_autocompletion::AutocompleteAction::Inserted { inserted_text: _ }) =
+                    crate::wikilink::wikilink_autocompletion::render_wikilink_autocomplete(
+                        ui,
+                        &painter,
+                        &mut self.wikilink_autocomplete,
+                        &mut self.ed,
+                        &self.theme,
+                        bounds,
+                    )
+                {
+                    self.is_dirty = true;
+                    self.sound.play();
+                }
+            } else {
+                self.wikilink_autocomplete.clear();
             }
 
             if let Some(pos) = pointer_pos {
-                if editor_panel_rect.contains(pos) {
+                if actual_editor_rect.contains(pos) {
                     let text = self.ed.text();
                     let links = crate::wikilink::extract_wikilinks(&text);
                     let mut found_hover = None;
@@ -575,17 +579,46 @@ impl App {
                     } else {
                         self.hover_wikilink.pending_target = None;
                         self.hover_wikilink.dismissed_target = None;
-                        if !self.hover_wikilink.is_mouse_inside_popup {
-                            self.hover_wikilink.clear();
+
+                        // Safe bridge corridor between link anchor and popup card
+                        let in_bridge = if let Some(popup) = self.hover_wikilink.popup_rect {
+                            let bridge = Rect::from_min_max(
+                                pos2(popup.min.x.min(self.hover_wikilink.anchor_pos.x - 24.0), (self.hover_wikilink.anchor_pos.y - 24.0).min(popup.min.y)),
+                                pos2(popup.max.x.max(self.hover_wikilink.anchor_pos.x + 80.0), popup.max.y + 10.0),
+                            );
+                            bridge.contains(pos)
+                        } else {
+                            false
+                        };
+
+                        if in_bridge || self.hover_wikilink.is_mouse_inside_popup {
+                            self.hover_wikilink.last_hover_time = now;
+                        } else if self.hover_wikilink.is_active() {
+                            // 400ms grace window for mouse travel
+                            if now - self.hover_wikilink.last_hover_time > 0.40 {
+                                self.hover_wikilink.clear();
+                            }
                         }
                     }
                 } else if !self.hover_wikilink.is_mouse_inside_popup {
+                    if self.hover_wikilink.is_active() {
+                        if now - self.hover_wikilink.last_hover_time > 0.40 {
+                            self.hover_wikilink.clear();
+                        }
+                    } else {
+                        self.hover_wikilink.pending_target = None;
+                        self.hover_wikilink.clear();
+                    }
+                }
+            } else if !self.hover_wikilink.is_mouse_inside_popup {
+                if self.hover_wikilink.is_active() {
+                    if now - self.hover_wikilink.last_hover_time > 0.40 {
+                        self.hover_wikilink.clear();
+                    }
+                } else {
                     self.hover_wikilink.pending_target = None;
                     self.hover_wikilink.clear();
                 }
-            } else if !self.hover_wikilink.is_mouse_inside_popup {
-                self.hover_wikilink.pending_target = None;
-                self.hover_wikilink.clear();
             }
 
             // Keyboard navigation / typing in editor dismisses hover preview

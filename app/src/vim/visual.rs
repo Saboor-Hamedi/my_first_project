@@ -94,14 +94,14 @@ impl VimEngine {
                 }
                 self.set_mode(VimSubMode::Normal, ed);
             }
-            VimAction::Operator(VimOperator::Delete) => {
+            VimAction::Operator(VimOperator::Delete) | VimAction::OperatorToEndOfLine(VimOperator::Delete) => {
                 if let Some(text) = ed.selected_text() {
                     self.set_register(text, is_line);
                 }
                 ed.delete_selection();
                 self.set_mode(VimSubMode::Normal, ed);
             }
-            VimAction::Operator(VimOperator::Change) => {
+            VimAction::Operator(VimOperator::Change) | VimAction::OperatorToEndOfLine(VimOperator::Change) => {
                 if let Some(text) = ed.selected_text() {
                     self.set_register(text, is_line);
                 }

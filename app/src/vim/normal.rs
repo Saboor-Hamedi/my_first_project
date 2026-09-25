@@ -30,6 +30,38 @@ impl VimEngine {
             }
         }
 
+        // ── 0.5. Active Selection Direct Edit (e.g. after Ctrl+A or mouse drag) ──
+        if ed.has_selection() {
+            if c == 'd' || c == 'D' || c == 'x' {
+                ed.save_undo_snapshot();
+                if let Some(text) = ed.selected_text() {
+                    self.set_register(text, false);
+                }
+                ed.delete_selection();
+                self.last_completed_action = Some(c.to_string());
+                self.pending_keys.clear();
+                return true;
+            } else if c == 'c' || c == 'C' {
+                ed.save_undo_snapshot();
+                if let Some(text) = ed.selected_text() {
+                    self.set_register(text, false);
+                }
+                ed.delete_selection();
+                self.set_mode(crate::vim::types::VimSubMode::Insert, ed);
+                self.last_completed_action = Some(c.to_string());
+                self.pending_keys.clear();
+                return true;
+            } else if c == 'y' || c == 'Y' {
+                if let Some(text) = ed.selected_text() {
+                    self.set_register(text, false);
+                }
+                ed.clear_selection();
+                self.last_completed_action = Some(c.to_string());
+                self.pending_keys.clear();
+                return true;
+            }
+        }
+
         // ── 1. Pending Operator Handling (e.g. `di"`, `ca(`, `ciw`, `dw`, `d$`)
         if let Some(op) = self.pending_op {
             return self.handle_operator_pending(ed, lines, op, c);
@@ -183,6 +215,54 @@ impl VimEngine {
                 self.pending_op = Some(op);
                 if count > 1 {
                     self.count_accumulator = Some(count);
+                }
+            }
+            VimAction::OperatorToEndOfLine(op) => {
+                let initial_cur = ed.cur;
+                ed.end();
+                let end_cur = ed.cur;
+                let start = initial_cur.min(end_cur);
+                let end = initial_cur.max(end_cur);
+                if start < end {
+                    if op == crate::vim::types::VimOperator::Delete || op == crate::vim::types::VimOperator::Change {
+                        ed.save_undo_snapshot();
+                        let text: String = ed.buf[start..end].iter().collect();
+                        self.set_register(text, false);
+                        ed.buf.drain(start..end);
+                        ed.cur = start.min(ed.buf.len());
+                    } else if op == crate::vim::types::VimOperator::Yank {
+                        let text: String = ed.buf[start..end].iter().collect();
+                        self.set_register(text, false);
+                        ed.cur = initial_cur;
+                    }
+                }
+                if op == crate::vim::types::VimOperator::Change {
+                    self.set_mode(crate::vim::types::VimSubMode::Insert, ed);
+                }
+            }
+            VimAction::OperatorLine(op) => {
+                match op {
+                    crate::vim::types::VimOperator::Delete => {
+                        let mut deleted = String::new();
+                        for _ in 0..count {
+                            let line = ed.delete_line();
+                            deleted.push_str(&line);
+                        }
+                        self.set_register(deleted, true);
+                    }
+                    crate::vim::types::VimOperator::Yank => {
+                        let mut yanked = String::new();
+                        for _ in 0..count {
+                            let line = ed.yank_line();
+                            yanked.push_str(&line);
+                        }
+                        self.set_register(yanked, true);
+                    }
+                    crate::vim::types::VimOperator::Change => {
+                        let deleted = ed.delete_line();
+                        self.set_register(deleted, true);
+                        self.set_mode(crate::vim::types::VimSubMode::Insert, ed);
+                    }
                 }
             }
             VimAction::ToggleTaskCheckbox => {

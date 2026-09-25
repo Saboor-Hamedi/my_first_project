@@ -157,6 +157,25 @@ pub fn handle_editor_text(app: &mut App, s: &str, now: f64) -> bool {
 pub fn handle_editor_key(app: &mut App, key: Key, modifiers: Modifiers, now: f64) -> bool {
     let is_doc = app.mode == Mode::Doc;
 
+    // Wikilink Navigation on Enter: when cursor is inside [[link]], hitting Enter follows it
+    if app.mode == Mode::Normal && !app.wikilink_autocomplete.is_active && key == Key::Enter && !modifiers.shift && !modifiers.alt {
+        let is_vim_normal = app.editor_input_mode == EditorInputMode::Vim && app.vim.mode == crate::vim::VimSubMode::Normal;
+        if is_vim_normal || modifiers.ctrl {
+            let text = app.ed.text();
+            let links = crate::wikilink::extract_wikilinks(&text);
+            if let Some(link) = links.into_iter().find(|l| app.ed.cur >= l.start && app.ed.cur <= l.end) {
+                if let Some(note) = crate::wikilink::resolve_wikilink(&link.target, &app.notes_list) {
+                    app.open_note_by_id(note.id, now);
+                } else {
+                    app.create_new_note(now);
+                    crate::notes::rename_active_note(app, &link.target, now);
+                }
+                app.hover_wikilink.clear();
+                return true;
+            }
+        }
+    }
+
     // Mode-specific engines (Vim / Hybrid)
     if app.mode == Mode::Normal || is_doc {
         let target_ed = if is_doc { &mut app.doc_ed } else { &mut app.ed };
