@@ -5,6 +5,7 @@ use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, Stroke};
 pub struct SearchModalAction {
     pub selected_item: Option<SearchItem>,
     pub should_close: bool,
+    pub new_query: Option<String>,
 }
 
 pub fn render_search_modal(
@@ -20,6 +21,20 @@ pub fn render_search_modal(
     let mut action = SearchModalAction {
         selected_item: None,
         should_close: false,
+        new_query: None,
+    };
+
+    let is_theme_picker = query.starts_with(">theme") || query.starts_with("> theme");
+    let is_sound_picker = query.starts_with(">sound") || query.starts_with("> sound");
+    let is_cmd_mode = query.starts_with('>');
+    let (icon_str, hint_str) = if is_theme_picker {
+        ("🎨", "Search themes (↑↓/Ctrl+J/K to navigate  ·  Enter to apply live)...")
+    } else if is_sound_picker {
+        ("🔊", "Search sounds (↑↓/Ctrl+J/K to navigate  ·  Enter to preview live)...")
+    } else if is_cmd_mode {
+        ("⚡", "Type a setting or command (↑↓/Ctrl+J/K to navigate  ·  Enter to run)...")
+    } else {
+        ("🔍", "Search notes or type > for commands  ·  Ctrl+Shift+P for settings...")
     };
 
     // Dimmed translucent backdrop
@@ -27,7 +42,7 @@ pub fn render_search_modal(
     painter.rect_filled(bounds, 0.0, Color32::from_black_alpha(backdrop_alpha));
 
     // Spotlight layout: positioned towards the top (~18% from window top)
-    let modal_w = 600.0f32.min(bounds.width() - 32.0);
+    let modal_w = 620.0f32.min(bounds.width() - 32.0);
     let modal_top = bounds.min.y + (bounds.height() * 0.18).clamp(65.0, 140.0);
     let modal_x = bounds.min.x + (bounds.width() - modal_w) * 0.5;
 
@@ -64,48 +79,46 @@ pub fn render_search_modal(
     // ── Search Bar Input Row ────────────────────────────────────────────────
     let bar_center_y = modal_rect.min.y + bar_h * 0.5;
 
-    // Search icon (macOS style magnifying glass) vertically centered
+    // Search icon vertically centered
     painter.text(
         pos2(modal_rect.min.x + 20.0, bar_center_y),
         Align2::LEFT_CENTER,
-        "🔍",
+        icon_str,
         FontId::monospace(14.0),
         theme.muted,
     );
 
-    // Escape shortcut pill keycap on far right of search bar, vertically centered
-    let esc_h = 22.0;
-    let esc_pill = Rect::from_min_size(
-        pos2(modal_rect.max.x - 48.0, bar_center_y - esc_h * 0.5),
-        vec2(34.0, esc_h),
-    );
-    painter.rect(
-        esc_pill,
-        4.0,
-        theme.bg,
-        Stroke::new(1.0, theme.border()),
-        egui::StrokeKind::Inside,
-    );
+    // Escape shortcut text on far right of search bar, vertically centered (borderless typography, no background box)
     painter.text(
-        esc_pill.center(),
-        Align2::CENTER_CENTER,
+        pos2(modal_rect.max.x - 24.0, bar_center_y),
+        Align2::RIGHT_CENTER,
         "esc",
-        FontId::monospace(10.5),
+        FontId::monospace(11.0),
         theme.muted,
     );
 
-    // Keyboard navigation: pure, intuitive ArrowUp / ArrowDown before TextEdit consumes them
+    // Keyboard navigation: ArrowUp/Down and vim-style Ctrl+K/J before TextEdit consumes them
     let (nav_up, nav_down, nav_enter, nav_esc) = ui.input_mut(|i| {
-        let up = i.key_pressed(egui::Key::ArrowUp);
-        let down = i.key_pressed(egui::Key::ArrowDown);
+        let ctrl_k = i.modifiers.ctrl && !i.modifiers.shift && !i.modifiers.alt
+            && i.key_pressed(egui::Key::K);
+        let ctrl_j = i.modifiers.ctrl && !i.modifiers.shift && !i.modifiers.alt
+            && i.key_pressed(egui::Key::J);
+        let up   = i.key_pressed(egui::Key::ArrowUp)   || ctrl_k;
+        let down = i.key_pressed(egui::Key::ArrowDown) || ctrl_j;
         let enter = i.key_pressed(egui::Key::Enter);
-        let esc = i.key_pressed(egui::Key::Escape);
+        let esc   = i.key_pressed(egui::Key::Escape);
 
-        if up {
+        if i.key_pressed(egui::Key::ArrowUp) {
             i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp);
         }
-        if down {
+        if i.key_pressed(egui::Key::ArrowDown) {
             i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown);
+        }
+        if ctrl_k {
+            i.consume_key(egui::Modifiers::CTRL, egui::Key::K);
+        }
+        if ctrl_j {
+            i.consume_key(egui::Modifiers::CTRL, egui::Key::J);
         }
 
         (up, down, enter, esc)
@@ -127,12 +140,44 @@ pub fn render_search_modal(
     }
     if nav_enter {
         if let Some(item) = results.get(*selected_idx) {
-            action.selected_item = Some(item.clone());
+            match &item.action {
+                crate::fuzzy::PaletteAction::OpenThemePicker => {
+                    *query = ">theme ".to_string();
+                    *selected_idx = 0;
+                    action.new_query = Some(">theme ".to_string());
+                    action.should_close = false;
+                }
+                crate::fuzzy::PaletteAction::ApplyTheme(_) => {
+                    action.selected_item = Some(item.clone());
+                    action.should_close = false; // live change theme without moving away!
+                }
+                crate::fuzzy::PaletteAction::ShowSoundPicker => {
+                    *query = ">sound ".to_string();
+                    *selected_idx = 0;
+                    action.new_query = Some(">sound ".to_string());
+                    action.should_close = false;
+                }
+                crate::fuzzy::PaletteAction::ApplySoundProfile(_) => {
+                    action.selected_item = Some(item.clone());
+                    action.should_close = false; // preview sound without closing picker!
+                }
+                _ => {
+                    action.selected_item = Some(item.clone());
+                    action.should_close = true;
+                }
+            }
         }
-        action.should_close = true;
     }
     if nav_esc {
-        action.should_close = true;
+        // If in sub-picker mode (theme/sound), go back to > command list instead of closing
+        if is_theme_picker || is_sound_picker {
+            *query = ">".to_string();
+            *selected_idx = 0;
+            action.new_query = Some(">".to_string());
+            action.should_close = false;
+        } else {
+            action.should_close = true;
+        }
     }
 
     // Single-line text input vertically aligned with the search icon
@@ -146,7 +191,7 @@ pub fn render_search_modal(
         egui::TextEdit::singleline(query)
             .font(FontId::monospace(14.0))
             .text_color(theme.text)
-            .hint_text("Search notes...")
+            .hint_text(hint_str)
             .margin(vec2(0.0, 2.0))
             .frame(false),
     );
@@ -205,90 +250,106 @@ pub fn render_search_modal(
                         Color32::from_rgba_unmultiplied(255, 255, 255, 8)
                     };
                     painter.rect_filled(item_rect, 6.0, sel_bg);
-
-                    if is_selected {
-                        let bar_rect = Rect::from_min_size(
-                            item_rect.left_top() + vec2(0.0, 6.0),
-                            vec2(3.0, item_rect.height() - 12.0),
-                        );
-                        painter.rect_filled(bar_rect, 1.5, theme.accent);
-                    }
                 }
 
                 if is_hovered && ui.input(|i| i.pointer.primary_clicked()) {
                     *selected_idx = actual_idx;
-                    action.selected_item = Some(item.clone());
-                    action.should_close = true;
+                    match &item.action {
+                        crate::fuzzy::PaletteAction::OpenThemePicker => {
+                            *query = ">theme ".to_string();
+                            *selected_idx = 0;
+                            action.new_query = Some(">theme ".to_string());
+                            action.should_close = false;
+                        }
+                        crate::fuzzy::PaletteAction::ApplyTheme(_) => {
+                            action.selected_item = Some(item.clone());
+                            action.should_close = false; // stay in theme picker
+                        }
+                        crate::fuzzy::PaletteAction::ShowSoundPicker => {
+                            *query = ">sound ".to_string();
+                            *selected_idx = 0;
+                            action.new_query = Some(">sound ".to_string());
+                            action.should_close = false;
+                        }
+                        crate::fuzzy::PaletteAction::ApplySoundProfile(_) => {
+                            action.selected_item = Some(item.clone());
+                            action.should_close = false; // stay in sound picker, play preview
+                        }
+                        _ => {
+                            action.selected_item = Some(item.clone());
+                            action.should_close = true;
+                        }
+                    }
                 }
 
-                // Type badge pill: subtle background, crisp accent text
-                let badge_text = "NOTE";
-                let badge_w = 46.0;
-                let badge_bg = if is_selected {
-                    Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), if theme.is_light() { 20 } else { 26 })
-                } else {
-                    theme.bg
-                };
-                let badge_rect = Rect::from_min_size(item_rect.min + vec2(10.0, 8.0), vec2(badge_w, 20.0));
-                painter.rect(
-                    badge_rect,
-                    4.0,
-                    badge_bg,
-                    Stroke::new(1.0, if is_selected { Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 60) } else { theme.border() }),
-                    egui::StrokeKind::Inside,
-                );
+                // Left Icon (e.g. 🎨, 📄, ⚙, 👁, ⚡, 💡)
                 painter.text(
-                    badge_rect.center(),
-                    Align2::CENTER_CENTER,
-                    badge_text,
-                    FontId::monospace(10.0),
-                    theme.accent,
+                    pos2(item_rect.min.x + 16.0, item_rect.center().y),
+                    Align2::LEFT_CENTER,
+                    item.icon,
+                    FontId::monospace(13.0),
+                    if is_selected { theme.accent } else { theme.muted },
                 );
 
-                // Note Title: high contrast against background
-                let title_display = if item.title.len() > 38 {
-                    format!("{}...", &item.title[..38])
+                // Note / Command Title & Snippet
+                let title_x = item_rect.min.x + 42.0;
+                let title_color = if is_selected {
+                    theme.text
+                } else {
+                    theme.text.lerp_to_gamma(theme.muted, 0.15)
+                };
+
+                let title_display = if item.title.len() > 42 {
+                    format!("{}...", &item.title[..42])
                 } else {
                     item.title.clone()
                 };
-                painter.text(
-                    item_rect.min + vec2(66.0, 9.0),
-                    Align2::LEFT_TOP,
-                    title_display,
-                    FontId::monospace(13.0),
-                    if is_selected { theme.text } else { theme.text.lerp_to_gamma(theme.muted, 0.25) },
-                );
 
-                // Right side: "↵ Open" if selected, snippet if not
-                if is_selected {
-                    let open_pill = Rect::from_min_size(pos2(item_rect.max.x - 64.0, item_rect.min.y + 8.0), vec2(54.0, 20.0));
-                    let pill_bg = Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), if theme.is_light() { 16 } else { 24 });
-                    painter.rect(
-                        open_pill,
-                        3.0,
-                        pill_bg,
-                        Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 50)),
-                        egui::StrokeKind::Inside,
-                    );
+                if !item.snippet.is_empty() && is_selected {
                     painter.text(
-                        open_pill.center(),
-                        Align2::CENTER_CENTER,
-                        "↵ Open",
-                        FontId::monospace(10.5),
-                        theme.accent,
+                        pos2(title_x, item_rect.min.y + 4.0),
+                        Align2::LEFT_TOP,
+                        title_display,
+                        FontId::monospace(12.5),
+                        title_color,
                     );
-                } else if !item.snippet.is_empty() {
-                    let short_snippet = if item.snippet.len() > 22 {
-                        format!("{}...", &item.snippet[..22])
+                    let short_snip = if item.snippet.len() > 50 {
+                        format!("{}...", &item.snippet[..50])
                     } else {
                         item.snippet.clone()
                     };
                     painter.text(
-                        pos2(item_rect.max.x - 14.0, item_rect.min.y + 10.0),
-                        Align2::RIGHT_TOP,
-                        short_snippet,
-                        FontId::monospace(11.0),
+                        pos2(title_x, item_rect.min.y + 19.0),
+                        Align2::LEFT_TOP,
+                        short_snip,
+                        FontId::monospace(10.0),
                         theme.muted,
+                    );
+                } else {
+                    painter.text(
+                        pos2(title_x, item_rect.center().y),
+                        Align2::LEFT_CENTER,
+                        title_display,
+                        FontId::monospace(12.5),
+                        title_color,
+                    );
+                }
+
+                // Sleek borderless text badge on far right (NO background box, NO border!)
+                if !item.badge.is_empty() {
+                    let badge_color = if is_selected {
+                        theme.accent
+                    } else if item.badge.contains("Active") {
+                        theme.accent
+                    } else {
+                        theme.muted
+                    };
+                    painter.text(
+                        pos2(item_rect.max.x - 16.0, item_rect.center().y),
+                        Align2::RIGHT_CENTER,
+                        &item.badge,
+                        FontId::monospace(11.0),
+                        badge_color,
                     );
                 }
             }
@@ -300,10 +361,19 @@ pub fn render_search_modal(
             [pos2(modal_rect.min.x + 16.0, footer_y - 4.0), pos2(modal_rect.max.x - 16.0, footer_y - 4.0)],
             Stroke::new(1.0, theme.border()),
         );
+        let footer_hint = if is_theme_picker {
+            "↑↓ / Ctrl+J/K  ·  ↵ Apply Theme Live  ·  esc → Settings"
+        } else if is_sound_picker {
+            "↑↓ / Ctrl+J/K  ·  ↵ Preview Sound Live  ·  esc → Settings"
+        } else if is_cmd_mode {
+            "↑↓ / Ctrl+J/K  ·  ↵ Run Command  ·  esc Close"
+        } else {
+            "↑↓ / Ctrl+J/K  ·  ↵ Open Note  ·  > for Settings  ·  esc Close"
+        };
         painter.text(
             pos2(modal_rect.min.x + 18.0, footer_y + 1.0),
             Align2::LEFT_TOP,
-            "↑↓ Navigate  ·  ↵ Open  ·  esc Close",
+            footer_hint,
             FontId::monospace(10.5),
             theme.muted,
         );

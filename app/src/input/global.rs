@@ -125,11 +125,12 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
     }
 
     // Global Keyboard Shortcuts
-    let (ctrl_s, ctrl_n, ctrl_r, ctrl_p, ctrl_comma, ctrl_b, escape, ctrl_backslash) = ctx.input(|i| (
+    let (ctrl_s, ctrl_n, ctrl_r, ctrl_p, ctrl_shift_p, ctrl_comma, ctrl_b, escape, ctrl_backslash) = ctx.input(|i| (
         i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::S),
         i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::N),
         i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::R),
         i.modifiers.ctrl && !i.modifiers.shift && (i.key_pressed(egui::Key::P) || i.key_pressed(egui::Key::F)),
+        (i.modifiers.ctrl || i.modifiers.command) && i.modifiers.shift && i.key_pressed(egui::Key::P),
         i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::Comma),
         i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::B),
         i.key_pressed(egui::Key::Escape),
@@ -416,6 +417,15 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
         }
         app.delete_confirm_open = true;
         app.delete_just_opened = true;
+        return Some(false);
+    }
+
+    if ctrl_shift_p {
+        app.search_open = true;
+        app.search_query = ">".to_string();
+        app.search_selected = 0;
+        app.search_just_opened = true;
+        app.update_search_results();
         return Some(false);
     }
 

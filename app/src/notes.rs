@@ -1,7 +1,6 @@
 //! Synchronous note persistence, live search filtering, and note operations.
 
 use crate::app::App;
-use crate::fuzzy::{fuzzy_match, SearchItem};
 use chrono::Local;
 use core::Note;
 
@@ -152,35 +151,15 @@ pub fn rename_active_note(app: &mut App, new_title: &str, now: f64) {
     }
 }
 
-/// Updates fuzzy search results across notes, flashcards, and decisions.
+/// Updates fuzzy search results across notes, commands, themes, and sound profiles.
 pub fn update_search_results(app: &mut App) {
     let query = app.search_query.trim();
-    let mut results = Vec::new();
-
-    for note in &app.notes_list {
-        let score_topic = fuzzy_match(query, &note.topic);
-        let score_body = fuzzy_match(query, &note.body);
-        if let Some(score) = score_topic.or(score_body) {
-            let snippet = if let Some(pos) = note.body.to_lowercase().find(&query.to_lowercase()) {
-                let start = pos.saturating_sub(20);
-                let end = (pos + query.len() + 40).min(note.body.len());
-                format!("...{}...", note.body[start..end].replace('\n', " "))
-            } else if note.body.len() > 60 {
-                format!("{}...", &note.body[..60].replace('\n', " "))
-            } else {
-                note.body.replace('\n', " ")
-            };
-            results.push(SearchItem {
-                id: note.id,
-                title: note.topic.clone(),
-                snippet,
-                score,
-            });
-        }
-    }
-
-    results.sort_by(|a, b| b.score.cmp(&a.score));
-    app.search_results = results;
+    app.search_results = crate::fuzzy::search_palette(
+        query,
+        &app.notes_list,
+        app.theme.kind,
+        app.sound.profile,
+    );
     if app.search_selected >= app.search_results.len() {
         app.search_selected = 0;
     }

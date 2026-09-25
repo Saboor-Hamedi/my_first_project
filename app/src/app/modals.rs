@@ -2,6 +2,7 @@
 
 use super::App;
 use crate::db_worker::DbMsg;
+use crate::mode::Mode;
 use crate::modals::{render_delete_confirm_modal, render_rename_modal, render_search_modal};
 use crate::settings::{render_setting_panel, render_setting_tabs, SettingPanelAction};
 use eframe::egui::{self, pos2, Color32, Rect, Stroke, Ui};
@@ -127,7 +128,7 @@ impl App {
             }
         }
 
-        // 2. Fuzzy Search Modal (Ctrl+P)
+        // 2. Fuzzy Search & Command Palette Modal (Ctrl+P / Ctrl+Shift+P)
         if self.search_open {
             let act = render_search_modal(
                 ui,
@@ -140,11 +141,188 @@ impl App {
                 self.search_just_opened,
             );
             self.search_just_opened = false;
+            if let Some(ref new_q) = act.new_query {
+                self.search_query = new_q.clone();
+                self.search_selected = 0;
+                self.update_search_results();
+            }
             if let Some(item) = act.selected_item {
-                self.search_open = false;
-                if let Some(ref db) = self.db {
-                    if let Ok(Some(n)) = db.get_note(item.id) {
-                        self.load_note(n.id, n.topic, n.body, now);
+                match item.action {
+                    crate::fuzzy::PaletteAction::OpenNote(id) => {
+                        self.search_open = false;
+                        if let Some(ref db) = self.db {
+                            if let Ok(Some(n)) = db.get_note(id) {
+                                self.load_note(n.id, n.topic, n.body, now);
+                            }
+                        }
+                    }
+                    crate::fuzzy::PaletteAction::ApplyTheme(theme_kind) => {
+                        self.theme = crate::theme::Theme::from_kind(theme_kind);
+                        let _ = self.db_tx.send(DbMsg::SaveSetting {
+                            key: "theme".into(),
+                            val: theme_kind.name().into(),
+                        });
+                        self.set_status(&format!("Switched to {} theme", theme_kind.display_name()), now);
+                        // Live in-place update so active checkmark updates without moving!
+                        self.update_search_results();
+                    }
+                    crate::fuzzy::PaletteAction::OpenThemePicker => {
+                        self.search_query = ">theme ".to_string();
+                        self.search_selected = 0;
+                        self.update_search_results();
+                    }
+                    crate::fuzzy::PaletteAction::OpenSetting(tab) => {
+                        self.search_open = false;
+                        self.active_setting_tab = tab;
+                        self.settings_open = true;
+                        self.settings_just_opened = true;
+                    }
+                    crate::fuzzy::PaletteAction::ToggleSidebar => {
+                        self.search_open = false;
+                        self.sidebar_open = !self.sidebar_open;
+                        self.set_status(if self.sidebar_open { "Sidebar opened" } else { "Sidebar closed" }, now);
+                    }
+                    crate::fuzzy::PaletteAction::TogglePreview => {
+                        self.search_open = false;
+                        self.preview_open = !self.preview_open;
+                        let val = if self.preview_open { "true" } else { "false" };
+                        let _ = self.db_tx.send(DbMsg::SaveSetting {
+                            key: "preview".into(),
+                            val: val.into(),
+                        });
+                        self.set_status(if self.preview_open { "Preview ON" } else { "Preview OFF" }, now);
+                    }
+                    crate::fuzzy::PaletteAction::ToggleAi => {
+                        self.search_open = false;
+                        self.preview_open = true;
+                        self.right_pane_tab = crate::app::RightPaneTab::AiAgent;
+                        self.ai_focus_requested = true;
+                        self.agent_state.is_open = true;
+                        ui.memory_mut(|m| m.request_focus(egui::Id::new("deepseek_prompt_input")));
+                        self.set_status("AI Assistant opened", now);
+                    }
+                    crate::fuzzy::PaletteAction::ToggleTerminal => {
+                        self.search_open = false;
+                        self.terminal_open = !self.terminal_open;
+                        self.set_status(if self.terminal_open { "Terminal docked (:term)" } else { "Terminal closed" }, now);
+                    }
+                    crate::fuzzy::PaletteAction::ToggleZen => {
+                        self.search_open = false;
+                        self.zen_mode = !self.zen_mode;
+                        if self.zen_mode {
+                            self.show_titlebar = false;
+                            self.show_tabs = false;
+                            self.sidebar_open = false;
+                            self.preview_open = false;
+                        } else {
+                            self.show_titlebar = true;
+                            self.show_tabs = true;
+                        }
+                        self.set_status(if self.zen_mode { "Zen Mode ON (Ctrl+.)" } else { "Zen Mode OFF" }, now);
+                    }
+                    crate::fuzzy::PaletteAction::ToggleTitlebar => {
+                        self.search_open = false;
+                        self.show_titlebar = !self.show_titlebar;
+                    }
+                    crate::fuzzy::PaletteAction::ToggleTabs => {
+                        self.search_open = false;
+                        self.show_tabs = !self.show_tabs;
+                    }
+                    crate::fuzzy::PaletteAction::NewNote => {
+                        self.search_open = false;
+                        self.create_new_note(now);
+                    }
+                    crate::fuzzy::PaletteAction::QuickSave => {
+                        self.search_open = false;
+                        self.quick_save_active_note(now);
+                    }
+                    crate::fuzzy::PaletteAction::RenameNote => {
+                        self.search_open = false;
+                        self.rename_open = true;
+                        self.rename_input = self.active_note_title.clone();
+                        self.rename_just_opened = true;
+                    }
+                    crate::fuzzy::PaletteAction::DeleteNote => {
+                        self.search_open = false;
+                        self.delete_confirm_open = true;
+                        self.delete_just_opened = true;
+                    }
+                    crate::fuzzy::PaletteAction::ToggleChecklist => {
+                        self.search_open = false;
+                        let (target_ed_mut, _) = if self.mode == Mode::Doc {
+                            (&mut self.doc_ed, &mut self.doc_scroll_y)
+                        } else {
+                            (&mut self.ed, &mut self.scroll_y)
+                        };
+                        if target_ed_mut.toggle_checklist() {
+                            self.is_dirty = true;
+                            self.sound.play();
+                            self.set_status("Toggled checklist item (Ctrl+Shift+X)", now);
+                        }
+                    }
+                    crate::fuzzy::PaletteAction::CloseTab => {
+                        self.search_open = false;
+                        if self.mode == Mode::Doc {
+                            self.close_doc_tab(self.active_doc_tab, now);
+                        } else {
+                            self.close_tab(self.active_tab, now);
+                        }
+                    }
+                    crate::fuzzy::PaletteAction::ImportWorkspace => {
+                        self.search_open = false;
+                        self.workspace_importer.is_modal_open = true;
+                    }
+                    crate::fuzzy::PaletteAction::RunScan => {
+                        self.search_open = false;
+                        self.in_command = true;
+                        self.cmd_ed.set_text(":scan ");
+                        self.cmd_ed.cur = 6;
+                    }
+                    crate::fuzzy::PaletteAction::ScanHistory => {
+                        self.search_open = false;
+                        self.mode = Mode::ScanHistory;
+                    }
+                    crate::fuzzy::PaletteAction::OpenHelp => {
+                        self.search_open = false;
+                        self.mode = Mode::Doc;
+                        self.active_doc_idx = 0;
+                    }
+                    crate::fuzzy::PaletteAction::SetLunaStyle(style) => {
+                        self.search_open = false;
+                        self.lunaline_config.style = style;
+                        if let Ok(json) = serde_json::to_string(&self.lunaline_config) {
+                            let _ = self.db_tx.send(DbMsg::SaveSetting {
+                                key: "lunaline_config".into(),
+                                val: json,
+                            });
+                        }
+                        self.set_status(&format!("LunaLine style set to {}", style.name()), now);
+                    }
+                    crate::fuzzy::PaletteAction::SetLunaColor(color_mode) => {
+                        self.search_open = false;
+                        self.lunaline_config.color_mode = color_mode;
+                        if let Ok(json) = serde_json::to_string(&self.lunaline_config) {
+                            let _ = self.db_tx.send(DbMsg::SaveSetting {
+                                key: "lunaline_config".into(),
+                                val: json,
+                            });
+                        }
+                        self.set_status(&format!("LunaLine color set to {}", color_mode.name()), now);
+                    }
+                    crate::fuzzy::PaletteAction::ShowSoundPicker => {
+                        // handled in modals.rs (sets query to >sound), no-op here
+                    }
+                    crate::fuzzy::PaletteAction::ApplySoundProfile(profile) => {
+                        // Apply live — keep modal open so user can audition other profiles
+                        self.sound.profile = profile;
+                        self.sound.play(); // play a key sound so user hears the new profile immediately
+                        let _ = self.db_tx.send(DbMsg::SaveSetting {
+                            key: "sound".into(),
+                            val: profile.name().to_lowercase(),
+                        });
+                        // Refresh results so ✓ Active badge moves to new selection
+                        crate::notes::update_search_results(self);
+                        self.set_status(&format!("Sound profile: {}", profile.name()), now);
                     }
                 }
             }

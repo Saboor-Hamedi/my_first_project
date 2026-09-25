@@ -150,14 +150,14 @@ impl Theme {
     /// Slightly elevated surface color for cards and active tabs
     pub fn surface(&self) -> Color32 {
         if self.is_light() {
-            let r = self.bg.r().saturating_sub(8);
-            let g = self.bg.g().saturating_sub(8);
-            let b = self.bg.b().saturating_sub(10);
+            let r = self.bg.r().saturating_sub(7);
+            let g = self.bg.g().saturating_sub(7);
+            let b = self.bg.b().saturating_sub(9);
             Color32::from_rgb(r, g, b)
         } else {
-            let r = (self.bg.r() as u16 + 10).min(255) as u8;
-            let g = (self.bg.g() as u16 + 12).min(255) as u8;
-            let b = (self.bg.b() as u16 + 16).min(255) as u8;
+            let r = (self.bg.r() as u16 + 8).min(255) as u8;
+            let g = (self.bg.g() as u16 + 9).min(255) as u8;
+            let b = (self.bg.b() as u16 + 12).min(255) as u8;
             Color32::from_rgb(r, g, b)
         }
     }
@@ -165,14 +165,14 @@ impl Theme {
     /// Border color for containers and dividers
     pub fn border(&self) -> Color32 {
         if self.is_light() {
-            let r = self.bg.r().saturating_sub(26);
-            let g = self.bg.g().saturating_sub(26);
-            let b = self.bg.b().saturating_sub(28);
+            let r = self.bg.r().saturating_sub(22);
+            let g = self.bg.g().saturating_sub(22);
+            let b = self.bg.b().saturating_sub(24);
             Color32::from_rgb(r, g, b)
         } else {
-            let r = (self.bg.r() as u16 + 22).min(255) as u8;
-            let g = (self.bg.g() as u16 + 26).min(255) as u8;
-            let b = (self.bg.b() as u16 + 32).min(255) as u8;
+            let r = (self.bg.r() as u16 + 20).min(255) as u8;
+            let g = (self.bg.g() as u16 + 22).min(255) as u8;
+            let b = (self.bg.b() as u16 + 28).min(255) as u8;
             Color32::from_rgb(r, g, b)
         }
     }
@@ -196,83 +196,83 @@ impl Theme {
         match kind {
             ThemeKind::Shell => Self {
                 kind,
-                bg: Color32::from_rgb(1, 43, 54),
-                text: Color32::from_rgb(238, 232, 213),
-                accent: Color32::from_rgb(42, 161, 152),
-                muted: Color32::from_rgb(101, 123, 131),
-                highlight: Color32::from_rgb(38, 139, 210),
+                bg: Color32::from_rgb(0, 36, 44),
+                text: Color32::from_rgb(246, 242, 226),
+                accent: Color32::from_rgb(42, 192, 180),
+                muted: Color32::from_rgb(128, 154, 162),
+                highlight: Color32::from_rgb(45, 165, 245),
             },
             ThemeKind::TokyoNight => Self {
                 kind,
-                bg: Color32::from_rgb(26, 27, 38),
-                text: Color32::from_rgb(192, 202, 245),
+                bg: Color32::from_rgb(22, 23, 34),
+                text: Color32::from_rgb(212, 222, 255),
                 accent: Color32::from_rgb(122, 162, 247),
-                muted: Color32::from_rgb(115, 125, 165),
+                muted: Color32::from_rgb(138, 148, 188),
                 highlight: Color32::from_rgb(187, 154, 247),
             },
             ThemeKind::Dracula => Self {
                 kind,
-                bg: Color32::from_rgb(40, 42, 54),
+                bg: Color32::from_rgb(34, 36, 48),
                 text: Color32::from_rgb(248, 248, 242),
                 accent: Color32::from_rgb(255, 121, 198),
-                muted: Color32::from_rgb(139, 147, 184),
+                muted: Color32::from_rgb(155, 162, 200),
                 highlight: Color32::from_rgb(139, 233, 253),
             },
             ThemeKind::Catppuccin => Self {
                 kind,
-                bg: Color32::from_rgb(30, 30, 46),
-                text: Color32::from_rgb(205, 214, 244),
+                bg: Color32::from_rgb(24, 24, 37),
+                text: Color32::from_rgb(215, 222, 248),
                 accent: Color32::from_rgb(203, 166, 247),
-                muted: Color32::from_rgb(140, 146, 175),
+                muted: Color32::from_rgb(152, 158, 188),
                 highlight: Color32::from_rgb(245, 194, 231),
             },
             ThemeKind::Nord => Self {
                 kind,
-                bg: Color32::from_rgb(46, 52, 64),
-                text: Color32::from_rgb(236, 239, 244),
+                bg: Color32::from_rgb(40, 46, 58),
+                text: Color32::from_rgb(240, 243, 248),
                 accent: Color32::from_rgb(136, 192, 208),
-                muted: Color32::from_rgb(140, 150, 175),
+                muted: Color32::from_rgb(155, 165, 190),
                 highlight: Color32::from_rgb(143, 188, 187),
             },
             ThemeKind::RosePine => Self {
                 kind,
-                bg: Color32::from_rgb(31, 29, 46),
-                text: Color32::from_rgb(224, 222, 244),
+                bg: Color32::from_rgb(25, 23, 36),
+                text: Color32::from_rgb(235, 233, 250),
                 accent: Color32::from_rgb(235, 111, 146),
-                muted: Color32::from_rgb(140, 135, 168),
+                muted: Color32::from_rgb(155, 150, 180),
                 highlight: Color32::from_rgb(246, 193, 119),
             },
             ThemeKind::Cyberpunk => Self {
                 kind,
-                bg: Color32::from_rgb(24, 18, 40),
-                text: Color32::from_rgb(160, 245, 255),
+                bg: Color32::from_rgb(18, 13, 30),
+                text: Color32::from_rgb(180, 250, 255),
                 accent: Color32::from_rgb(255, 225, 53),
-                muted: Color32::from_rgb(145, 110, 175),
+                muted: Color32::from_rgb(165, 130, 195),
                 highlight: Color32::from_rgb(255, 42, 109),
             },
             ThemeKind::Green => Self {
                 kind,
-                bg: Color32::from_rgb(12, 24, 15),
-                text: Color32::from_rgb(190, 245, 205),
+                bg: Color32::from_rgb(8, 18, 10),
+                text: Color32::from_rgb(200, 255, 215),
                 accent: Color32::from_rgb(51, 255, 102),
-                muted: Color32::from_rgb(95, 155, 115),
-                highlight: Color32::from_rgb(110, 255, 160),
+                muted: Color32::from_rgb(115, 175, 135),
+                highlight: Color32::from_rgb(130, 255, 180),
             },
             ThemeKind::Amber => Self {
                 kind,
-                bg: Color32::from_rgb(26, 20, 12),
-                text: Color32::from_rgb(255, 230, 185),
+                bg: Color32::from_rgb(18, 14, 8),
+                text: Color32::from_rgb(255, 235, 195),
                 accent: Color32::from_rgb(255, 175, 45),
-                muted: Color32::from_rgb(165, 125, 75),
+                muted: Color32::from_rgb(185, 145, 95),
                 highlight: Color32::from_rgb(255, 215, 105),
             },
             ThemeKind::Ice => Self {
                 kind,
-                bg: Color32::from_rgb(16, 28, 44),
-                text: Color32::from_rgb(220, 245, 255),
+                bg: Color32::from_rgb(10, 20, 32),
+                text: Color32::from_rgb(225, 248, 255),
                 accent: Color32::from_rgb(80, 210, 255),
-                muted: Color32::from_rgb(95, 155, 185),
-                highlight: Color32::from_rgb(150, 235, 255),
+                muted: Color32::from_rgb(115, 175, 205),
+                highlight: Color32::from_rgb(160, 240, 255),
             },
             ThemeKind::Cream => Self {
                 kind,
@@ -302,51 +302,51 @@ impl Theme {
             // --- New themes ---
             ThemeKind::Gruvbox => Self {
                 kind,
-                bg: Color32::from_rgb(40, 40, 40),        // #282828
-                text: Color32::from_rgb(235, 219, 178),   // #ebdbb2
-                accent: Color32::from_rgb(254, 128, 25),  // #fe8019 (orange)
-                muted: Color32::from_rgb(168, 153, 132),  // #a89984
-                highlight: Color32::from_rgb(184, 187, 38), // #b8bb26 (green)
+                bg: Color32::from_rgb(32, 32, 32),
+                text: Color32::from_rgb(240, 224, 185),
+                accent: Color32::from_rgb(254, 128, 25),
+                muted: Color32::from_rgb(175, 160, 140),
+                highlight: Color32::from_rgb(184, 187, 38),
             },
             ThemeKind::Everforest => Self {
                 kind,
-                bg: Color32::from_rgb(39, 46, 51),        // #272e33
-                text: Color32::from_rgb(211, 198, 170),   // #d3c6aa
-                accent: Color32::from_rgb(167, 192, 128), // #a7c080 (green)
-                muted: Color32::from_rgb(148, 158, 145),  // #949e91
-                highlight: Color32::from_rgb(127, 187, 179), // #7fbbb3 (aqua)
+                bg: Color32::from_rgb(31, 38, 42),
+                text: Color32::from_rgb(218, 206, 180),
+                accent: Color32::from_rgb(167, 192, 128),
+                muted: Color32::from_rgb(155, 165, 152),
+                highlight: Color32::from_rgb(127, 187, 179),
             },
             ThemeKind::Monokai => Self {
                 kind,
-                bg: Color32::from_rgb(45, 42, 46),        // #2d2a2e
-                text: Color32::from_rgb(252, 252, 250),   // #fcfcfa
-                accent: Color32::from_rgb(255, 216, 102), // #ffd866 (yellow)
-                muted: Color32::from_rgb(163, 158, 165),  // #a39ea5
-                highlight: Color32::from_rgb(255, 97, 136), // #ff6188 (pink)
+                bg: Color32::from_rgb(36, 33, 37),
+                text: Color32::from_rgb(253, 253, 251),
+                accent: Color32::from_rgb(255, 216, 102),
+                muted: Color32::from_rgb(170, 165, 172),
+                highlight: Color32::from_rgb(255, 97, 136),
             },
             ThemeKind::OneDark => Self {
                 kind,
-                bg: Color32::from_rgb(40, 44, 52),        // #282c34
-                text: Color32::from_rgb(220, 223, 228),   // brighter than stock abb2bf for AA on body text
-                accent: Color32::from_rgb(97, 175, 239),  // #61afef (blue)
-                muted: Color32::from_rgb(150, 158, 175),  // lifted slightly from #5c6370 for legibility
-                highlight: Color32::from_rgb(198, 120, 221), // #c678dd (purple)
+                bg: Color32::from_rgb(33, 37, 43),
+                text: Color32::from_rgb(228, 231, 236),
+                accent: Color32::from_rgb(97, 175, 239),
+                muted: Color32::from_rgb(158, 166, 182),
+                highlight: Color32::from_rgb(198, 120, 221),
             },
             ThemeKind::Ayu => Self {
                 kind,
-                bg: Color32::from_rgb(10, 14, 20),        // #0a0e14
-                text: Color32::from_rgb(191, 189, 182),   // #bfbdb6
-                accent: Color32::from_rgb(255, 180, 84),  // #ffb454 (orange)
-                muted: Color32::from_rgb(110, 122, 140),  // lifted from #4d5566 for AA
-                highlight: Color32::from_rgb(89, 194, 255), // #59c2ff (blue)
+                bg: Color32::from_rgb(8, 12, 18),
+                text: Color32::from_rgb(205, 203, 196),
+                accent: Color32::from_rgb(255, 180, 84),
+                muted: Color32::from_rgb(125, 137, 155),
+                highlight: Color32::from_rgb(89, 194, 255),
             },
             ThemeKind::Kanagawa => Self {
                 kind,
-                bg: Color32::from_rgb(31, 31, 40),        // #1f1f28
-                text: Color32::from_rgb(220, 215, 186),   // #dcd7ba
-                accent: Color32::from_rgb(126, 156, 216), // #7e9cd8 (crystal blue)
-                muted: Color32::from_rgb(146, 143, 129),  // lifted from #727169 for AA
-                highlight: Color32::from_rgb(210, 126, 153), // #d27e99 (sakura pink)
+                bg: Color32::from_rgb(24, 24, 32),
+                text: Color32::from_rgb(228, 223, 196),
+                accent: Color32::from_rgb(126, 156, 216),
+                muted: Color32::from_rgb(156, 153, 140),
+                highlight: Color32::from_rgb(210, 126, 153),
             },
         }
     }

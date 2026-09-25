@@ -47,7 +47,7 @@ impl App {
             zoom: crate::zoom::ZoomState::new(),
             right_pane_tab: RightPaneTab::Preview,
             ai_focus_requested: false,
-            opacity: 0.88,
+            opacity: 1.0,
             last_char_time: -10.0,
             cell: None,
             visual_lines: vec![VisualLine { char_start: 0, char_end: 0 }],
