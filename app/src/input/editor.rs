@@ -94,11 +94,14 @@ pub fn handle_editor_text(app: &mut App, s: &str, now: f64) -> bool {
                     continue;
                 }
                 app.vim.pending_keys_time = now;
+                let buf_before = app.ed.buf.clone();
                 if app.vim.handle_char(&mut app.ed, &app.visual_lines, c) {
                     typed = true;
                     app.sound.play();
                     app.last_char_time = now;
-                    app.is_dirty = true;
+                    if app.ed.buf != buf_before {
+                        app.is_dirty = true;
+                    }
                     if app.vim.is_searching() {
                         let sym = if app.vim.search.backward { "?" } else { "/" };
                         app.showcmd.set_search(sym, &app.vim.search.query, now);
@@ -159,11 +162,14 @@ pub fn handle_editor_key(app: &mut App, key: Key, modifiers: Modifiers, now: f64
         let target_ed = if is_doc { &mut app.doc_ed } else { &mut app.ed };
         if app.editor_input_mode == EditorInputMode::Vim {
             app.vim.pending_keys_time = now;
+            let buf_before = if !is_doc { Some(target_ed.buf.clone()) } else { None };
             if app.vim.handle_key(target_ed, &app.visual_lines, key, modifiers) {
                 app.sound.play();
                 app.last_char_time = now;
-                if !is_doc {
-                    app.is_dirty = true;
+                if let Some(ref before) = buf_before {
+                    if target_ed.buf != *before {
+                        app.is_dirty = true;
+                    }
                 }
                 if app.vim.is_searching() {
                     let sym = if app.vim.search.backward { "?" } else { "/" };
@@ -184,13 +190,18 @@ pub fn handle_editor_key(app: &mut App, key: Key, modifiers: Modifiers, now: f64
                 }
                 return true;
             }
-        } else if app.editor_input_mode == EditorInputMode::Hybrid && app.hybrid.handle_key(target_ed, key, modifiers) {
-            app.sound.play();
-            app.last_char_time = now;
-            if !is_doc {
-                app.is_dirty = true;
+        } else if app.editor_input_mode == EditorInputMode::Hybrid {
+            let buf_before = if !is_doc { Some(target_ed.buf.clone()) } else { None };
+            if app.hybrid.handle_key(target_ed, key, modifiers) {
+                app.sound.play();
+                app.last_char_time = now;
+                if let Some(ref before) = buf_before {
+                    if target_ed.buf != *before {
+                        app.is_dirty = true;
+                    }
+                }
+                return true;
             }
-            return true;
         }
     }
 

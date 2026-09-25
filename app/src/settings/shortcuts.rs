@@ -147,6 +147,8 @@ pub fn render_shortcuts_tab(
         ("NAVIGATION", &[
             ("Ctrl + P",      "Fuzzy search across notes"),
             ("Ctrl + B",      "Toggle notes sidebar"),
+            ("Ctrl + I",      "Toggle backlinks sidebar"),
+            ("Ctrl+Shift+O",  "Toggle outline (H1-H6) sidebar"),
             ("Ctrl + .",      "Toggle Zen mode (distraction-free editor)"),
             ("Ctrl + J",      "Toggle interactive terminal dock"),
             ("Ctrl + ,",      "Open preferences & keybindings"),

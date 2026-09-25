@@ -9,6 +9,8 @@ MindForge provides an extensive suite of intuitive, ergonomic keyboard shortcuts
 - **Ctrl + N**: Create a new blank note
 - **Ctrl + S**: Quick save active note to local SQLite database
 - **Ctrl + B**: Toggle notes sidebar open or closed
+- **Ctrl + I**: Toggle Backlinks reference sidebar
+- **Ctrl + Shift + O**: Toggle Outline (H1-H6) headings sidebar
 - **Ctrl + .**: Toggle Zen Mode (distraction-free editor)
 - **Ctrl + P**: Open fast fuzzy search across all notes
 - **Ctrl + R**: Quick rename active note

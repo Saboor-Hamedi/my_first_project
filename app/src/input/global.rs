@@ -41,12 +41,29 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
         }
         return Some(false);
     }
+    if app.wikilink_autocomplete.is_active {
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            app.wikilink_autocomplete.clear();
+            return Some(false);
+        }
+    }
+    if app.hover_wikilink.is_active() {
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            app.hover_wikilink.dismiss();
+            return Some(false);
+        }
+    }
 
     // Global terminal toggle shortcut: Ctrl+J or Ctrl+` (Backtick / Tilde)
-    let toggle_term = !app.in_command && ctx.input(|i| {
-        (i.modifiers.ctrl && !i.modifiers.shift && !i.modifiers.alt && i.key_pressed(egui::Key::J))
-            || (i.modifiers.ctrl && i.key_pressed(egui::Key::Backtick))
-    });
+    // IMPORTANT: Suppressed when wikilink autocomplete or hover wikilink is active,
+    // so Ctrl+J navigates items / scrolls preview instead of toggling terminal.
+    let toggle_term = !app.in_command
+        && !app.wikilink_autocomplete.is_active
+        && !app.hover_wikilink.is_active()
+        && ctx.input(|i| {
+            (i.modifiers.ctrl && !i.modifiers.shift && !i.modifiers.alt && i.key_pressed(egui::Key::J))
+                || (i.modifiers.ctrl && i.key_pressed(egui::Key::Backtick))
+        });
     if toggle_term {
         app.terminal_open = !app.terminal_open;
         if app.terminal_open {
@@ -98,6 +115,24 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
     // flows through as a Text event into the search buffer (fixes missing chars).
     if app.editor_input_mode == crate::app::EditorInputMode::Vim && app.vim.is_searching() {
         return None;
+    }
+
+    // Terminal input priority: when terminal dock is open and focused, protect shell control sequences
+    // (Ctrl+C, Ctrl+D, Ctrl+Z, etc.) so they pass directly to the terminal PTY instead of triggering editor commands.
+    if app.terminal_open && app.terminal_focused {
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            app.terminal_focused = false;
+            app.set_status("Editor focused (Ctrl+J to return to terminal)", now);
+            return Some(false);
+        }
+        let is_ctrl = ctx.input(|i| i.modifiers.ctrl);
+        let key_c = ctx.input(|i| i.key_pressed(egui::Key::C));
+        let key_d = ctx.input(|i| i.key_pressed(egui::Key::D));
+        let key_z = ctx.input(|i| i.key_pressed(egui::Key::Z));
+        let key_l = ctx.input(|i| i.key_pressed(egui::Key::L));
+        if is_ctrl && (key_c || key_d || key_z || key_l) {
+            return None;
+        }
     }
 
     // Help Tab Input Isolation & Navigation (single Quick Start tab)
@@ -570,6 +605,44 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
             key: "sidebar".into(),
             val: sb_val.into(),
         });
+        return Some(false);
+    }
+
+    // Toggle Backlinks Sidebar: Ctrl+I
+    let ctrl_i = ctx.input(|i| {
+        (i.modifiers.ctrl || i.modifiers.command)
+            && !i.modifiers.shift
+            && !i.modifiers.alt
+            && i.key_pressed(egui::Key::I)
+    });
+    if ctrl_i {
+        if app.right_sidebar_open && app.right_sidebar_state.active_tab == crate::rightsidebar::RightSidebarTab::Backlinks {
+            app.right_sidebar_open = false;
+            app.set_status("Backlinks panel closed (Ctrl+I)", now);
+        } else {
+            app.right_sidebar_open = true;
+            app.right_sidebar_state.active_tab = crate::rightsidebar::RightSidebarTab::Backlinks;
+            app.set_status("Backlinks panel opened (Ctrl+I)", now);
+        }
+        return Some(false);
+    }
+
+    // Toggle Outline Sidebar: Ctrl+Shift+O
+    let ctrl_shift_o = ctx.input(|i| {
+        (i.modifiers.ctrl || i.modifiers.command)
+            && i.modifiers.shift
+            && !i.modifiers.alt
+            && i.key_pressed(egui::Key::O)
+    });
+    if ctrl_shift_o {
+        if app.right_sidebar_open && app.right_sidebar_state.active_tab == crate::rightsidebar::RightSidebarTab::Outline {
+            app.right_sidebar_open = false;
+            app.set_status("Outline panel closed (Ctrl+Shift+O)", now);
+        } else {
+            app.right_sidebar_open = true;
+            app.right_sidebar_state.active_tab = crate::rightsidebar::RightSidebarTab::Outline;
+            app.set_status("Outline panel opened (Ctrl+Shift+O)", now);
+        }
         return Some(false);
     }
 

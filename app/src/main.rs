@@ -14,6 +14,7 @@ pub mod layout;
 mod modals;
 mod mode;
 mod notes;
+pub mod palette;
 pub mod settings;
 pub mod lunaline;
 #[path = "sidebar/sidebar.rs"]
@@ -38,6 +39,8 @@ pub mod blur;
 pub mod font_manager;
 pub mod view_dashboard;
 pub mod workspace_import;
+pub mod wikilink;
+pub mod rightsidebar;
 
 pub use types::{snapshot, visual_line};
 

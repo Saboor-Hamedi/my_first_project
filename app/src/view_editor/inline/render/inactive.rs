@@ -265,6 +265,19 @@ pub fn render_inactive_line(
                     append_run_and_map(job, charmap, chars, abs_start..abs_end, fmt);
                 }
             }
+            InlineSpanKind::WikiLink { .. } => {
+                let fmt_marker = TextFormat::simple(default_font.clone(), theme.muted);
+                let mut fmt_body = TextFormat::simple(default_font.clone(), theme.accent);
+                fmt_body.underline = Stroke::new(1.0, theme.accent);
+
+                append_run_and_map(job, charmap, chars, abs_start..(abs_start + 2).min(abs_end), fmt_marker.clone());
+                if abs_end >= abs_start + 4 {
+                    append_run_and_map(job, charmap, chars, abs_start + 2..abs_end - 2, fmt_body);
+                    append_run_and_map(job, charmap, chars, abs_end - 2..abs_end, fmt_marker);
+                } else if abs_end > abs_start + 2 {
+                    append_run_and_map(job, charmap, chars, abs_start + 2..abs_end, fmt_body);
+                }
+            }
             InlineSpanKind::Image { ref alt, .. } => {
                 // Render image icon + alt text
                 let fmt_icon = TextFormat::simple(default_font.clone(), theme.text);

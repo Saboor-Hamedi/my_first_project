@@ -130,6 +130,43 @@ pub fn parse_inline_spans(chars: &[char]) -> Vec<InlineSpan> {
             }
         }
 
+        // 4b. WikiLink: [[target]] or [[target|display]]
+        if c == '[' && i + 1 < parse_limit && chars[i + 1] == '[' {
+            if let Some(close_rel) = chars[i + 2..parse_limit].windows(2).position(|w| w[0] == ']' && w[1] == ']') {
+                let inner_start = i + 2;
+                let inner_end = inner_start + close_rel;
+                let inner: String = chars[inner_start..inner_end].iter().collect();
+                let inner_trim = inner.trim();
+                if !inner_trim.is_empty() {
+                    let (target, display) = if let Some((tgt, alias)) = inner_trim.split_once('|') {
+                        (tgt.trim().to_string(), alias.trim().to_string())
+                    } else {
+                        (inner_trim.to_string(), inner_trim.to_string())
+                    };
+
+                    if i > text_start {
+                        spans.push(InlineSpan {
+                            kind: InlineSpanKind::Text,
+                            start: text_start,
+                            end: i,
+                            marker_len: 0,
+                        });
+                    }
+
+                    spans.push(InlineSpan {
+                        kind: InlineSpanKind::WikiLink { target, display },
+                        start: i,
+                        end: inner_end + 2,
+                        marker_len: 2,
+                    });
+
+                    i = inner_end + 2;
+                    text_start = i;
+                    continue;
+                }
+            }
+        }
+
         // 5. Link: [text](url) or [text](url "title")
         if c == '[' {
             if let Some((span_end, text, raw_url)) = parse_link_or_image(&chars[i..parse_limit]) {

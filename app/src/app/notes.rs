@@ -142,7 +142,7 @@ impl App {
         self.sync_active_tab();
 
         // 1. Check if note is already open in an existing tab
-        if let Some(existing_tab_idx) = self.open_notes.iter().position(|n| n.id == id) {
+        if let Some(existing_tab_idx) = self.open_notes.iter().position(|n| (id > 0 && n.id == id) || (id == 0 && n.title == topic)) {
             self.switch_tab(existing_tab_idx, now);
             return;
         }
@@ -354,10 +354,27 @@ impl App {
     }
 
     pub fn open_note_by_id(&mut self, id: i64, now: f64) {
+        if id <= 0 {
+            return;
+        }
+
+        // 1. If note is already open in an existing tab, switch directly to it
+        if let Some(tab_idx) = self.open_notes.iter().position(|t| t.id == id) {
+            self.switch_tab(tab_idx, now);
+            return;
+        }
+
+        // 2. Load note from SQLite database
         if let Some(ref db) = self.db {
             if let Ok(Some(note)) = db.get_note(id) {
                 self.load_note(note.id, note.topic, note.body, now);
+                return;
             }
+        }
+
+        // 3. Fallback: check in self.notes_list cache
+        if let Some(note) = self.notes_list.iter().find(|n| n.id == id).cloned() {
+            self.load_note(note.id, note.topic, note.body, now);
         }
     }
 }

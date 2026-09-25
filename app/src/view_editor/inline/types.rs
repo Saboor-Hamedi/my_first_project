@@ -66,6 +66,7 @@ pub enum InlineSpanKind {
     Strike,
     Code,
     Link { url: String, title: Option<String> },
+    WikiLink { target: String, display: String },
     Image { url: String, alt: String },
     Autolink { url: String },
     FootnoteRef { id: String },

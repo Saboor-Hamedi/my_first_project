@@ -216,6 +216,15 @@ pub struct App {
 
     // LunaLine Statusline Configuration
     pub lunaline_config: crate::lunaline::LunaLineConfig,
+
+    // Right Sidebar (Outline & Backlinks)
+    pub right_sidebar_open: bool,
+    pub right_sidebar_width: f32,
+    pub right_sidebar_state: crate::rightsidebar::RightSidebarState,
+
+    // Wikilink hover preview & autocomplete state
+    pub hover_wikilink: crate::wikilink::hover_wikilink::HoverWikiLinkState,
+    pub wikilink_autocomplete: crate::wikilink::wikilink_autocompletion::WikiLinkAutocompleteState,
 }
 
 impl App {

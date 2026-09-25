@@ -148,6 +148,11 @@ impl App {
             show_tabs: true,
             workspace_importer: crate::workspace_import::WorkspaceImporter::new(),
             lunaline_config: crate::lunaline::LunaLineConfig::default(),
+            right_sidebar_open: false,
+            right_sidebar_width: 240.0,
+            right_sidebar_state: crate::rightsidebar::RightSidebarState::default(),
+            hover_wikilink: crate::wikilink::hover_wikilink::HoverWikiLinkState::default(),
+            wikilink_autocomplete: crate::wikilink::wikilink_autocompletion::WikiLinkAutocompleteState::default(),
         };
 
         app.load_settings();

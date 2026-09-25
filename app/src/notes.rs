@@ -151,7 +151,7 @@ pub fn rename_active_note(app: &mut App, new_title: &str, now: f64) {
     }
 }
 
-/// Updates fuzzy search results across notes, commands, themes, and sound profiles.
+/// Updates fuzzy search results across notes, commands, themes, sound profiles, carets, fonts, and modes.
 pub fn update_search_results(app: &mut App) {
     let query = app.search_query.trim();
     app.search_results = crate::fuzzy::search_palette(
@@ -159,6 +159,10 @@ pub fn update_search_results(app: &mut App) {
         &app.notes_list,
         app.theme.kind,
         app.sound.profile,
+        app.caret.kind,
+        &app.selected_font,
+        app.editor_input_mode,
+        app.lunaline_config.style,
     );
     if app.search_selected >= app.search_results.len() {
         app.search_selected = 0;

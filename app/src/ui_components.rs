@@ -2,6 +2,10 @@
 pub mod toggle;
 pub use toggle::{render_toggle, render_toggle_with_label};
 
+#[path = "ui_components/icons.rs"]
+pub mod icons;
+pub use icons::render_vector_icon;
+
 use eframe::egui::{self, vec2, Align2, Color32, FontId, Pos2, Rect};
 use crate::theme::Theme;
 

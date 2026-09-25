@@ -37,12 +37,11 @@ pub fn render_full_titlebar(
 
     let center_y = titlebar_rect.center().y;
 
-    // 2. Codex Icon (📖 / book glyph)
-    painter.text(
-        pos2(titlebar_rect.min.x + 12.0, center_y),
-        Align2::LEFT_CENTER,
-        "📖",
-        FontId::monospace(14.0),
+    // 2. Modern vector Codex / Book icon
+    crate::ui_components::render_vector_icon(
+        painter,
+        "book",
+        Rect::from_center_size(pos2(titlebar_rect.min.x + 20.0, center_y), vec2(15.0, 15.0)),
         theme.accent,
     );
 
@@ -66,10 +65,12 @@ pub fn render_full_titlebar(
 
     // Total width consumed by the 5 right buttons (36px * 5 = 180px)
     let btn_w = 36.0;
-    let right_zone_w = btn_w * 5.0 + 16.0;
+    let right_controls_start = titlebar_rect.max.x - btn_w * 5.0;
+    let gap_from_controls = 48.0; // Clean, generous breathing room between title and right icons
+    let title_start_x = titlebar_rect.min.x + 136.0;
 
     // 5. Active Document / Section Title — fully styled using theme.text
-    let max_avail_w = (titlebar_rect.width() - right_zone_w - 140.0).max(80.0);
+    let max_avail_w = (right_controls_start - gap_from_controls - title_start_x).max(40.0);
     let max_chars = (max_avail_w / 7.5) as usize;
     let base_title = if active_title.len() > max_chars {
         format!("{}...", &active_title[..max_chars.saturating_sub(3)])
@@ -82,7 +83,7 @@ pub fn render_full_titlebar(
         base_title
     };
     painter.text(
-        pos2(titlebar_rect.min.x + 136.0, center_y),
+        pos2(title_start_x, center_y),
         Align2::LEFT_CENTER,
         display_title,
         FontId::monospace(11.5),
@@ -142,11 +143,11 @@ pub fn render_window_controls(
 
     // Palette icon with active accent color dot
     let c = accent_rect.center();
-    painter.text(
-        pos2(c.x - 2.0, c.y),
-        Align2::CENTER_CENTER,
-        "🎨",
-        FontId::monospace(12.5),
+    let palette_rect = Rect::from_center_size(c - vec2(1.0, 0.0), vec2(15.0, 15.0));
+    crate::ui_components::render_vector_icon(
+        painter,
+        "palette",
+        palette_rect,
         if is_accent_hovered || accent_dropdown_open { theme.accent } else { theme.text },
     );
     // Indicator dot showing active accent color

@@ -182,6 +182,33 @@ impl App {
                         self.sidebar_open = !self.sidebar_open;
                         self.set_status(if self.sidebar_open { "Sidebar opened" } else { "Sidebar closed" }, now);
                     }
+                    crate::fuzzy::PaletteAction::ToggleRightSidebar => {
+                        self.search_open = false;
+                        self.right_sidebar_open = !self.right_sidebar_open;
+                        self.set_status(if self.right_sidebar_open { "Right Sidebar (Outline / Backlinks) opened" } else { "Right Sidebar closed" }, now);
+                    }
+                    crate::fuzzy::PaletteAction::ToggleBacklinks => {
+                        self.search_open = false;
+                        if self.right_sidebar_open && self.right_sidebar_state.active_tab == crate::rightsidebar::RightSidebarTab::Backlinks {
+                            self.right_sidebar_open = false;
+                            self.set_status("Backlinks panel closed", now);
+                        } else {
+                            self.right_sidebar_open = true;
+                            self.right_sidebar_state.active_tab = crate::rightsidebar::RightSidebarTab::Backlinks;
+                            self.set_status("Backlinks panel opened (Ctrl+I)", now);
+                        }
+                    }
+                    crate::fuzzy::PaletteAction::ToggleOutline => {
+                        self.search_open = false;
+                        if self.right_sidebar_open && self.right_sidebar_state.active_tab == crate::rightsidebar::RightSidebarTab::Outline {
+                            self.right_sidebar_open = false;
+                            self.set_status("Outline panel closed", now);
+                        } else {
+                            self.right_sidebar_open = true;
+                            self.right_sidebar_state.active_tab = crate::rightsidebar::RightSidebarTab::Outline;
+                            self.set_status("Outline panel opened (Ctrl+Shift+O)", now);
+                        }
+                    }
                     crate::fuzzy::PaletteAction::TogglePreview => {
                         self.search_open = false;
                         self.preview_open = !self.preview_open;
@@ -323,6 +350,55 @@ impl App {
                         // Refresh results so ✓ Active badge moves to new selection
                         crate::notes::update_search_results(self);
                         self.set_status(&format!("Sound profile: {}", profile.name()), now);
+                    }
+                    crate::fuzzy::PaletteAction::OpenCaretPicker => {
+                        self.search_query = ">caret ".to_string();
+                        self.search_selected = 0;
+                        self.update_search_results();
+                    }
+                    crate::fuzzy::PaletteAction::ApplyCaretKind(kind) => {
+                        self.caret.kind = kind;
+                        self.caret.last_type = now;
+                        let _ = self.db_tx.send(DbMsg::SaveSetting {
+                            key: "caret".into(),
+                            val: kind.name().into(),
+                        });
+                        crate::notes::update_search_results(self);
+                        self.set_status(&format!("Caret style: {}", crate::palette::caret_display_name(kind)), now);
+                    }
+                    crate::fuzzy::PaletteAction::OpenFontPicker => {
+                        self.search_query = ">font ".to_string();
+                        self.search_selected = 0;
+                        self.update_search_results();
+                    }
+                    crate::fuzzy::PaletteAction::ApplyFont(font_name) => {
+                        self.selected_font = font_name.clone();
+                        crate::font_manager::apply_font(ui.ctx(), &self.selected_font);
+                        self.cell = None;
+                        let _ = self.db_tx.send(DbMsg::SaveSetting {
+                            key: "selected_font".into(),
+                            val: self.selected_font.clone(),
+                        });
+                        crate::notes::update_search_results(self);
+                        self.set_status(&format!("Font family: {}", self.selected_font), now);
+                    }
+                    crate::fuzzy::PaletteAction::OpenModePicker => {
+                        self.search_query = ">mode ".to_string();
+                        self.search_selected = 0;
+                        self.update_search_results();
+                    }
+                    crate::fuzzy::PaletteAction::ApplyEditorMode(mode) => {
+                        self.editor_input_mode = mode;
+                        let mode_str = match mode {
+                            crate::app::EditorInputMode::Vim => "vim",
+                            crate::app::EditorInputMode::Hybrid => "hybrid",
+                        };
+                        let _ = self.db_tx.send(DbMsg::SaveSetting {
+                            key: "editor_input_mode".into(),
+                            val: mode_str.into(),
+                        });
+                        crate::notes::update_search_results(self);
+                        self.set_status(&format!("Editor mode: {}", if mode == crate::app::EditorInputMode::Vim { "Vim" } else { "Hybrid" }), now);
                     }
                 }
             }

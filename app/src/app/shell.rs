@@ -49,10 +49,13 @@ impl App {
             }
         }
         let sidebar_visible = self.sidebar_open;
-        let layout = crate::layout::compute_modular_layout(
+        let right_sidebar_visible = self.right_sidebar_open && self.mode == Mode::Normal && !self.zen_mode;
+        let layout = crate::layout::compute_modular_layout_ex(
             bounds,
             sidebar_visible,
             self.sidebar_width,
+            right_sidebar_visible,
+            self.right_sidebar_width,
             is_titlebar_visible,
             true,
         );
@@ -243,6 +246,42 @@ impl App {
             now,
             typed,
         );
+
+        // Render Right Sidebar (Outline & Backlinks)
+        if let Some(right_sb_rect) = layout.right_sidebar_rect {
+            if self.mode == Mode::Normal && !self.zen_mode {
+                let rsb_action = crate::rightsidebar::render_right_sidebar(
+                    ui,
+                    right_sb_rect,
+                    &mut self.right_sidebar_state,
+                    &self.ed,
+                    &self.theme,
+                    self.opacity,
+                    &self.active_note_title,
+                    &self.notes_list,
+                    self.active_note_id,
+                );
+
+                if let Some(act) = rsb_action {
+                    match act {
+                        crate::rightsidebar::RightSidebarAction::JumpToChar(pos) => {
+                            self.ed.cur = pos.min(self.ed.buf.len());
+                            self.ed.desired_col = None;
+                        }
+                        crate::rightsidebar::RightSidebarAction::OpenNote { id, title } => {
+                            if id > 0 {
+                                self.open_note_by_id(id, now);
+                            } else if let Some(note) = crate::wikilink::resolve_wikilink(&title, &self.notes_list) {
+                                self.open_note_by_id(note.id, now);
+                            } else {
+                                self.create_new_note(now);
+                                crate::notes::rename_active_note(self, &title, now);
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         // Update Vim keystroke HUD and ShowCmd card timeout
         if self.editor_input_mode == EditorInputMode::Vim {
@@ -450,6 +489,136 @@ impl App {
 
         // Drag-and-drop hover indicator overlay
         crate::workspace_import::render_hover_indicator(ui.ctx(), &painter, bounds, &self.theme);
+
+        // Wikilink Autocomplete & Hover Preview Popups
+        if self.mode == Mode::Normal && !any_modal_open {
+            let gutter_w = if self.show_line_numbers {
+                let total_lines = (self.ed.buf.iter().filter(|&&c| c == '\n').count() + 1).max(1);
+                let digits = total_lines.to_string().len().max(2);
+                (digits as f32 * (self.font_size * 0.55) + 14.0).max(28.0)
+            } else {
+                0.0
+            };
+            let pad_x = if self.show_line_numbers { 16.0 } else { 24.0 };
+            let pad_y = 10.0;
+            let effective_gutter_w = if editor_panel_rect.width() > gutter_w + 40.0 { gutter_w } else { 0.0 };
+            let text_left = (editor_panel_rect.min.x + effective_gutter_w + pad_x).min(editor_panel_rect.max.x);
+            let ed_origin = pos2(text_left, editor_panel_rect.min.y - self.scroll_y + pad_y);
+            let wrap_w = (editor_panel_rect.max.x - text_left - 24.0).max(120.0);
+
+            let inline_layout = crate::view_editor::inline::compute_inline_layout_ctx(
+                ui.ctx(),
+                &self.ed,
+                wrap_w,
+                self.font_size,
+                &self.theme,
+                text_left,
+            );
+
+            self.wikilink_autocomplete.check_trigger(&self.ed, &self.notes_list);
+
+            if self.wikilink_autocomplete.is_active {
+                let (trigger_pos, trigger_lh) = inline_layout.pos_for_char(self.wikilink_autocomplete.trigger_start, ed_origin);
+                self.wikilink_autocomplete.trigger_screen_pos = pos2(trigger_pos.x, trigger_pos.y + trigger_lh + 2.0);
+            }
+
+            if let Some(crate::wikilink::wikilink_autocompletion::AutocompleteAction::Inserted { inserted_text: _ }) =
+                crate::wikilink::wikilink_autocompletion::render_wikilink_autocomplete(
+                    ui,
+                    &painter,
+                    &mut self.wikilink_autocomplete,
+                    &mut self.ed,
+                    &self.theme,
+                    bounds,
+                )
+            {
+                self.is_dirty = true;
+                self.sound.play();
+            }
+
+            if let Some(pos) = pointer_pos {
+                if editor_panel_rect.contains(pos) {
+                    let text = self.ed.text();
+                    let links = crate::wikilink::extract_wikilinks(&text);
+                    let mut found_hover = None;
+
+                    // Hit-test character position and geometric bounding box from inline layout
+                    let char_idx = inline_layout.char_at_pos(pos, ed_origin);
+
+                    for link in &links {
+                        let (start_pos, line_h) = inline_layout.pos_for_char(link.start, ed_origin);
+                        let (end_pos, _) = inline_layout.pos_for_char(link.end, ed_origin);
+                        let link_rect = Rect::from_min_max(
+                            pos2(start_pos.x.min(end_pos.x) - 4.0, start_pos.y - 2.0),
+                            pos2(start_pos.x.max(end_pos.x) + 4.0, start_pos.y + line_h + 3.0),
+                        );
+                        let is_hit = link_rect.contains(pos) || (char_idx >= link.start && char_idx <= link.end);
+
+                        if is_hit {
+                            let anchor = pos2(start_pos.x, start_pos.y + line_h);
+                            found_hover = Some((link.target.clone(), anchor));
+
+                            if ui.input(|i| i.pointer.primary_clicked()) {
+                                if let Some(note) = crate::wikilink::resolve_wikilink(&link.target, &self.notes_list) {
+                                    self.open_note_by_id(note.id, now);
+                                } else {
+                                    self.create_new_note(now);
+                                    crate::notes::rename_active_note(self, &link.target, now);
+                                }
+                            }
+                            break;
+                        }
+                    }
+
+                    if let Some((target, anchor)) = found_hover {
+                        self.hover_wikilink.update_hover(&target, anchor, &self.notes_list, now);
+                    } else {
+                        self.hover_wikilink.pending_target = None;
+                        self.hover_wikilink.dismissed_target = None;
+                        if !self.hover_wikilink.is_mouse_inside_popup {
+                            self.hover_wikilink.clear();
+                        }
+                    }
+                } else if !self.hover_wikilink.is_mouse_inside_popup {
+                    self.hover_wikilink.pending_target = None;
+                    self.hover_wikilink.clear();
+                }
+            } else if !self.hover_wikilink.is_mouse_inside_popup {
+                self.hover_wikilink.pending_target = None;
+                self.hover_wikilink.clear();
+            }
+
+            // Keyboard navigation / typing in editor dismisses hover preview
+            if self.hover_wikilink.is_active() && !self.hover_wikilink.is_mouse_inside_popup {
+                let key_active = ui.input(|i| {
+                    !i.events.is_empty()
+                        && i.events.iter().any(|e| matches!(e, egui::Event::Key { .. } | egui::Event::Text(_)))
+                });
+                if key_active {
+                    self.hover_wikilink.dismiss();
+                }
+            }
+        }
+
+        if let Some(act) = crate::wikilink::hover_wikilink::render_hover_wikilink_popup(
+            ui,
+            &painter,
+            &mut self.hover_wikilink,
+            &self.theme,
+            self.font_size,
+            bounds,
+        ) {
+            match act {
+                crate::wikilink::hover_wikilink::HoverWikiLinkAction::OpenNote { id, title } => {
+                    if let Some(note_id) = id {
+                        self.open_note_by_id(note_id, now);
+                    } else {
+                        self.create_new_note(now);
+                        crate::notes::rename_active_note(self, &title, now);
+                    }
+                }
+            }
+        }
 
         // Render Modal dialogs (Preferences, Search, Rename, Delete, Accent dropdown, Workspace Import)
         self.render_modals(ui, &painter, bounds, accent_anchor_rect, now);

@@ -495,7 +495,8 @@ impl App {
                         typed,
                         any_modal_open
                             || self.is_dragging_splitter
-                            || self.is_dragging_sidebar_splitter,
+                            || self.is_dragging_sidebar_splitter
+                            || self.hover_wikilink.is_mouse_inside_popup,
                         search_matches,
                         self.show_line_numbers,
                         &mut self.sound,
@@ -520,7 +521,8 @@ impl App {
                         typed,
                         any_modal_open
                             || self.is_dragging_splitter
-                            || self.is_dragging_sidebar_splitter,
+                            || self.is_dragging_sidebar_splitter
+                            || self.hover_wikilink.is_mouse_inside_popup,
                         search_matches,
                         self.show_line_numbers,
                         active_vim_mode,

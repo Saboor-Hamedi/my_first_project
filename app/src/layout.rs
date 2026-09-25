@@ -17,16 +17,38 @@ pub struct AppLayout {
     pub sidebar_rect: Option<Rect>,
     pub splitter_hit_rect: Option<Rect>,
     pub splitter_center_x: Option<f32>,
+    pub right_sidebar_rect: Option<Rect>,
     pub editor_panel_rect: Rect,
 }
 
 /// Computes the exact window geometry ensuring a uniform 5px outer gap everywhere,
 /// identical top and bottom alignment between the sidebar and editor panel, and
-/// a centered resizable splitter knob. Supports modular hiding of titlebar and statusbar.
+/// a centered resizable splitter knob. Supports modular hiding of titlebar, statusbar, and right sidebar.
 pub fn compute_modular_layout(
     bounds: Rect,
     sidebar_open: bool,
     sidebar_w: f32,
+    show_titlebar: bool,
+    show_statusbar: bool,
+) -> AppLayout {
+    compute_modular_layout_ex(
+        bounds,
+        sidebar_open,
+        sidebar_w,
+        false,
+        0.0,
+        show_titlebar,
+        show_statusbar,
+    )
+}
+
+/// Computes layout including optional right sidebar inspector.
+pub fn compute_modular_layout_ex(
+    bounds: Rect,
+    sidebar_open: bool,
+    sidebar_w: f32,
+    right_sidebar_open: bool,
+    right_sidebar_w: f32,
     show_titlebar: bool,
     show_statusbar: bool,
 ) -> AppLayout {
@@ -60,6 +82,22 @@ pub fn compute_modular_layout(
         bounds.max.y - GAP
     };
 
+    let right_sidebar_rect = if right_sidebar_open {
+        let rw = right_sidebar_w.clamp(MIN_SIDEBAR_W, MAX_SIDEBAR_W);
+        Some(Rect::from_min_max(
+            pos2(bounds.max.x - GAP - rw, panel_top),
+            pos2(bounds.max.x - GAP, panel_bottom),
+        ))
+    } else {
+        None
+    };
+
+    let ed_right = if let Some(rsb) = right_sidebar_rect {
+        rsb.min.x - GAP
+    } else {
+        bounds.max.x - GAP
+    };
+
     if sidebar_open {
         let sw = sidebar_w.clamp(MIN_SIDEBAR_W, MAX_SIDEBAR_W);
         let sb_rect = Rect::from_min_max(
@@ -74,7 +112,7 @@ pub fn compute_modular_layout(
         let ed_left = sb_rect.max.x + GAP + SPLITTER_BAR_W + GAP;
         let ed_panel = Rect::from_min_max(
             pos2(ed_left, panel_top),
-            pos2(bounds.max.x - GAP, panel_bottom),
+            pos2(ed_right, panel_bottom),
         );
         AppLayout {
             titlebar_rect,
@@ -82,12 +120,13 @@ pub fn compute_modular_layout(
             sidebar_rect: Some(sb_rect),
             splitter_hit_rect: Some(split_hit_rect),
             splitter_center_x: Some(splitter_center_x),
+            right_sidebar_rect,
             editor_panel_rect: ed_panel,
         }
     } else {
         let ed_panel = Rect::from_min_max(
             pos2(bounds.min.x + GAP, panel_top),
-            pos2(bounds.max.x - GAP, panel_bottom),
+            pos2(ed_right, panel_bottom),
         );
         AppLayout {
             titlebar_rect,
@@ -95,6 +134,7 @@ pub fn compute_modular_layout(
             sidebar_rect: None,
             splitter_hit_rect: None,
             splitter_center_x: None,
+            right_sidebar_rect,
             editor_panel_rect: ed_panel,
         }
     }

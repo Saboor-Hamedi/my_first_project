@@ -10,8 +10,17 @@ pub enum PaletteAction {
     ApplyTheme(ThemeKind),
     ShowSoundPicker,
     ApplySoundProfile(SoundProfile),
+    OpenCaretPicker,
+    ApplyCaretKind(crate::caret::CaretKind),
+    OpenFontPicker,
+    ApplyFont(String),
+    OpenModePicker,
+    ApplyEditorMode(crate::app::EditorInputMode),
     OpenSetting(crate::settings::SettingTab),
     ToggleSidebar,
+    ToggleRightSidebar,
+    ToggleBacklinks,
+    ToggleOutline,
     TogglePreview,
     ToggleAi,
     ToggleTerminal,
@@ -66,51 +75,58 @@ pub struct BuiltinCommand {
 }
 
 pub const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
-    // --- Theme & Appearance Settings ---
+    // --- Theme, Audio & Caret Pickers ---
     BuiltinCommand {
-        title: "Settings: Color Theme",
+        title: "Color Theme",
         snippet: "Browse and live-preview all 19 visual themes",
         badge: ">theme",
         icon: "🎨",
         action: PaletteAction::OpenThemePicker,
     },
     BuiltinCommand {
-        title: "Settings: Typing Sound Profile",
+        title: "Typing Sound Profile",
         snippet: "Preview and switch mechanical keyboard sound profiles live",
         badge: ">sound",
         icon: "🔊",
         action: PaletteAction::ShowSoundPicker,
     },
     BuiltinCommand {
-        title: "Settings: Preferences & Appearance",
+        title: "Caret Style & Cursor FX",
+        snippet: "Preview and switch living animated cursor styles & physics live",
+        badge: ">caret",
+        icon: "✦",
+        action: PaletteAction::OpenCaretPicker,
+    },
+    BuiltinCommand {
+        title: "Preferences & Appearance",
         snippet: "Customize active color palette, window opacity, and blur",
         badge: "Ctrl+,",
         icon: "⚙",
         action: PaletteAction::OpenSetting(crate::settings::SettingTab::Theme),
     },
     BuiltinCommand {
-        title: "Settings: Keyboard Shortcuts & Cheatsheet",
+        title: "Keyboard Shortcuts & Cheatsheet",
         snippet: "Review global shortcuts, editing commands, and markdown combos",
         badge: "F1",
         icon: "⚙",
         action: PaletteAction::OpenSetting(crate::settings::SettingTab::Shortcuts),
     },
     BuiltinCommand {
-        title: "Settings: Editor Mode (Vim / Hybrid)",
+        title: "Editor Mode (Vim / Hybrid)",
         snippet: "Switch between modal Vim motions and intuitive Hybrid writing",
-        badge: "Ctrl+E",
+        badge: ">mode",
         icon: "⚙",
-        action: PaletteAction::OpenSetting(crate::settings::SettingTab::EditorMode),
+        action: PaletteAction::OpenModePicker,
     },
     BuiltinCommand {
-        title: "Settings: Window Opacity & Transparency",
+        title: "Window Opacity & Transparency",
         snippet: "Adjust window opacity level from solid to translucent",
         badge: "Opacity",
         icon: "⚙",
         action: PaletteAction::OpenSetting(crate::settings::SettingTab::Theme),
     },
     BuiltinCommand {
-        title: "Settings: Window Blur Effect (Acrylic / Mica / Off)",
+        title: "Window Blur Effect (Acrylic / Mica / Off)",
         snippet: "Configure Windows desktop acrylic or mica glass blur",
         badge: "Blur",
         icon: "⚙",
@@ -119,51 +135,51 @@ pub const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
 
     // --- Carets & Typography Settings ---
     BuiltinCommand {
-        title: "Settings: Carets & Cursor Styles",
+        title: "Carets & Cursor Styles",
         snippet: "Customize cursor animation, kind (Beam, Block, Neon), and width",
         badge: "Caret",
         icon: "⚙",
         action: PaletteAction::OpenSetting(crate::settings::SettingTab::Carets),
     },
     BuiltinCommand {
-        title: "Settings: Fonts & Monospace Typography",
+        title: "Fonts & Monospace Typography",
         snippet: "Select custom font family, ligature rendering, and font size",
-        badge: "Font",
+        badge: ">font",
         icon: "⚙",
-        action: PaletteAction::OpenSetting(crate::settings::SettingTab::Fonts),
+        action: PaletteAction::OpenFontPicker,
     },
 
     // --- Audio, Keybindings & System Settings ---
     BuiltinCommand {
-        title: "Settings: Mechanical Typing Audio & Switches",
+        title: "Mechanical Typing Audio & Switches",
         snippet: "Switch mechanical switch audio profiles (Thocky, Clacky, Silent)",
         badge: "Audio",
         icon: "⚙",
         action: PaletteAction::OpenSetting(crate::settings::SettingTab::Sounds),
     },
     BuiltinCommand {
-        title: "Settings: Custom Keybindings & Remapping",
+        title: "Custom Keybindings & Remapping",
         snippet: "Configure custom keybindings and inspect motion keymaps",
         badge: "Keymap",
         icon: "⚙",
         action: PaletteAction::OpenSetting(crate::settings::SettingTab::Keybindings),
     },
     BuiltinCommand {
-        title: "Settings: Vault Backup & Data Safety",
+        title: "Vault Backup & Data Safety",
         snippet: "Configure automated SQLite snapshots and export paths",
         badge: "Backup",
         icon: "⚙",
         action: PaletteAction::OpenSetting(crate::settings::SettingTab::Backup),
     },
     BuiltinCommand {
-        title: "Settings: Check for App Updates",
+        title: "Check for App Updates",
         snippet: "Verify GitHub release packages and apply live updates",
         badge: "Updates",
         icon: "⚙",
         action: PaletteAction::OpenSetting(crate::settings::SettingTab::Updates),
     },
     BuiltinCommand {
-        title: "Settings: AI Engine & DeepSeek",
+        title: "AI Engine & DeepSeek",
         snippet: "Configure DeepSeek API key and model parameters",
         badge: "Ctrl+Shift+I",
         icon: "⚙",
@@ -172,56 +188,56 @@ pub const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
 
     // --- LunaLine Statusline Settings ---
     BuiltinCommand {
-        title: "Settings: LunaLine Statusline",
+        title: "LunaLine Statusline",
         snippet: "Customize dock style (Pill, Powerline, Floating) & component toggles",
         badge: "LunaLine",
         icon: "⚙",
         action: PaletteAction::OpenSetting(crate::settings::SettingTab::LunaLine),
     },
     BuiltinCommand {
-        title: "Settings: LunaLine Style - Modern Pill Capsules",
+        title: "LunaLine Style - Modern Pill Capsules",
         snippet: "Discrete capsules with subtle rounded pill background",
         badge: "Pill",
         icon: "🎨",
         action: PaletteAction::SetLunaStyle(crate::lunaline::LunaStyle::Pill),
     },
     BuiltinCommand {
-        title: "Settings: LunaLine Style - Neovim Powerline Chevrons",
+        title: "LunaLine Style - Neovim Powerline Chevrons",
         snippet: "Classic angled arrow chevrons connecting segments",
         badge: "Powerline",
         icon: "🎨",
         action: PaletteAction::SetLunaStyle(crate::lunaline::LunaStyle::Powerline),
     },
     BuiltinCommand {
-        title: "Settings: LunaLine Style - Floating Island Pill",
+        title: "LunaLine Style - Floating Island Pill",
         snippet: "Detached glassmorphic statusline floating above edge",
         badge: "Floating",
         icon: "🎨",
         action: PaletteAction::SetLunaStyle(crate::lunaline::LunaStyle::Floating),
     },
     BuiltinCommand {
-        title: "Settings: LunaLine Style - Minimal Clean Typography",
+        title: "LunaLine Style - Minimal Clean Typography",
         snippet: "Pure typographic statusline with subtle dot separators",
         badge: "Minimal",
         icon: "🎨",
         action: PaletteAction::SetLunaStyle(crate::lunaline::LunaStyle::Minimal),
     },
     BuiltinCommand {
-        title: "Settings: LunaLine Color Mode - Dynamic Accents",
+        title: "LunaLine Color Mode - Dynamic Accents",
         snippet: "Mode-reactive colors (Normal, Insert, Visual, Command)",
         badge: "Dynamic",
         icon: "🎨",
         action: PaletteAction::SetLunaColor(crate::lunaline::LunaColorMode::Dynamic),
     },
     BuiltinCommand {
-        title: "Settings: LunaLine Color Mode - Theme Accent",
+        title: "LunaLine Color Mode - Theme Accent",
         snippet: "Harmonizes directly with active Lumina theme accent",
         badge: "Accent",
         icon: "🎨",
         action: PaletteAction::SetLunaColor(crate::lunaline::LunaColorMode::ThemeAccent),
     },
     BuiltinCommand {
-        title: "Settings: LunaLine Color Mode - Monochrome",
+        title: "LunaLine Color Mode - Monochrome",
         snippet: "Stealth minimalist grayscale with maximum clarity",
         badge: "Mono",
         icon: "🎨",
@@ -230,49 +246,63 @@ pub const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
 
     // --- View Settings & Navigation Shortcuts ---
     BuiltinCommand {
-        title: "Settings: Toggle Sidebar Explorer",
+        title: "Toggle Sidebar Explorer",
         snippet: "Show or hide the document explorer drawer",
         badge: "Ctrl+B",
         icon: "👁",
         action: PaletteAction::ToggleSidebar,
     },
     BuiltinCommand {
-        title: "Settings: Toggle Markdown Live Preview",
+        title: "Toggle Backlinks Sidebar",
+        snippet: "Show or hide incoming backlinks and note reference panel",
+        badge: "Ctrl+I",
+        icon: "🔗",
+        action: PaletteAction::ToggleBacklinks,
+    },
+    BuiltinCommand {
+        title: "Toggle Outline Sidebar",
+        snippet: "Show or hide the document outline (H1-H6) panel",
+        badge: "Ctrl+Shift+O",
+        icon: "📑",
+        action: PaletteAction::ToggleOutline,
+    },
+    BuiltinCommand {
+        title: "Toggle Markdown Live Preview",
         snippet: "Split or close side-by-side formatted preview",
         badge: "Ctrl+\\",
         icon: "👁",
         action: PaletteAction::TogglePreview,
     },
     BuiltinCommand {
-        title: "Settings: Toggle Interactive Terminal",
+        title: "Toggle Interactive Terminal",
         snippet: "Open bottom docked PowerShell / cmd shell session",
         badge: "Ctrl+J",
         icon: "👁",
         action: PaletteAction::ToggleTerminal,
     },
     BuiltinCommand {
-        title: "Settings: Toggle Zen Focus Mode",
+        title: "Toggle Zen Focus Mode",
         snippet: "Distraction-free pure canvas writing environment",
         badge: "Ctrl+.",
         icon: "👁",
         action: PaletteAction::ToggleZen,
     },
     BuiltinCommand {
-        title: "Settings: Toggle AI Writing Assistant",
+        title: "Toggle AI Writing Assistant",
         snippet: "Open DeepSeek Pro intelligent writing assistant",
         badge: "Ctrl+Shift+I",
         icon: "👁",
         action: PaletteAction::ToggleAi,
     },
     BuiltinCommand {
-        title: "Settings: Toggle Window Titlebar",
+        title: "Toggle Window Titlebar",
         snippet: "Show or hide the top window titlebar",
         badge: "UI",
         icon: "👁",
         action: PaletteAction::ToggleTitlebar,
     },
     BuiltinCommand {
-        title: "Settings: Toggle Document Tabs",
+        title: "Toggle Document Tabs",
         snippet: "Show or hide editor document tab strip",
         badge: "UI",
         icon: "👁",
@@ -281,80 +311,80 @@ pub const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
 
     // --- Document & Action Settings Shortcuts ---
     BuiltinCommand {
-        title: "Settings: New Note Document",
+        title: "New Note Document",
         snippet: "Create a fresh empty markdown note",
         badge: "Ctrl+N",
         icon: "📄",
         action: PaletteAction::NewNote,
     },
     BuiltinCommand {
-        title: "Settings: Quick Save Active Note",
+        title: "Quick Save Active Note",
         snippet: "Commit active note buffer immediately to SQLite",
         badge: "Ctrl+S",
         icon: "📄",
         action: PaletteAction::QuickSave,
     },
     BuiltinCommand {
-        title: "Settings: Rename Active Note",
+        title: "Rename Active Note",
         snippet: "Change topic title of the active document",
         badge: "Ctrl+R",
         icon: "📄",
         action: PaletteAction::RenameNote,
     },
     BuiltinCommand {
-        title: "Settings: Delete Active Note",
+        title: "Delete Active Note",
         snippet: "Permanently delete current note from local vault",
         badge: "Ctrl+Shift+D",
         icon: "📄",
         action: PaletteAction::DeleteNote,
     },
     BuiltinCommand {
-        title: "Settings: Toggle Checklist Checkbox",
+        title: "Toggle Checklist Checkbox",
         snippet: "Toggle checklist checkbox between [ ] and [x]",
         badge: "Ctrl+Shift+X",
         icon: "📄",
         action: PaletteAction::ToggleChecklist,
     },
     BuiltinCommand {
-        title: "Settings: Close Note Tab",
+        title: "Close Note Tab",
         snippet: "Close the currently active note or doc tab",
         badge: "Ctrl+W",
         icon: "📄",
         action: PaletteAction::CloseTab,
     },
     BuiltinCommand {
-        title: "Settings: Command Palette & Settings",
+        title: "Command Palette & Settings",
         snippet: "Search settings, themes, preferences, and shortcuts",
         badge: "Ctrl+Shift+P",
         icon: "⚡",
         action: PaletteAction::OpenSetting(crate::settings::SettingTab::Shortcuts),
     },
     BuiltinCommand {
-        title: "Settings: Import Obsidian Vault or Folder",
+        title: "Import Obsidian Vault or Folder",
         snippet: "Bulk-import local markdown files and vaults",
         badge: "Import",
         icon: "📄",
         action: PaletteAction::ImportWorkspace,
     },
     BuiltinCommand {
-        title: "Settings: Run Web Security Scan",
+        title: "Run Web Security Scan",
         snippet: "Run automated security vulnerability scan against URL",
         badge: ":scan",
         icon: "⚡",
         action: PaletteAction::RunScan,
     },
     BuiltinCommand {
-        title: "Settings: Security Scan History",
+        title: "Security Scan History",
         snippet: "Review previous security vulnerability scan results",
         badge: ":scans",
         icon: "⚡",
         action: PaletteAction::ScanHistory,
     },
     BuiltinCommand {
-        title: "Settings: Open Documentation & Guides",
+        title: "Documentation & User Manual",
         snippet: "Browse built-in user guides, shortcuts, and tutorials",
         badge: "F1",
-        icon: "💡",
+        icon: "📖",
         action: PaletteAction::OpenHelp,
     },
 ];
@@ -402,98 +432,35 @@ pub fn fuzzy_match(needle: &str, haystack: &str) -> Option<i64> {
 /// Handles:
 /// 1. `>theme [query]` -> Live interactive theme selector across all 19 themes
 /// 2. `>sound [query]` -> Live interactive sound profile selector with Enter-to-preview
-/// 3. `>[query]`       -> VS Code-style Command Palette across all settings, views, and actions
-/// 4. `[query]`        -> Fast fuzzy search across notes and content
+/// 3. `>caret [query]` -> Live interactive caret style selector with Enter-to-preview
+/// 4. `>font [query]`  -> Live interactive font family selector
+/// 5. `>mode [query]`  -> Live interactive editor mode switcher (Vim / Hybrid)
+/// 6. `>luna [query]`  -> Live interactive statusline style switcher
+/// 7. `>[query]`       -> VS Code-style Command Palette across all settings, views, and actions
+/// 8. `[query]`        -> Fast fuzzy search across notes and content
 pub fn search_palette(
     query_str: &str,
     notes: &[core::Note],
     active_theme: ThemeKind,
     active_sound: SoundProfile,
+    active_caret: crate::caret::CaretKind,
+    active_font: &str,
+    active_mode: crate::app::EditorInputMode,
+    active_luna_style: crate::lunaline::LunaStyle,
 ) -> Vec<SearchItem> {
     let raw = query_str.trim();
 
-    // ── 1. Theme Sub-Picker Mode ─────────────────────────────────────────────
-    if raw.starts_with(">theme") || raw.starts_with("> theme") {
-        let needle = if let Some(stripped) = raw.strip_prefix(">theme") {
-            stripped.trim()
-        } else if let Some(stripped) = raw.strip_prefix("> theme") {
-            stripped.trim()
-        } else {
-            ""
-        };
-
-        let mut results = Vec::new();
-        for &theme_kind in ThemeKind::ALL {
-            let name = theme_kind.display_name();
-            let key_name = theme_kind.name();
-            let score = if needle.is_empty() {
-                Some(100)
-            } else {
-                fuzzy_match(needle, name).or_else(|| fuzzy_match(needle, key_name))
-            };
-
-            if let Some(mut s) = score {
-                let is_active = theme_kind == active_theme;
-                if is_active { s += 200; }
-                let snippet = if theme_kind.is_light() {
-                    "Crisp Paper • Light".to_string()
-                } else {
-                    "Midnight Canvas • Dark".to_string()
-                };
-                let badge = if is_active { "✓ Active".to_string() } else { String::new() };
-                results.push(SearchItem {
-                    id: 0,
-                    title: name.to_string(),
-                    snippet,
-                    score: s,
-                    badge,
-                    icon: "🎨",
-                    action: PaletteAction::ApplyTheme(theme_kind),
-                });
-            }
-        }
-        results.sort_by(|a, b| b.score.cmp(&a.score));
-        return results;
-    }
-
-    // ── 1b. Sound Sub-Picker Mode (`>sound ...`) ─────────────────────────────
-    if raw.starts_with(">sound") || raw.starts_with("> sound") {
-        let needle = if let Some(stripped) = raw.strip_prefix(">sound") {
-            stripped.trim()
-        } else if let Some(stripped) = raw.strip_prefix("> sound") {
-            stripped.trim()
-        } else {
-            ""
-        };
-
-        let mut results = Vec::new();
-        for &profile in SoundProfile::ALL.iter() {
-            let name = profile.name();
-            let desc = profile.description();
-            let score = if needle.is_empty() {
-                Some(100)
-            } else {
-                fuzzy_match(needle, name).or_else(|| fuzzy_match(needle, desc))
-            };
-
-            if let Some(mut s) = score {
-                let is_active = profile == active_sound;
-                if is_active { s += 200; }
-                let badge = if is_active { "✓ Active".to_string() } else { String::new() };
-                let icon = if profile == SoundProfile::Off { "🔇" } else { "🔊" };
-                results.push(SearchItem {
-                    id: 0,
-                    title: name.to_string(),
-                    snippet: desc.to_string(),
-                    score: s,
-                    badge,
-                    icon,
-                    action: PaletteAction::ApplySoundProfile(profile),
-                });
-            }
-        }
-        results.sort_by(|a, b| b.score.cmp(&a.score));
-        return results;
+    // ── 1. Sub-Picker Modes (`>theme`, `>sound`, `>caret`, `>font`, `>mode`, `>luna`)
+    if let Some(sub_items) = crate::palette::match_subpicker(
+        raw,
+        active_theme,
+        active_sound,
+        active_caret,
+        active_font,
+        active_mode,
+        active_luna_style,
+    ) {
+        return sub_items;
     }
 
     // ── 2. VS Code Command Palette Mode (`>...`) ─────────────────────────────
@@ -579,13 +546,19 @@ mod tests {
 
     #[test]
     fn test_command_palette_matching() {
-        let items = search_palette(">", &[], ThemeKind::TokyoNight, crate::sound::SoundProfile::Off);
+        let def_font = "JetBrains Mono";
+        let def_mode = crate::app::EditorInputMode::Vim;
+        let def_luna = crate::lunaline::LunaStyle::Pill;
+
+        let items = search_palette(">", &[], ThemeKind::TokyoNight, crate::sound::SoundProfile::Off, crate::caret::CaretKind::Beam, def_font, def_mode, def_luna);
         assert!(!items.is_empty());
-        assert!(items.iter().all(|i| i.title.starts_with("Settings: ")));
+        // Verify commands have NO "Settings: " prefix as requested
+        assert!(items.iter().all(|i| !i.title.starts_with("Settings: ")));
         assert!(items.iter().any(|i| i.title.contains("Color Theme")));
         assert!(items.iter().any(|i| i.title.contains("Keyboard Shortcuts")));
+        assert!(items.iter().any(|i| i.title.contains("Caret Style & Cursor FX")));
 
-        let theme_filter = search_palette(">theme", &[], ThemeKind::TokyoNight, crate::sound::SoundProfile::Off);
+        let theme_filter = search_palette(">theme", &[], ThemeKind::TokyoNight, crate::sound::SoundProfile::Off, crate::caret::CaretKind::Beam, def_font, def_mode, def_luna);
         assert_eq!(theme_filter.len(), ThemeKind::ALL.len());
         let active = theme_filter.iter().find(|i| i.badge.contains("Active"));
         assert!(active.is_some());
@@ -594,7 +567,7 @@ mod tests {
         assert_eq!(inactive_with_badge, 0);
 
         // Sound picker: >sound shows all profiles
-        let sound_filter = search_palette(">sound", &[], ThemeKind::TokyoNight, crate::sound::SoundProfile::Thocky);
+        let sound_filter = search_palette(">sound", &[], ThemeKind::TokyoNight, crate::sound::SoundProfile::Thocky, crate::caret::CaretKind::Beam, def_font, def_mode, def_luna);
         assert_eq!(sound_filter.len(), crate::sound::SoundProfile::ALL.len());
         let active_sound = sound_filter.iter().find(|i| i.badge.contains("Active"));
         assert!(active_sound.is_some());
@@ -602,6 +575,23 @@ mod tests {
         // Inactive sound profiles must have empty badges
         let inactive_sound_with_badge = sound_filter.iter().filter(|i| !i.badge.is_empty() && !i.badge.contains("Active")).count();
         assert_eq!(inactive_sound_with_badge, 0);
+
+        // Caret picker: >caret shows all curated carets
+        let caret_filter = search_palette(">caret", &[], ThemeKind::TokyoNight, crate::sound::SoundProfile::Off, crate::caret::CaretKind::Fire, def_font, def_mode, def_luna);
+        assert_eq!(caret_filter.len(), crate::caret::CaretKind::ALL.len());
+        let active_caret = caret_filter.iter().find(|i| i.badge.contains("Active"));
+        assert!(active_caret.is_some());
+        assert!(active_caret.unwrap().title.contains("Fire"));
+
+        // Font picker: >font shows supported fonts
+        let font_filter = search_palette(">font", &[], ThemeKind::TokyoNight, crate::sound::SoundProfile::Off, crate::caret::CaretKind::Beam, "JetBrains Mono", def_mode, def_luna);
+        assert!(!font_filter.is_empty());
+        assert!(font_filter.iter().any(|i| i.title == "JetBrains Mono" && i.badge.contains("Active")));
+
+        // Mode picker: >mode shows modes
+        let mode_filter = search_palette(">mode", &[], ThemeKind::TokyoNight, crate::sound::SoundProfile::Off, crate::caret::CaretKind::Beam, def_font, crate::app::EditorInputMode::Vim, def_luna);
+        assert_eq!(mode_filter.len(), 2);
+        assert!(mode_filter.iter().any(|i| i.title.contains("Vim") && i.badge.contains("Active")));
 
         // Note search items must have empty badges
         let sample_notes = vec![core::Note {
@@ -611,7 +601,7 @@ mod tests {
             struggled_with: None,
             created_at: chrono::NaiveDateTime::default(),
         }];
-        let note_results = search_palette("Arch", &sample_notes, ThemeKind::TokyoNight, crate::sound::SoundProfile::Off);
+        let note_results = search_palette("Arch", &sample_notes, ThemeKind::TokyoNight, crate::sound::SoundProfile::Off, crate::caret::CaretKind::Beam, def_font, def_mode, def_luna);
         assert!(!note_results.is_empty());
         assert_eq!(note_results[0].badge, "");
     }

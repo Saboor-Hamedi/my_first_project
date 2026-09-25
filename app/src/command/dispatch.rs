@@ -43,6 +43,8 @@ pub const COMMAND_CATALOG: &[CommandInfo] = &[
     CommandInfo { name: "scans", desc: "View web security scan history" },
     CommandInfo { name: "titlebar", desc: "Toggle window titlebar (:titlebar)" },
     CommandInfo { name: "sidebar", desc: "Toggle notes sidebar (:sidebar)" },
+    CommandInfo { name: "backlinks", desc: "Toggle backlinks reference panel (:backlinks, :bl)" },
+    CommandInfo { name: "outline", desc: "Toggle outline headings panel (:outline, :ol)" },
     CommandInfo { name: "settings", desc: "Open preferences & settings (:settings)" },
     CommandInfo { name: "zen", desc: "Toggle Zen mode (:zen)" },
     CommandInfo { name: "ai", desc: "Toggle DeepSeek AI Assistant (:ai)" },
@@ -274,6 +276,26 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
                     });
                     let msg = if app.sidebar_open { ":set sidebar (Sidebar visible)" } else { ":set nosidebar (Sidebar hidden)" };
                     app.set_status(msg, now);
+                }
+                "backlinks" | "bl" | "backlink" | "backlinks!" | "bl!" => {
+                    if app.right_sidebar_open && app.right_sidebar_state.active_tab == crate::rightsidebar::RightSidebarTab::Backlinks {
+                        app.right_sidebar_open = false;
+                        app.set_status(":backlinks (Backlinks panel closed)", now);
+                    } else {
+                        app.right_sidebar_open = true;
+                        app.right_sidebar_state.active_tab = crate::rightsidebar::RightSidebarTab::Backlinks;
+                        app.set_status(":backlinks (Backlinks panel opened - Ctrl+I)", now);
+                    }
+                }
+                "outline" | "ol" | "outline!" | "ol!" => {
+                    if app.right_sidebar_open && app.right_sidebar_state.active_tab == crate::rightsidebar::RightSidebarTab::Outline {
+                        app.right_sidebar_open = false;
+                        app.set_status(":outline (Outline panel closed)", now);
+                    } else {
+                        app.right_sidebar_open = true;
+                        app.right_sidebar_state.active_tab = crate::rightsidebar::RightSidebarTab::Outline;
+                        app.set_status(":outline (Outline panel opened - Ctrl+Shift+O)", now);
+                    }
                 }
                 "notabs" | "notab" | "tabs off" | "tabs=off" | "tabs 0" => {
                     app.show_tabs = false;
