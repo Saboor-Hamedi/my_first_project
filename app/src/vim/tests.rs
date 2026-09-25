@@ -550,3 +550,116 @@ fn test_vim_keymap_rebind_and_unbind() {
     assert_eq!(keymap.lookup_normal(&stroke), None);
 }
 
+#[test]
+fn test_vim_vip_paragraph_selection() {
+    let mut ed = Editor::new();
+    let sample = "Intro line\n\nOne fact per note beats paragraph soup.\nWhen a note covers two ideas, split it before\ntuning rankers.\n\nNext paragraph line.";
+    ed.insert_str(sample);
+
+    let mut vim = VimEngine::new();
+
+    // 1. Test 'vip' from beginning of paragraph
+    let para_start_idx = sample.find("One fact").unwrap();
+    ed.cur = para_start_idx;
+    assert!(vim.handle_char(&mut ed, &[], 'v'));
+    assert!(vim.handle_char(&mut ed, &[], 'i'));
+    assert!(vim.handle_char(&mut ed, &[], 'p'));
+    assert_eq!(vim.mode, VimSubMode::VisualLine);
+    let selected = ed.selected_text().unwrap();
+    assert_eq!(
+        selected,
+        "One fact per note beats paragraph soup.\nWhen a note covers two ideas, split it before\ntuning rankers.\n"
+    );
+
+    // Cancel visual selection
+    assert!(vim.handle_key(&mut ed, &[], Key::Escape, Modifiers::default()));
+
+    // 2. Test 'vip' from center of paragraph
+    let para_center_idx = sample.find("split it").unwrap();
+    ed.cur = para_center_idx;
+    assert!(vim.handle_char(&mut ed, &[], 'v'));
+    assert!(vim.handle_char(&mut ed, &[], 'i'));
+    assert!(vim.handle_char(&mut ed, &[], 'p'));
+    assert_eq!(vim.mode, VimSubMode::VisualLine);
+    let selected_center = ed.selected_text().unwrap();
+    assert_eq!(selected_center, selected);
+
+    // Cancel visual selection
+    assert!(vim.handle_key(&mut ed, &[], Key::Escape, Modifiers::default()));
+
+    // 3. Test 'vip' from end of paragraph
+    let para_end_idx = sample.find("rankers.").unwrap();
+    ed.cur = para_end_idx;
+    assert!(vim.handle_char(&mut ed, &[], 'v'));
+    assert!(vim.handle_char(&mut ed, &[], 'i'));
+    assert!(vim.handle_char(&mut ed, &[], 'p'));
+    assert_eq!(vim.mode, VimSubMode::VisualLine);
+    let selected_end = ed.selected_text().unwrap();
+    assert_eq!(selected_end, selected);
+}
+
+#[test]
+fn test_vim_vap_paragraph_around() {
+    let mut ed = Editor::new();
+    let sample = "Intro line\n\nParagraph 1 line 1\nParagraph 1 line 2\n\nParagraph 2 line 1";
+    ed.insert_str(sample);
+
+    let mut vim = VimEngine::new();
+
+    // From inside paragraph 1, 'vap' should include paragraph 1 and the blank line next to it
+    let p1_idx = sample.find("Paragraph 1").unwrap();
+    ed.cur = p1_idx;
+    assert!(vim.handle_char(&mut ed, &[], 'v'));
+    assert!(vim.handle_char(&mut ed, &[], 'a'));
+    assert!(vim.handle_char(&mut ed, &[], 'p'));
+    assert_eq!(vim.mode, VimSubMode::VisualLine);
+    let selected = ed.selected_text().unwrap();
+    assert_eq!(selected, "Paragraph 1 line 1\nParagraph 1 line 2\n\n");
+}
+
+#[test]
+fn test_vim_yip_and_dap() {
+    let mut ed = Editor::new();
+    let sample = "Header\n\nParagraph to yank and delete.\nSecond line.\n\nFooter";
+    ed.insert_str(sample);
+
+    let mut vim = VimEngine::new();
+
+    // 1. Test 'yip': Yanks the whole paragraph without needing visual selection
+    let p_idx = sample.find("Paragraph to yank").unwrap();
+    ed.cur = p_idx;
+    assert!(vim.handle_char(&mut ed, &[], 'y'));
+    assert!(vim.handle_char(&mut ed, &[], 'i'));
+    assert!(vim.handle_char(&mut ed, &[], 'p'));
+    assert_eq!(vim.mode, VimSubMode::Normal);
+    assert_eq!(vim.register, "Paragraph to yank and delete.\nSecond line.\n");
+    assert!(vim.register_is_line);
+
+    // 2. Test 'dap': Automatically deletes the entire paragraph and its extra blank
+    assert!(vim.handle_char(&mut ed, &[], 'd'));
+    assert!(vim.handle_char(&mut ed, &[], 'a'));
+    assert!(vim.handle_char(&mut ed, &[], 'p'));
+    assert_eq!(vim.mode, VimSubMode::Normal);
+    assert_eq!(ed.text(), "Header\n\nFooter");
+}
+
+#[test]
+fn test_vim_cip_changes_paragraph() {
+    let mut ed = Editor::new();
+    let sample = "Header\n\nOld paragraph line 1.\nOld paragraph line 2.\n\nFooter";
+    ed.insert_str(sample);
+
+    let mut vim = VimEngine::new();
+    ed.cur = sample.find("Old paragraph").unwrap();
+
+    // 'cip' deletes the paragraph and puts the editor into Insert mode
+    assert!(vim.handle_char(&mut ed, &[], 'c'));
+    assert!(vim.handle_char(&mut ed, &[], 'i'));
+    assert!(vim.handle_char(&mut ed, &[], 'p'));
+    assert_eq!(vim.mode, VimSubMode::Insert);
+    // Typing replacement paragraph text
+    ed.insert_str("New replacement paragraph.");
+    assert_eq!(ed.text(), "Header\n\nNew replacement paragraph.\nFooter");
+}
+
+

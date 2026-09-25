@@ -19,6 +19,7 @@ pub struct Editor {
     pub selection_inclusive: bool,
     pub undo_stack: Vec<EditorSnapshot>,
     pub redo_stack: Vec<EditorSnapshot>,
+    pub desired_col: Option<usize>,
 }
 
 impl Editor {
@@ -38,6 +39,7 @@ impl Editor {
         self.cur = 0;
         self.selection = None;
         self.selection_inclusive = false;
+        self.desired_col = None;
     }
 
     pub fn clear_history(&mut self) {
@@ -50,6 +52,7 @@ impl Editor {
         self.cur = 0;
         self.selection = None;
         self.selection_inclusive = false;
+        self.desired_col = None;
     }
 
     pub fn text(&self) -> String {

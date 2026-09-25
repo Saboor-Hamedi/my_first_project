@@ -27,6 +27,7 @@ pub fn find_text_object_range(
         TextObjectKind::Brackets => find_bracket_range(buf, cur, '[', ']', inner),
         TextObjectKind::AngleBrackets => find_bracket_range(buf, cur, '<', '>', inner),
         TextObjectKind::Word => find_word_range(buf, cur, inner),
+        TextObjectKind::Paragraph => find_paragraph_range(buf, cur, inner),
     }
 }
 
@@ -214,6 +215,169 @@ fn find_word_range(buf: &[char], cur: usize, inner: bool) -> Option<(usize, usiz
     }
 
     Some((start, end))
+}
+
+/// Finds the character range `(start, end)` of the paragraph surrounding `cur`.
+///
+/// An inner paragraph (`inner == true`) selects the contiguous block of non-blank lines,
+/// excluding leading or trailing blank lines.
+/// An around paragraph (`inner == false`) includes the adjacent blank line(s) (trailing by default,
+/// or leading if at EOF).
+pub fn find_paragraph_range(buf: &[char], cur: usize, inner: bool) -> Option<(usize, usize)> {
+    if buf.is_empty() {
+        return None;
+    }
+
+    struct LineSpan {
+        start: usize,
+        end: usize,
+        is_blank: bool,
+    }
+
+    let mut lines = Vec::new();
+    let mut line_start = 0;
+    while line_start <= buf.len() {
+        let mut line_end = line_start;
+        while line_end < buf.len() && buf[line_end] != '\n' {
+            line_end += 1;
+        }
+        let is_blank = buf[line_start..line_end].iter().all(|c| c.is_whitespace());
+        lines.push(LineSpan {
+            start: line_start,
+            end: line_end,
+            is_blank,
+        });
+        if line_end >= buf.len() {
+            break;
+        }
+        line_start = line_end + 1;
+    }
+
+    if lines.is_empty() {
+        return None;
+    }
+
+    // Locate which line the cursor is currently on
+    let cur_pos = cur.min(buf.len());
+    let mut cur_line_idx = 0;
+    for (idx, line) in lines.iter().enumerate() {
+        let line_full_end = if line.end < buf.len() { line.end + 1 } else { line.end };
+        if cur_pos >= line.start && cur_pos < line_full_end {
+            cur_line_idx = idx;
+            break;
+        }
+        if cur_pos == line_full_end && idx + 1 == lines.len() {
+            cur_line_idx = idx;
+            break;
+        }
+    }
+
+    if !lines[cur_line_idx].is_blank {
+        // Cursor is on a text paragraph line
+        let mut start_idx = cur_line_idx;
+        while start_idx > 0 && !lines[start_idx - 1].is_blank {
+            start_idx -= 1;
+        }
+
+        let mut end_idx = cur_line_idx;
+        while end_idx + 1 < lines.len() && !lines[end_idx + 1].is_blank {
+            end_idx += 1;
+        }
+
+        if inner {
+            // "ip": text of the paragraph only, excluding surrounding blank lines
+            let start = lines[start_idx].start;
+            let end = if lines[end_idx].end < buf.len() {
+                lines[end_idx].end + 1
+            } else {
+                lines[end_idx].end
+            };
+            Some((start, end))
+        } else {
+            // "ap": text of the paragraph plus adjacent blank line(s)
+            let mut start = lines[start_idx].start;
+            let mut end = if lines[end_idx].end < buf.len() {
+                lines[end_idx].end + 1
+            } else {
+                lines[end_idx].end
+            };
+
+            // Trailing blank lines take precedence in standard Vim
+            if end_idx + 1 < lines.len() && lines[end_idx + 1].is_blank {
+                let mut post_blank = end_idx + 1;
+                while post_blank + 1 < lines.len() && lines[post_blank + 1].is_blank {
+                    post_blank += 1;
+                }
+                end = if lines[post_blank].end < buf.len() {
+                    lines[post_blank].end + 1
+                } else {
+                    lines[post_blank].end
+                };
+            } else if start_idx > 0 && lines[start_idx - 1].is_blank {
+                // If no trailing blank line (e.g. at EOF), consume preceding blank lines
+                let mut pre_blank = start_idx - 1;
+                while pre_blank > 0 && lines[pre_blank - 1].is_blank {
+                    pre_blank -= 1;
+                }
+                start = lines[pre_blank].start;
+            }
+            Some((start, end))
+        }
+    } else {
+        // Cursor is on a blank line: select contiguous blank lines (or blank lines + adjacent paragraph)
+        let mut start_blank = cur_line_idx;
+        while start_blank > 0 && lines[start_blank - 1].is_blank {
+            start_blank -= 1;
+        }
+
+        let mut end_blank = cur_line_idx;
+        while end_blank + 1 < lines.len() && lines[end_blank + 1].is_blank {
+            end_blank += 1;
+        }
+
+        if inner {
+            let start = lines[start_blank].start;
+            let end = if lines[end_blank].end < buf.len() {
+                lines[end_blank].end + 1
+            } else {
+                lines[end_blank].end
+            };
+            Some((start, end))
+        } else {
+            // "ap" on blank lines includes following paragraph if available, or preceding
+            if end_blank + 1 < lines.len() && !lines[end_blank + 1].is_blank {
+                let mut post_para = end_blank + 1;
+                while post_para + 1 < lines.len() && !lines[post_para + 1].is_blank {
+                    post_para += 1;
+                }
+                let end = if lines[post_para].end < buf.len() {
+                    lines[post_para].end + 1
+                } else {
+                    lines[post_para].end
+                };
+                Some((lines[start_blank].start, end))
+            } else if start_blank > 0 && !lines[start_blank - 1].is_blank {
+                let mut pre_para = start_blank - 1;
+                while pre_para > 0 && !lines[pre_para - 1].is_blank {
+                    pre_para -= 1;
+                }
+                let end = if lines[end_blank].end < buf.len() {
+                    lines[end_blank].end + 1
+                } else {
+                    lines[end_blank].end
+                };
+                Some((lines[pre_para].start, end))
+            } else {
+                let start = lines[start_blank].start;
+                let end = if lines[end_blank].end < buf.len() {
+                    lines[end_blank].end + 1
+                } else {
+                    lines[end_blank].end
+                };
+                Some((start, end))
+            }
+        }
+    }
 }
 
 /// Applies a text object operation (Delete, Yank, Change) to the editor.

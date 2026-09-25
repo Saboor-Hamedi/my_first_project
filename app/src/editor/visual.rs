@@ -102,6 +102,9 @@ impl Editor {
         if row == 0 {
             return;
         }
+        let target_col = self.desired_col.unwrap_or(col);
+        self.desired_col = Some(target_col);
+
         let mut target_row = row - 1;
         while target_row > 0
             && lines[target_row].char_start == self.cur
@@ -111,7 +114,13 @@ impl Editor {
         }
         let target_line = &lines[target_row];
         let line_len = target_line.char_end.saturating_sub(target_line.char_start);
-        self.cur = target_line.char_start + col.min(line_len);
+        let is_soft_wrapped = target_line.char_end < self.buf.len() && self.buf[target_line.char_end] != '\n';
+        let max_col = if is_soft_wrapped {
+            line_len.saturating_sub(1)
+        } else {
+            line_len
+        };
+        self.cur = target_line.char_start + target_col.min(max_col);
     }
 
     pub fn up_visual_select(&mut self, lines: &[VisualLine]) {
@@ -126,6 +135,9 @@ impl Editor {
         if row == 0 {
             return;
         }
+        let target_col = self.desired_col.unwrap_or(col);
+        self.desired_col = Some(target_col);
+
         let mut target_row = row - 1;
         while target_row > 0
             && lines[target_row].char_start == self.cur
@@ -135,7 +147,13 @@ impl Editor {
         }
         let target_line = &lines[target_row];
         let line_len = target_line.char_end.saturating_sub(target_line.char_start);
-        self.cur = target_line.char_start + col.min(line_len);
+        let is_soft_wrapped = target_line.char_end < self.buf.len() && self.buf[target_line.char_end] != '\n';
+        let max_col = if is_soft_wrapped {
+            line_len.saturating_sub(1)
+        } else {
+            line_len
+        };
+        self.cur = target_line.char_start + target_col.min(max_col);
     }
 
     pub fn down_visual(&mut self, lines: &[VisualLine]) {
@@ -148,9 +166,18 @@ impl Editor {
         if row + 1 >= lines.len() {
             return;
         }
+        let target_col = self.desired_col.unwrap_or(col);
+        self.desired_col = Some(target_col);
+
         let target_line = &lines[row + 1];
         let line_len = target_line.char_end.saturating_sub(target_line.char_start);
-        self.cur = target_line.char_start + col.min(line_len);
+        let is_soft_wrapped = target_line.char_end < self.buf.len() && self.buf[target_line.char_end] != '\n';
+        let max_col = if is_soft_wrapped {
+            line_len.saturating_sub(1)
+        } else {
+            line_len
+        };
+        self.cur = target_line.char_start + target_col.min(max_col);
     }
 
     pub fn down_visual_select(&mut self, lines: &[VisualLine]) {
@@ -165,12 +192,22 @@ impl Editor {
         if row + 1 >= lines.len() {
             return;
         }
+        let target_col = self.desired_col.unwrap_or(col);
+        self.desired_col = Some(target_col);
+
         let target_line = &lines[row + 1];
         let line_len = target_line.char_end.saturating_sub(target_line.char_start);
-        self.cur = target_line.char_start + col.min(line_len);
+        let is_soft_wrapped = target_line.char_end < self.buf.len() && self.buf[target_line.char_end] != '\n';
+        let max_col = if is_soft_wrapped {
+            line_len.saturating_sub(1)
+        } else {
+            line_len
+        };
+        self.cur = target_line.char_start + target_col.min(max_col);
     }
 
     pub fn home_visual(&mut self, lines: &[VisualLine]) {
+        self.desired_col = None;
         self.selection = None;
         let (row, _) = self.visual_row_col(lines);
         if let Some(line) = lines.get(row) {
@@ -179,6 +216,7 @@ impl Editor {
     }
 
     pub fn home_visual_select(&mut self, lines: &[VisualLine]) {
+        self.desired_col = None;
         if self.selection.is_none() {
             self.selection = Some(self.cur);
         }
@@ -189,6 +227,7 @@ impl Editor {
     }
 
     pub fn end_visual(&mut self, lines: &[VisualLine]) {
+        self.desired_col = None;
         self.selection = None;
         self.selection_inclusive = false;
         let (row, _) = self.visual_row_col(lines);
@@ -207,6 +246,7 @@ impl Editor {
     }
 
     pub fn end_visual_select(&mut self, lines: &[VisualLine]) {
+        self.desired_col = None;
         if self.selection.is_none() {
             self.selection = Some(self.cur);
         }
@@ -219,10 +259,18 @@ impl Editor {
     pub fn page_up_visual(&mut self, lines: &[VisualLine], count: usize) {
         self.selection = None;
         let (row, col) = self.visual_row_col(lines);
+        let target_col = self.desired_col.unwrap_or(col);
+        self.desired_col = Some(target_col);
         let target_row = row.saturating_sub(count);
         if let Some(target_line) = lines.get(target_row) {
             let line_len = target_line.char_end.saturating_sub(target_line.char_start);
-            self.cur = target_line.char_start + col.min(line_len);
+            let is_soft_wrapped = target_line.char_end < self.buf.len() && self.buf[target_line.char_end] != '\n';
+            let max_col = if is_soft_wrapped {
+                line_len.saturating_sub(1)
+            } else {
+                line_len
+            };
+            self.cur = target_line.char_start + target_col.min(max_col);
         }
     }
 
@@ -231,20 +279,36 @@ impl Editor {
             self.selection = Some(self.cur);
         }
         let (row, col) = self.visual_row_col(lines);
+        let target_col = self.desired_col.unwrap_or(col);
+        self.desired_col = Some(target_col);
         let target_row = row.saturating_sub(count);
         if let Some(target_line) = lines.get(target_row) {
             let line_len = target_line.char_end.saturating_sub(target_line.char_start);
-            self.cur = target_line.char_start + col.min(line_len);
+            let is_soft_wrapped = target_line.char_end < self.buf.len() && self.buf[target_line.char_end] != '\n';
+            let max_col = if is_soft_wrapped {
+                line_len.saturating_sub(1)
+            } else {
+                line_len
+            };
+            self.cur = target_line.char_start + target_col.min(max_col);
         }
     }
 
     pub fn page_down_visual(&mut self, lines: &[VisualLine], count: usize) {
         self.selection = None;
         let (row, col) = self.visual_row_col(lines);
+        let target_col = self.desired_col.unwrap_or(col);
+        self.desired_col = Some(target_col);
         let target_row = (row + count).min(lines.len().saturating_sub(1));
         if let Some(target_line) = lines.get(target_row) {
             let line_len = target_line.char_end.saturating_sub(target_line.char_start);
-            self.cur = target_line.char_start + col.min(line_len);
+            let is_soft_wrapped = target_line.char_end < self.buf.len() && self.buf[target_line.char_end] != '\n';
+            let max_col = if is_soft_wrapped {
+                line_len.saturating_sub(1)
+            } else {
+                line_len
+            };
+            self.cur = target_line.char_start + target_col.min(max_col);
         }
     }
 
@@ -253,10 +317,18 @@ impl Editor {
             self.selection = Some(self.cur);
         }
         let (row, col) = self.visual_row_col(lines);
+        let target_col = self.desired_col.unwrap_or(col);
+        self.desired_col = Some(target_col);
         let target_row = (row + count).min(lines.len().saturating_sub(1));
         if let Some(target_line) = lines.get(target_row) {
             let line_len = target_line.char_end.saturating_sub(target_line.char_start);
-            self.cur = target_line.char_start + col.min(line_len);
+            let is_soft_wrapped = target_line.char_end < self.buf.len() && self.buf[target_line.char_end] != '\n';
+            let max_col = if is_soft_wrapped {
+                line_len.saturating_sub(1)
+            } else {
+                line_len
+            };
+            self.cur = target_line.char_start + target_col.min(max_col);
         }
     }
 }

@@ -22,6 +22,7 @@ impl Editor {
     pub fn clear_selection(&mut self) {
         self.selection = None;
         self.selection_inclusive = false;
+        self.desired_col = None;
     }
 
     pub fn select_all(&mut self) {
@@ -29,6 +30,7 @@ impl Editor {
             self.selection = Some(0);
             self.cur = self.buf.len();
             self.selection_inclusive = false;
+            self.desired_col = None;
         }
     }
 
@@ -44,6 +46,7 @@ impl Editor {
             self.cur = s;
             self.selection = None;
             self.selection_inclusive = false;
+            self.desired_col = None;
             true
         } else {
             false
@@ -59,6 +62,7 @@ impl Editor {
         if !is_word_char(self.buf[pos]) {
             self.cur = pos;
             self.selection = None;
+            self.desired_col = None;
             return;
         }
         let mut start = pos;
@@ -72,5 +76,6 @@ impl Editor {
         self.selection = Some(start);
         self.cur = end;
         self.selection_inclusive = false;
+        self.desired_col = None;
     }
 }

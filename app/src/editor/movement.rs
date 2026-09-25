@@ -2,6 +2,7 @@ use super::Editor;
 
 impl Editor {
     pub fn left(&mut self) {
+        self.desired_col = None;
         if let Some((start, _)) = self.selected_range() {
             self.cur = start;
             self.selection = None;
@@ -12,6 +13,7 @@ impl Editor {
     }
 
     pub fn right(&mut self) {
+        self.desired_col = None;
         if let Some((_, end)) = self.selected_range() {
             self.cur = end;
             self.selection = None;
@@ -22,6 +24,7 @@ impl Editor {
     }
 
     pub fn left_select(&mut self) {
+        self.desired_col = None;
         if self.selection.is_none() {
             self.selection = Some(self.cur);
         }
@@ -29,6 +32,7 @@ impl Editor {
     }
 
     pub fn right_select(&mut self) {
+        self.desired_col = None;
         if self.selection.is_none() {
             self.selection = Some(self.cur);
         }
@@ -37,6 +41,7 @@ impl Editor {
 
     #[allow(dead_code)]
     pub fn home(&mut self) {
+        self.desired_col = None;
         self.selection = None;
         while self.cur > 0 && self.buf[self.cur - 1] != '\n' {
             self.cur -= 1;
@@ -45,6 +50,7 @@ impl Editor {
 
     #[allow(dead_code)]
     pub fn end(&mut self) {
+        self.desired_col = None;
         self.selection = None;
         while self.cur < self.buf.len() && self.buf[self.cur] != '\n' {
             self.cur += 1;
@@ -58,7 +64,9 @@ impl Editor {
         if row == 0 {
             return;
         }
-        self.set_row_col(row - 1, col);
+        let target_col = self.desired_col.unwrap_or(col);
+        self.desired_col = Some(target_col);
+        self.set_row_col(row - 1, target_col);
     }
 
     pub fn up_select(&mut self) {
@@ -69,14 +77,18 @@ impl Editor {
         if row == 0 {
             return;
         }
-        self.set_row_col(row - 1, col);
+        let target_col = self.desired_col.unwrap_or(col);
+        self.desired_col = Some(target_col);
+        self.set_row_col(row - 1, target_col);
     }
 
     #[allow(dead_code)]
     pub fn down(&mut self) {
         self.selection = None;
         let (row, col) = self.row_col();
-        self.set_row_col(row + 1, col);
+        let target_col = self.desired_col.unwrap_or(col);
+        self.desired_col = Some(target_col);
+        self.set_row_col(row + 1, target_col);
     }
 
     pub fn down_select(&mut self) {
@@ -84,7 +96,9 @@ impl Editor {
             self.selection = Some(self.cur);
         }
         let (row, col) = self.row_col();
-        self.set_row_col(row + 1, col);
+        let target_col = self.desired_col.unwrap_or(col);
+        self.desired_col = Some(target_col);
+        self.set_row_col(row + 1, target_col);
     }
 
     pub fn set_row_col(&mut self, target_row: usize, target_col: usize) {
@@ -140,16 +154,19 @@ impl Editor {
     }
 
     pub fn word_left(&mut self) {
+        self.desired_col = None;
         self.cur = self.prev_word_boundary(self.cur);
         self.selection = None;
     }
 
     pub fn word_right(&mut self) {
+        self.desired_col = None;
         self.cur = self.next_word_boundary(self.cur);
         self.selection = None;
     }
 
     pub fn word_left_select(&mut self) {
+        self.desired_col = None;
         if self.selection.is_none() {
             self.selection = Some(self.cur);
         }
@@ -157,6 +174,7 @@ impl Editor {
     }
 
     pub fn word_right_select(&mut self) {
+        self.desired_col = None;
         if self.selection.is_none() {
             self.selection = Some(self.cur);
         }

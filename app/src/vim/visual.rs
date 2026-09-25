@@ -32,6 +32,9 @@ impl VimEngine {
             if let Some(kind) = keymap::char_to_text_object_kind(c) {
                 let full_cmd = format!("{}{}", self.pending_keys, c);
                 select_text_object(ed, inner, kind);
+                if kind == crate::vim::types::TextObjectKind::Paragraph {
+                    self.mode = VimSubMode::VisualLine;
+                }
                 self.last_completed_action = Some(full_cmd);
                 self.pending_keys.clear();
                 return true;

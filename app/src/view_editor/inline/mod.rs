@@ -22,9 +22,7 @@ pub use charmap::CharMapBuilder;
 #[allow(unused_imports)]
 pub use classify::{classify_line, classify_lines};
 #[allow(unused_imports)]
-pub use layout::compute_inline_layout;
-#[allow(unused_imports)]
-pub use layout::build_line_layout;
+pub use layout::{build_line_layout, compute_inline_layout, compute_inline_layout_ctx};
 pub use render::render_inline_editor;
 #[allow(unused_imports)]
 pub use spans::parse_inline_spans;

@@ -1,3 +1,4 @@
+use crate::editor::VisualLine;
 use eframe::egui::text::CCursor;
 use eframe::egui::{pos2, vec2, Galley, Pos2, Rect};
 use std::sync::Arc;
@@ -117,6 +118,56 @@ impl InlineEditorLayout {
             lines: Vec::new(),
             total_height: 0.0,
         }
+    }
+
+    /// Extracts exact VisualLine slices matching the rendered Galley rows.
+    pub fn compute_visual_lines(&self) -> Vec<VisualLine> {
+        let mut visual_lines = Vec::new();
+        for line in &self.lines {
+            if line.galley.rows.is_empty() || line.char_map.is_empty() {
+                visual_lines.push(VisualLine {
+                    char_start: line.char_start,
+                    char_end: line.char_end,
+                });
+                continue;
+            }
+
+            let num_rows = line.galley.rows.len();
+            if num_rows <= 1 {
+                visual_lines.push(VisualLine {
+                    char_start: line.char_start,
+                    char_end: line.char_end,
+                });
+                continue;
+            }
+
+            for r_idx in 0..num_rows {
+                let row = &line.galley.rows[r_idx];
+                let start_cursor = line.galley.cursor_from_pos(vec2(0.0, row.rect.center().y));
+                let start_g = start_cursor.ccursor.index;
+                let start_char = line.char_map.get(start_g).copied().unwrap_or(line.char_start);
+
+                let end_char = if r_idx + 1 == num_rows {
+                    line.char_end
+                } else {
+                    let next_row = &line.galley.rows[r_idx + 1];
+                    let next_cursor = line.galley.cursor_from_pos(vec2(0.0, next_row.rect.center().y));
+                    let next_start_g = next_cursor.ccursor.index;
+                    line.char_map.get(next_start_g).copied().unwrap_or(line.char_end)
+                };
+
+                visual_lines.push(VisualLine {
+                    char_start: start_char,
+                    char_end: end_char.max(start_char),
+                });
+            }
+        }
+
+        if visual_lines.is_empty() {
+            visual_lines.push(VisualLine { char_start: 0, char_end: 0 });
+        }
+
+        visual_lines
     }
 
     /// Finds the visual line index containing the given Y offset.

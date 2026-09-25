@@ -56,8 +56,10 @@ pub fn handle_inline_mouse_interaction(
         }
     }
 
-    // 3. Direct click / Shift+Click to move cursor or expand selection
-    if ui.input(|i| i.pointer.primary_clicked()) {
+    // 3. Direct mouse press / Shift+Click to move cursor or expand selection
+    let is_primary_pressed = ui.input(|i| i.pointer.primary_pressed());
+    let is_primary_clicked = ui.input(|i| i.pointer.primary_clicked());
+    if is_primary_pressed || is_primary_clicked {
         if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
             let clicked_char = layout.char_at_pos(pos, ed_origin);
             let target_char = {
@@ -88,6 +90,7 @@ pub fn handle_inline_mouse_interaction(
                 ed.cur = target_char;
                 ed.selection = None;
             }
+            ed.desired_col = None;
             action_taken = true;
         }
     }
@@ -100,6 +103,7 @@ pub fn handle_inline_mouse_interaction(
                 ed.selection = Some(ed.cur);
             }
             ed.cur = drag_char;
+            ed.desired_col = None;
             action_taken = true;
         }
     }

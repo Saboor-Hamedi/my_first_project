@@ -99,6 +99,33 @@ pub fn render_editor_body(
             if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
                 let clicked_char = pos_to_char(pos);
                 ed.select_word_at(clicked_char);
+                ed.desired_col = None;
+                typed = true;
+            }
+        } else if ui.input(|i| i.pointer.primary_pressed()) {
+            if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+                let clicked_char = pos_to_char(pos);
+                let is_shift = ui.input(|i| i.modifiers.shift);
+                if is_shift {
+                    if ed.selection.is_none() {
+                        ed.selection = Some(ed.cur);
+                    }
+                    ed.cur = clicked_char;
+                } else {
+                    ed.cur = clicked_char;
+                    ed.selection = None;
+                }
+                ed.desired_col = None;
+                typed = true;
+            }
+        } else if ui.input(|i| i.pointer.is_decidedly_dragging() && i.pointer.primary_down()) {
+            if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+                let drag_char = pos_to_char(pos);
+                if ed.selection.is_none() {
+                    ed.selection = Some(ed.cur);
+                }
+                ed.cur = drag_char;
+                ed.desired_col = None;
                 typed = true;
             }
         } else if ui.input(|i| i.pointer.primary_clicked()) {
@@ -114,15 +141,7 @@ pub fn render_editor_body(
                     ed.cur = clicked_char;
                     ed.selection = None;
                 }
-                typed = true;
-            }
-        } else if ui.input(|i| i.pointer.is_decidedly_dragging() && i.pointer.primary_down()) {
-            if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
-                let drag_char = pos_to_char(pos);
-                if ed.selection.is_none() {
-                    ed.selection = Some(ed.cur);
-                }
-                ed.cur = drag_char;
+                ed.desired_col = None;
                 typed = true;
             }
         }

@@ -279,18 +279,41 @@ impl App {
 
         // Keep visual lines updated to exact editor width
         let target_ed = if self.mode == Mode::Doc { &self.doc_ed } else { &self.ed };
-        let total_lines = (target_ed.buf.iter().filter(|&&c| c == '\n').count() + 1).max(1);
-        let digits = total_lines.to_string().len().max(2);
-        let gutter_space = if self.show_line_numbers {
-            (digits as f32 * ed_cw + 10.0).max(22.0) + 14.0
-        } else {
-            22.0
-        };
-
         let effective_editor_w = actual_editor_rect.width();
-        let text_area_w = (effective_editor_w - gutter_space - 10.0).max(100.0);
-        let max_cols = (text_area_w / ed_cw).floor().max(15.0) as usize;
-        self.visual_lines = target_ed.compute_visual_lines(max_cols);
+
+        self.visual_lines = if self.inline_mode {
+            let gutter_w = if self.show_line_numbers {
+                let total_lines = (target_ed.buf.iter().filter(|&&c| c == '\n').count() + 1).max(1);
+                let digits = total_lines.to_string().len().max(2);
+                (digits as f32 * (ed_font_size * 0.55) + 14.0).max(28.0)
+            } else {
+                0.0
+            };
+            let pad_x = if self.show_line_numbers { 16.0 } else { 24.0 };
+            let safe_w = effective_editor_w;
+            let effective_gutter_w = if safe_w > gutter_w + 40.0 { gutter_w } else { 0.0 };
+            let wrap_w = (effective_editor_w - effective_gutter_w - pad_x - 24.0).max(120.0);
+            let inline_layout = crate::view_editor::inline::compute_inline_layout_ctx(
+                ui.ctx(),
+                target_ed,
+                wrap_w,
+                ed_font_size,
+                &self.theme,
+                0.0,
+            );
+            inline_layout.compute_visual_lines()
+        } else {
+            let total_lines = (target_ed.buf.iter().filter(|&&c| c == '\n').count() + 1).max(1);
+            let digits = total_lines.to_string().len().max(2);
+            let gutter_space = if self.show_line_numbers {
+                (digits as f32 * ed_cw + 10.0).max(22.0) + 14.0
+            } else {
+                22.0
+            };
+            let text_area_w = (effective_editor_w - gutter_space - 10.0).max(100.0);
+            let max_cols = (text_area_w / ed_cw).floor().max(15.0) as usize;
+            target_ed.compute_visual_lines(max_cols)
+        };
 
         // Active View rendering delegated to dedicated view modules
         match self.mode {

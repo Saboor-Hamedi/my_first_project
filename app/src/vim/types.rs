@@ -78,6 +78,8 @@ pub enum TextObjectKind {
     AngleBrackets,
     /// Current word under or adjacent to cursor
     Word,
+    /// Paragraph block (`p`)
+    Paragraph,
 }
 
 /// Cursor destination when entering Insert mode from Normal mode.

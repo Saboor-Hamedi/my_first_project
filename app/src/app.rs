@@ -268,11 +268,35 @@ impl eframe::App for App {
         } else {
             editor_w
         };
-        let gutter_space = if self.show_line_numbers { 42.0 } else { 0.0 };
-        let text_area_w = (effective_editor_w - gutter_space - 8.0).max(100.0);
-        let max_cols = (text_area_w / cw).floor().max(15.0) as usize;
+        let (ed_font_size, _, _) = self.zoom.editor_metrics(self.font_size, ctx);
         let active_ed = if self.mode == Mode::Doc { &self.doc_ed } else { &self.ed };
-        self.visual_lines = active_ed.compute_visual_lines(max_cols);
+        self.visual_lines = if self.inline_mode {
+            let gutter_w = if self.show_line_numbers {
+                let total_lines = (active_ed.buf.iter().filter(|&&c| c == '\n').count() + 1).max(1);
+                let digits = total_lines.to_string().len().max(2);
+                (digits as f32 * (ed_font_size * 0.55) + 14.0).max(28.0)
+            } else {
+                0.0
+            };
+            let pad_x = if self.show_line_numbers { 16.0 } else { 24.0 };
+            let safe_w = effective_editor_w;
+            let effective_gutter_w = if safe_w > gutter_w + 40.0 { gutter_w } else { 0.0 };
+            let wrap_w = (effective_editor_w - effective_gutter_w - pad_x - 24.0).max(120.0);
+            let inline_layout = crate::view_editor::inline::compute_inline_layout_ctx(
+                ctx,
+                active_ed,
+                wrap_w,
+                ed_font_size,
+                &self.theme,
+                0.0,
+            );
+            inline_layout.compute_visual_lines()
+        } else {
+            let gutter_space = if self.show_line_numbers { 42.0 } else { 0.0 };
+            let text_area_w = (effective_editor_w - gutter_space - 8.0).max(100.0);
+            let max_cols = (text_area_w / cw).floor().max(15.0) as usize;
+            active_ed.compute_visual_lines(max_cols)
+        };
 
         if self.terminal_open || self.mode == Mode::Terminal {
             if let Some(ref mut pane) = self.term_pane {

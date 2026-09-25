@@ -547,6 +547,7 @@ pub fn char_to_text_object_kind(c: char) -> Option<TextObjectKind> {
         '[' | ']' => Some(TextObjectKind::Brackets),
         '<' | '>' => Some(TextObjectKind::AngleBrackets),
         'w' => Some(TextObjectKind::Word),
+        'p' => Some(TextObjectKind::Paragraph),
         _ => None,
     }
 }

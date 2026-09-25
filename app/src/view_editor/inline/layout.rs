@@ -60,9 +60,21 @@ pub fn build_line_layout(
     (job, map, line_h)
 }
 
-/// Computes the complete layout of all lines in the editor buffer.
+/// Computes the complete layout of all lines in the editor buffer using `egui::Ui`.
 pub fn compute_inline_layout(
     ui: &eframe::egui::Ui,
+    ed: &Editor,
+    wrap_width: f32,
+    base_font_size: f32,
+    theme: &Theme,
+    ed_origin_x: f32,
+) -> InlineEditorLayout {
+    compute_inline_layout_ctx(ui.ctx(), ed, wrap_width, base_font_size, theme, ed_origin_x)
+}
+
+/// Computes the complete layout of all lines in the editor buffer using `egui::Context`.
+pub fn compute_inline_layout_ctx(
+    ctx: &eframe::egui::Context,
     ed: &Editor,
     wrap_width: f32,
     base_font_size: f32,
@@ -137,7 +149,7 @@ pub fn compute_inline_layout(
         );
 
         job.wrap.max_width = wrap_width.max(100.0);
-        let galley = ui.fonts(|f| f.layout_job(job));
+        let galley = ctx.fonts(|f| f.layout_job(job));
 
         let galley_h = galley.size().y;
         let line_h = galley_h.max(min_line_h);

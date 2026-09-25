@@ -137,16 +137,23 @@ pub fn render_document_selection(
             }
 
             // Cursor Integration: ensure character under cursor at both selection ends is fully covered
+            let row_top = galley_top + row.rect.min.y;
+            let row_bottom = galley_top + row.rect.max.y;
+
             if is_start_row {
                 let (cur_pos, _) = layout.pos_for_char(sel_start, ed_origin);
-                x_min = x_min.min(cur_pos.x);
-                if is_end_row {
-                    x_max = x_max.max(cur_pos.x + char_w);
+                if cur_pos.y >= row_top - 2.0 && cur_pos.y <= row_bottom + 2.0 {
+                    x_min = x_min.min(cur_pos.x);
+                    if is_end_row {
+                        x_max = x_max.max(cur_pos.x + char_w);
+                    }
                 }
             }
-            if is_end_row {
+            if is_end_row && sel_end > line.char_start {
                 let (cur_pos, _) = layout.pos_for_char(sel_end.saturating_sub(1), ed_origin);
-                x_max = x_max.max(cur_pos.x + char_w);
+                if cur_pos.y >= row_top - 2.0 && cur_pos.y <= row_bottom + 2.0 {
+                    x_max = x_max.max(cur_pos.x + char_w);
+                }
             }
 
             let raw_top = (galley_top + row.rect.min.y).round();

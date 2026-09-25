@@ -2,6 +2,7 @@ use super::{Editor, EditorSnapshot};
 
 impl Editor {
     pub fn save_undo_snapshot(&mut self) {
+        self.desired_col = None;
         let snap = EditorSnapshot {
             buf: self.buf.clone(),
             cur: self.cur,
@@ -24,6 +25,7 @@ impl Editor {
             self.buf = prev.buf;
             self.cur = prev.cur.min(self.buf.len());
             self.selection = None;
+            self.desired_col = None;
             true
         } else {
             false
@@ -39,6 +41,7 @@ impl Editor {
             self.buf = next.buf;
             self.cur = next.cur.min(self.buf.len());
             self.selection = None;
+            self.desired_col = None;
             true
         } else {
             false

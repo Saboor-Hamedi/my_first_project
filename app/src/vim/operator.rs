@@ -20,7 +20,8 @@ impl VimEngine {
             if let Some(kind) = keymap::char_to_text_object_kind(c) {
                 let full_cmd = self.pending_keys.clone();
                 if let Some(extracted) = apply_text_object_operator(ed, op, inner, kind) {
-                    self.set_register(extracted, false);
+                    let is_line = kind == crate::vim::types::TextObjectKind::Paragraph;
+                    self.set_register(extracted, is_line);
                 }
                 if op == VimOperator::Change {
                     self.set_mode(VimSubMode::Insert, ed);

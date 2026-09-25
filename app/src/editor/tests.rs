@@ -53,6 +53,67 @@ fn test_visual_line_wrapping() {
     ed.up_visual(&lines);
     let (r_back, _) = ed.visual_row_col(&lines);
     assert_eq!(r_back, 0);
+
+    // End-of-line down_visual should NOT skip line 1 or land at col 0 of line 2
+    ed.desired_col = None;
+    ed.cur = lines[0].char_end - 1;
+    let (r_end0, c_end0) = ed.visual_row_col(&lines);
+    assert_eq!(r_end0, 0);
+    assert_eq!(c_end0, 15);
+
+    ed.down_visual(&lines);
+    let (r_down1, _) = ed.visual_row_col(&lines);
+    assert_eq!(r_down1, 1, "down_visual from end of line 0 must land on line 1, not skip to line 2");
+
+    ed.down_visual(&lines);
+    let (r_down2, _) = ed.visual_row_col(&lines);
+    assert_eq!(r_down2, 2, "down_visual from line 1 must land on line 2");
+
+    ed.up_visual(&lines);
+    let (r_up1, _) = ed.visual_row_col(&lines);
+    assert_eq!(r_up1, 1, "up_visual from line 2 must land on line 1");
+
+    ed.up_visual(&lines);
+    let (r_up0, c_up0) = ed.visual_row_col(&lines);
+    assert_eq!(r_up0, 0, "up_visual from line 1 must land on line 0");
+    assert_eq!(c_up0, c_end0, "desired_col should restore cursor to original column");
+}
+
+#[test]
+fn test_paragraph_vertical_navigation_and_rankers_selection() {
+    let mut ed = Editor::new();
+    let text = "One fact per note beats paragraph soup. When a note covers two ideas, split it before tuning rankers.";
+    ed.insert_str(text);
+
+    // Test across several screen widths / max_cols
+    for max_cols in [20, 25, 30, 40, 50, 60] {
+        let lines = ed.compute_visual_lines(max_cols);
+        assert!(lines.len() >= 2, "Should wrap into multiple visual lines for max_cols {}", max_cols);
+
+        // Verify every line can be visited sequentially from row 0 to last_row
+        ed.cur = 0;
+        for expected_row in 0..lines.len() {
+            let (r, _) = ed.visual_row_col(&lines);
+            assert_eq!(r, expected_row, "Forward traversal failed at row {} for max_cols {}", expected_row, max_cols);
+            if expected_row + 1 < lines.len() {
+                ed.down_visual(&lines);
+            }
+        }
+
+        // Verify every line can be visited backwards from last_row to 0
+        for expected_row in (0..lines.len()).rev() {
+            let (r, _) = ed.visual_row_col(&lines);
+            assert_eq!(r, expected_row, "Backward traversal failed at row {} for max_cols {}", expected_row, max_cols);
+            if expected_row > 0 {
+                ed.up_visual(&lines);
+            }
+        }
+
+        // Verify 'rankers' can be selected and is present
+        let rankers_idx = text.find("rankers").expect("must find rankers in text");
+        ed.select_word_at(rankers_idx);
+        assert_eq!(ed.selected_text(), Some("rankers".to_string()));
+    }
 }
 
 #[test]
