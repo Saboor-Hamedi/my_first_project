@@ -213,6 +213,9 @@ pub struct App {
 
     // Workspace & Obsidian Vault Importer
     pub workspace_importer: crate::workspace_import::WorkspaceImporter,
+
+    // LunaLine Statusline Configuration
+    pub lunaline_config: crate::lunaline::LunaLineConfig,
 }
 
 impl App {

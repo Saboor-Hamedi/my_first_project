@@ -11,6 +11,7 @@ pub mod sounds;
 pub mod tabs;
 pub mod theme;
 pub mod updates;
+pub mod lunaline_tab;
 
 pub use tabs::{render_setting_tabs, SettingTab};
 
@@ -48,6 +49,7 @@ pub fn render_setting_panel(
     font_size: &mut f32,
     opacity: &mut f32,
     blur_effect: &mut crate::blur::BlurEffect,
+    lunaline_config: &mut crate::lunaline::LunaLineConfig,
     on_save_setting: &mut dyn FnMut(&str, &str),
 ) -> Option<SettingPanelAction> {
     // Clip all painting strictly to the panel rect — nothing bleeds over modal border
@@ -109,6 +111,10 @@ pub fn render_setting_panel(
         }
         SettingTab::Ai => {
             ai_engine::render_ai_tab(ui, painter, panel_rect, p_origin, api_key_enc, deepseek_model, theme, on_save_setting);
+            None
+        }
+        SettingTab::LunaLine => {
+            lunaline_tab::render_lunaline_tab(ui, painter, panel_rect, p_origin, lunaline_config, theme, *opacity, on_save_setting);
             None
         }
     }

@@ -15,6 +15,7 @@ mod modals;
 mod mode;
 mod notes;
 pub mod settings;
+pub mod lunaline;
 #[path = "sidebar/sidebar.rs"]
 mod sidebar;
 mod sound;

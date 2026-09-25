@@ -14,10 +14,11 @@ pub enum SettingTab {
     Backup,
     Updates,
     Ai,
+    LunaLine,
 }
 
 impl SettingTab {
-    pub const ALL: [SettingTab; 10] = [
+    pub const ALL: [SettingTab; 11] = [
         SettingTab::Carets,
         SettingTab::Fonts,
         SettingTab::EditorMode,
@@ -25,6 +26,7 @@ impl SettingTab {
         SettingTab::Theme,
         SettingTab::Shortcuts,
         SettingTab::Keybindings,
+        SettingTab::LunaLine,
         SettingTab::Backup,
         SettingTab::Updates,
         SettingTab::Ai,
@@ -39,6 +41,7 @@ impl SettingTab {
             SettingTab::Theme => "Theme",
             SettingTab::Shortcuts => "Shortcuts",
             SettingTab::Keybindings => "Keybindings",
+            SettingTab::LunaLine => "LunaLine",
             SettingTab::Backup => "Backup",
             SettingTab::Updates => "Updates",
             SettingTab::Ai => "AI Agent",
@@ -122,6 +125,13 @@ impl SettingTab {
                 painter.line_segment([pos2(center.x + 5.0, center.y), pos2(center.x, center.y + 6.0)], stroke);
                 painter.line_segment([pos2(center.x, center.y + 6.0), pos2(center.x - 5.0, center.y)], stroke);
                 painter.line_segment([pos2(center.x - 5.0, center.y), pos2(center.x, center.y - 6.0)], stroke);
+            }
+            SettingTab::LunaLine => {
+                // Sleek statusline bar with left & right capsule segments
+                let bar = Rect::from_center_size(center, vec2(14.0, 8.0));
+                painter.rect_stroke(bar, 2.0, stroke, egui::StrokeKind::Inside);
+                painter.rect_filled(Rect::from_min_size(pos2(bar.min.x + 1.5, bar.min.y + 1.5), vec2(3.5, 5.0)), 1.0, color);
+                painter.rect_filled(Rect::from_min_size(pos2(bar.max.x - 5.0, bar.min.y + 1.5), vec2(3.5, 5.0)), 1.0, color);
             }
         }
     }

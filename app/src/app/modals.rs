@@ -82,6 +82,7 @@ impl App {
                 &mut self.font_size,
                 &mut self.opacity,
                 &mut self.blur_effect,
+                &mut self.lunaline_config,
                 &mut on_save,
             );
 

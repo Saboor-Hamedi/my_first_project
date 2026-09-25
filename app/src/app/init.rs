@@ -147,6 +147,7 @@ impl App {
             show_titlebar: true,
             show_tabs: true,
             workspace_importer: crate::workspace_import::WorkspaceImporter::new(),
+            lunaline_config: crate::lunaline::LunaLineConfig::default(),
         };
 
         app.load_settings();
@@ -389,6 +390,11 @@ impl App {
             }
             if let Ok(Some(m)) = db.get_setting("deepseek_model") {
                 self.agent_state.deepseek_model = m;
+            }
+            if let Ok(Some(json)) = db.get_setting("lunaline_config") {
+                if let Ok(cfg) = serde_json::from_str::<crate::lunaline::LunaLineConfig>(&json) {
+                    self.lunaline_config = cfg;
+                }
             }
         }
 

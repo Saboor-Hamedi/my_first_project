@@ -3,7 +3,6 @@
 use super::{App, EditorInputMode, OpenNote, RightPaneTab};
 use crate::mode::Mode;
 use crate::sidebar::{render_sidebar, SidebarAction};
-use crate::statusbar::render_bottom_dock;
 use eframe::egui::{self, pos2, vec2, Color32, Rect, Stroke, Ui};
 
 impl App {
@@ -279,28 +278,49 @@ impl App {
             None
         };
 
+        let total_rows = if self.mode == Mode::Doc {
+            self.doc_ed.text().lines().count()
+        } else {
+            self.ed.text().lines().count()
+        };
+        let total_chars = if self.mode == Mode::Doc {
+            self.doc_ed.text().len()
+        } else {
+            self.ed.text().len()
+        };
+        let active_title = if self.mode == Mode::Doc {
+            crate::docs::BRAIN_DOCS.get(self.active_doc_idx).map(|d| d.title).unwrap_or("Documentation")
+        } else {
+            self.active_note_title.as_str()
+        };
+
         let is_ai_active = self.preview_open && self.right_pane_tab == RightPaneTab::AiAgent;
-        let toggle_ai = render_bottom_dock(
+        let toggle_ai = crate::lunaline::render_lunaline(crate::lunaline::LunaLineRenderParams {
             ui,
-            &painter,
-            cmd_bar_rect,
-            0.0,
-            self.in_command,
-            &self.cmd_ed.text(),
-            self.cmd_ed.cur,
-            self.cmd_ed.selected_range(),
-            &self.status_msg,
-            self.status_time,
+            painter: &painter,
+            dock_rect: cmd_bar_rect,
+            in_command: self.in_command,
+            cmd_text: &self.cmd_ed.text(),
+            cmd_cur: self.cmd_ed.cur,
+            cmd_selection: self.cmd_ed.selected_range(),
+            status_msg: &self.status_msg,
+            status_time: self.status_time,
             now,
-            row + 1,
-            col + 1,
-            word_count,
-            Some(mode_badge_str.as_str()),
+            cursor_row: row + 1,
+            cursor_col: col + 1,
+            total_rows,
+            total_words: word_count,
+            total_chars,
+            active_note_title: active_title,
+            is_dirty: if self.mode == Mode::Doc { false } else { self.is_dirty },
+            is_doc: self.mode == Mode::Doc,
+            mode_badge: Some(mode_badge_str.as_str()),
             search_prompt,
-            &self.theme,
-            is_ai_active,
-            self.opacity,
-        );
+            theme: &self.theme,
+            opacity: self.opacity,
+            is_ai_open: is_ai_active,
+            config: &self.lunaline_config,
+        });
         if toggle_ai {
             if self.preview_open && self.right_pane_tab == RightPaneTab::AiAgent {
                 self.preview_open = false;
