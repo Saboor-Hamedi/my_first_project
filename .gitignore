@@ -1,1 +1,5 @@
 /target
+*.zip
+*.tar.gz
+*.tgz
+*.ttc

@@ -133,7 +133,7 @@ pub fn render_sidebar_body(
                     let text_right_limit = (rect.max.x - del_w - 6.0).min(sb_rect.max.x - 20.0);
                     let avail_w = (text_right_limit - text_x).max(10.0);
 
-                    let font_id = crate::font_manager::editor_font_id(12.5);
+                    let font_id = egui::FontId::proportional(12.5);
                     let mut display_title = note.topic.clone();
                     let full_w = ui.fonts(|f| f.layout_no_wrap(display_title.clone(), font_id.clone(), Color32::WHITE).size().x);
                     if full_w > avail_w {

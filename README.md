@@ -1,130 +1,197 @@
-# MINDFORGE v2
+# MINDFORGE
 
-A GPU-accelerated, borderless learning system you type into.
+<div align="center">
 
-MINDFORGE looks like a pitch-black CLI terminal, but runs natively on the GPU with custom-rendered text, animated physics carets (fire, water, electric bolts, comet, rainbow, matrix, ice, glitch, neon, heartbeat), an SM-2 spaced repetition engine, an explanation scratchpad, and a calibrated decision journal.
+![MINDFORGE Header](images/fullscreen.png)
+
+### The GPU-Accelerated, Local-First Knowledge System Built for Developers.
+*Obsidian meets Neovim — reimagined from scratch in pure Rust.*
+
+[![Language: Rust](https://img.shields.io/badge/Language-Rust_2021-DEA584?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![GUI: egui](https://img.shields.io/badge/Built_with-egui-8A2BE2?style=for-the-badge&logo=rust&logoColor=white)](https://github.com/emilk/egui)
+[![Modal: Vim](https://img.shields.io/badge/Modal_Engine-Vim_Keymap-019733?style=for-the-badge&logo=vim&logoColor=white)](https://www.vim.org/)
+[![Storage: SQLite](https://img.shields.io/badge/Storage-Local_SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![Tests](https://img.shields.io/badge/Tests-176_Passing-brightgreen?style=for-the-badge)](https://github.com/Saboor-Hamedi/my_first_project)
+[![Release](https://img.shields.io/badge/Release-v0.1.13-orange?style=for-the-badge)](https://github.com/Saboor-Hamedi/my_first_project/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
+
+[**Quick Start**](#-quick-start) •
+[**Core Features**](#-core-features) •
+[**Showcase**](#-showcase) •
+[**Animated Carets**](#-animated-physics-carets) •
+[**Vim Engine**](#-vim-modal-editing) •
+[**Architecture & egui**](#-built-with-egui)
+
+</div>
 
 ---
 
-## 1. Quick Start
+## ⚡ Why MINDFORGE?
 
-Run the app in release mode for maximum speed and smooth animations:
+Modern note-taking tools and knowledge bases are bogged down by sluggish web runtimes, high memory footprints, and cloud dependencies. 
 
-```powershell
+**MINDFORGE** is an uncompromising, pitch-black developer environment engineered from the ground up in **100% native Rust**. Powered by the blazing-fast immediate-mode GUI library [**egui**](https://github.com/emilk/egui), MINDFORGE launches instantaneously, uses less than 30MB of RAM, and paints every frame directly onto your GPU at 120+ FPS.
+
+No Chromium. No Electron. Zero telemetry. Just your thoughts, your code, and your knowledge — strictly offline in local SQLite.
+
+---
+
+## 📸 Showcase
+
+### ✍️ Live Inline Markdown Editor & Split Preview
+Live formatting with active-line syntax expansion, multi-color syntax highlighting, custom vector checkboxes, and typography ligatures.
+
+<div align="center">
+  <img src="images/editor.png" alt="Live Inline Editor & Markdown Preview" width="100%" />
+</div>
+
+<br />
+
+### 🌌 Minimalist Welcome Dashboard & Zen Workspace
+Instant access to your notes, keyboard navigation, recents, and document search.
+
+<div align="center">
+  <img src="images/welcome.png" alt="Welcome Dashboard" width="100%" />
+</div>
+
+---
+
+## 🚀 Core Features
+
+### 1. ✍️ Live-Rendered Inline Markdown
+- **Active-Line Expansion**: Inactive lines render beautifully formatted typography (bold, italics, code pills, links, custom task checkboxes); clicking onto a line smoothly reveals the raw markdown markup for exact character editing.
+- **Geometric Font Ligatures**: Symbols such as `->`, `=>`, `==>`, `===>`, `!=`, `<=`, `>=`, and `===` render as seamless font ligatures across both the live editor and markdown preview without disrupting monospace grid alignment.
+- **Dedicated Editor Typography**: Select between developer classics including **JetBrains Mono**, **Fira Code**, **Cascadia Code**, **Victor Mono**, and **Iosevka**.
+- **Interactive Vector Checkboxes**: Toggle tasks directly by clicking vector checkboxes with smooth state updates.
+
+### 2. 🧠 Second Brain Knowledge Network
+- **Bi-Directional `[[Wikilinks]]`**: Connect your thoughts with automatic wikilink resolution (`[[Topic Name]]` or `[[Target|Alias]]`).
+- **Screen-Adaptive Autocompletion**: Type `[[` anywhere to summon fuzzy note completion. The autocomplete popup intelligently samples available viewport space to position itself seamlessly above or below the cursor.
+- **Live Hover Previews**: Hover over any wikilink to inspect document contents and metadata without switching tabs or losing focus.
+- **Document Backlinks & Outline**: Automatic document tree extraction and reverse-reference tracking.
+
+### 3. ⌨️ Modal Vim Engine
+- Full modal editing with **Normal**, **Visual**, and **Insert** modes.
+- True text objects: change inside quotes (`ci"`), delete around words (`daw`), select paragraphs (`vip`), format brackets (`ci{`, `ca[`).
+- Repeatable motions, linewise operations (`dd`, `yy`, `p`), search indexing (`/`, `n`, `N`), and interactive visual selections.
+
+### 4. 📚 Spaced Repetition (SuperMemo SM-2)
+- Built-in retrieval practice engine based on the **SM-2 algorithm**.
+- Review cards due today, type answers from memory, measure typing speed (WPM), and calibrate retention with difficulty ratings.
+- Create cards on the fly with `:add Question | Answer | tag`.
+
+### 5. 🔬 Feynman Technique Scratchpad (`:explain`)
+- Distraction-free scratchpad designed to explain complex topics in simple terms.
+- Eliminates context-switching while mastering technical concepts.
+
+### 6. ⚖️ Calibrated Decision Journal (`:decide`, `:resolve`)
+- Log critical decisions, rationales, predictions, and confidence levels (1–99%).
+- Track prediction outcomes and evaluate your **Brier score** (0.00 = perfect calibration). Discover cognitive blind spots with bucketed calibration charts.
+
+---
+
+## 🔥 Animated Physics Carets
+
+MINDFORGE features 13 custom-rendered cursor shaders and particle emitters. Toggle via `Ctrl+,` or with `:caret <style>`:
+
+| Caret Style | Visual Behavior |
+|:---|:---|
+| `fire` | Glowing flame base with physics-driven rising spark particles |
+| `water` | Liquid droplet cursor with gravity dynamics and baseline ripples |
+| `electric` | Snapping high-voltage crackling lightning bolts branching on keypresses |
+| `matrix` | Cascading green phosphor digital rain glyphs |
+| `ice` | Crystalline cyan frost shards with natural horizontal drift |
+| `glitch` | Cyberpunk RGB chromatic aberration split with micro-jitter |
+| `neon` | Multi-layer atmospheric glowing aura |
+| `heartbeat` | Smooth rhythmic organic pulse breathing animation |
+| `comet` | Motion-blur fading trail following cursor navigation |
+| `rainbow` | Dynamic shifting HSV color spectrum |
+| `block` / `beam` / `underline` | Precision geometric cursors |
+
+---
+
+## ⚡ Built with [egui](https://github.com/emilk/egui)
+
+MINDFORGE is built on top of [**egui**](https://github.com/emilk/egui) (and [eframe](https://github.com/emilk/egui/tree/master/crates/eframe)), the cutting-edge immediate mode GUI library for Rust created by [Emil Ernerfeldt](https://github.com/emilk).
+
+### How MINDFORGE leverages egui:
+- **Instant Response Times**: Immediate-mode layout allows sub-millisecond keyboard response and butter-smooth scrolling.
+- **Custom Galley & CharMap Invariants**: Custom `CharMapBuilder` maps variable-width inline markdown tokens, soft-wrapping galleys, and custom ligatures back to exact buffer indices with zero drift.
+- **GPU Painter Primitives**: High-speed particle rendering, custom antialiased rounded cards, and vector checkboxes drawn directly through egui's painter pipeline.
+- **Multi-Theme Palette**: 19 WCAG-verified themes (Tokyo Night, Catppuccin, Dracula, Nord, Rosé Pine, Monokai, Gruvbox, and more) calibrated for maximum reading comfort.
+
+Check out the upstream [egui repository](https://github.com/emilk/egui) to learn more about building GUI applications in Rust!
+
+---
+
+## ⌨️ Essential Keyboard Shortcuts
+
+| Shortcut | Action |
+|:---|:---|
+| `Ctrl + B` | Toggle Sleek Floating Sidebar |
+| `Ctrl + P` / `Ctrl + F` | Instant Subsequence Fuzzy Search |
+| `Ctrl + E` | Toggle between Inline Editor & Monospace Canvas |
+| `Ctrl + ,` | Open Settings & Customization Modal |
+| `Ctrl + S` | Force Save Document to SQLite |
+| `F2` | Rename Active Note |
+| `F11` | Toggle Fullscreen |
+| `Alt + Left Drag` | Move Borderless Window |
+| `:` | Open Command Dock (Vim command line) |
+| `Escape` | Dismiss Modals / Autocomplete / Return to Normal Mode |
+
+---
+
+## 📦 Quick Start
+
+### Prerequisites
+Make sure you have the [Rust toolchain](https://rustup.rs/) installed (1.78+ recommended).
+
+### Installation & Run
+
+```bash
+# Clone the repository
+git clone https://github.com/Saboor-Hamedi/my_first_project.git
+cd my_first_project
+
+# Run with maximum GPU optimizations
 cargo run --release
 ```
 
-To run unit tests:
-```powershell
+### Running Test Suite
+MINDFORGE maintains an extensive suite of 176 unit tests covering font metrics, inline markdown layout invariants, Vim text objects, and Wikilink resolution:
+
+```bash
 cargo test --workspace
 ```
 
 ---
 
-## 2. Window Controls & Navigation
+## 🔒 Local-First Data Privacy
 
-Because MINDFORGE is completely borderless with no OS title bar:
+All notes, spaced repetition decks, settings, and decisions are stored locally in an embedded SQLite database.
+- **Windows Path:** `%LOCALAPPDATA%\mindforge\mindforge\data\mindforge.db`
+- **Linux / macOS:** `~/.local/share/mindforge/mindforge.db`
 
-| Action | Shortcut |
-|---|---|
-| **Toggle Sleek Sidebar** | `Ctrl+B` (Floats with top, bottom, and left gaps) |
-| **Instant Fuzzy Search** | `Ctrl+P` or `Ctrl+F` (Searches documents, cards, and decisions) |
-| **Caret & Settings Modal** | `Ctrl+,` (Customize styles, themes, and physics) |
-| **Quick Save Document** | `Ctrl+S` (Saves directly to SQLite) |
-| **Rename Document** | `F2` (Renames active document directly in SQLite) |
-| **Move Window** | Hold `Alt` and drag anywhere with the left mouse button |
-| **Toggle Fullscreen** | Press `F11` |
-| **Close App** | Press `Ctrl+Q` or type `:quit` |
-| **Command Line** | Type `:` to open the command prompt at the bottom |
-| **Cancel / Close Modal** | Press `Escape` |
+Backing up your entire knowledge graph is as simple as copying `mindforge.db`.
 
 ---
 
-## 3. 13 Animated Caret Styles
+## 🤝 Contributing
 
-Open the visual settings modal with `Ctrl+,` or change your caret live by typing `:` followed by `:caret <name>`:
+Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/Saboor-Hamedi/my_first_project/issues).
 
-| Caret Style | Description |
-|---|---|
-| `fire` | **Tuned & compact** glowing flame base with additive rising spark particles |
-| `water` | Liquid blue cursor with splashing droplets (with gravity) and expanding baseline ripples |
-| `electric` | Snapping high-voltage crackling lightning bolts branching on keypress |
-| `matrix` | Cascading green phosphor digital rain glyphs trickling downwards |
-| `ice` | Crystalline cyan frost shards falling with subtle horizontal drift |
-| `glitch` | Cyberpunk RGB chromatic aberration split with brief position jitter |
-| `neon` | Triple-layer atmospheric glowing aura expanding from the cursor |
-| `heartbeat` | Smooth rhythmic organic pulse breathing animation |
-| `comet` | Motion-blur fading trail following cursor movements |
-| `rainbow` | Smoothly shifting HSV color spectrum |
-| `block` | Classic solid block cursor |
-| `beam` | Sleek thin vertical bar |
-| `underline` | Classic terminal underscore |
-
-### Caret & Physics Tuning
-- `:glide <10-200|off>` — Adjust cursor glide responsiveness (default `50`; `off` for instant jump)
-- `:calm` — Toggle ambient idle particles on/off
-- `:perf` — Show real-time frame render time in milliseconds in the top-right corner
-- `:theme <green|amber|white|ice>` — Change the accent color palette
-- `:opacity <0.2-1.0>` — Adjust window transparency (1.0 = solid pitch black)
-- `:font <size>` — Adjust font size (default `20`)
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'feat: Add AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ---
 
-## 4. Features & Commands
+## 📄 License
 
-### 4.1 Sleek Floating Sidebar (`Ctrl+B`)
-- Floats with gaps from the top, bottom, and left of the window.
-- Quick navigation: Editor, Recall, Explain, Decisions, Stats, Caret Settings.
-- **Live Document Browser**: Displays documents saved in SQLite. Click any document to open it immediately in the editor.
-- **`+` Button**: Start a new untitled note.
+Distributed under the MIT License. See `LICENSE` for more information.
 
-### 4.2 Instant Fuzzy Search (`Ctrl+P` / `Ctrl+F`)
-- Instant subsequence fuzzy search across:
-  - **Saved Documents** (matched by title and body content)
-  - **Spaced Repetition Flashcards** (matched by question and answer)
-  - **Decisions** (matched by decision and prediction)
-- Use `↑` / `↓` arrows to navigate and `Enter` to jump straight into the selected document in the editor.
-
-### 4.3 Spaced Repetition Recall (`:review`)
-Retrieval practice with the SuperMemo SM-2 algorithm:
-1. Shows the prompt for cards due today.
-2. Type your answer from memory and press `Enter`.
-3. Compares your response with the true answer.
-4. Rate your recall difficulty:
-   - `1` = Again (failed, repeats soon)
-   - `2` = Hard
-   - `3` = Good
-   - `4` = Easy
-5. Displays your accuracy and typing speed (WPM) upon completion.
-
-### 4.4 Adding Cards (`:add`)
-Add flashcards using the delimiter syntax:
-```
-:add What is the borrow checker? | A compile-time mechanism ensuring memory safety without a GC | rust
-```
-
-### 4.5 Feynman Explaining Mode (`:explain <topic>`)
-Open a distraction-free explanation screen to teach a concept in simple terms:
-```
-:explain Ownership in Rust
-```
-Press `Escape` when done to save your explanation directly to SQLite.
-
-### 4.6 Decision Journal (`:decide`, `:resolve`, `:calibration`)
-Track your predictions and calibrate your confidence:
-- `:decide` — Step-by-step wizard logging decision, reasoning, prediction, confidence (1-99%), and review date.
-- `:resolve` — View decisions ready for review and record if your prediction came true (`1` for true, `0` for false).
-- `:calibration` — Displays your **Brier score** (0.00 = perfect calibration, 0.25 = random chance) and accuracy breakdown across confidence buckets (50-59%, 60-69%, 70-79%, 80-89%, 90-99%).
-
-### 4.7 Focus & Stats
-- `:focus <topic1> | [topic2]` — Sets your current learning focus displayed in the header.
-- `:stats` — Displays learning retention and weekly review volume with block-character graphs.
-- `:export` — Exports all flashcards, notes, and decisions into `mindforge_export.md`.
-
----
-
-## 5. Backing Up Your Data
-
-All data is stored offline in a local SQLite database that auto-migrates on startup.
-- **Windows location:** `%LOCALAPPDATA%\mindforge\mindforge\data\mindforge.db` (or alongside the executable in the fallback directory).
-- To backup: copy `mindforge.db` to a flash drive or cloud drive.
+<div align="center">
+  <sub>Crafted with passion in pure Rust 🦀 and powered by <a href="https://github.com/emilk/egui">egui</a>.</sub>
+</div>

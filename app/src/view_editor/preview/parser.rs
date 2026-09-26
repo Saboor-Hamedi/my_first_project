@@ -2,7 +2,7 @@
 
 use crate::theme::Theme;
 use eframe::egui::text::LayoutJob;
-use eframe::egui::{Color32, FontId, Stroke, TextFormat};
+use eframe::egui::{Color32, Stroke, TextFormat};
 
 #[derive(Debug, Clone)]
 pub enum MdBlock {
@@ -287,6 +287,117 @@ pub fn parse_markdown(text: &str) -> Vec<MdBlock> {
     blocks
 }
 
+/// Replaces multi-character coding symbols with Unicode ligature glyphs for preview rendering.
+pub fn substitute_ligatures(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let chars: Vec<char> = s.chars().collect();
+    let mut i = 0;
+    let n = chars.len();
+
+    while i < n {
+        if i + 4 <= n {
+            match (chars[i], chars[i + 1], chars[i + 2], chars[i + 3]) {
+                ('=', '=', '=', '>') => {
+                    result.push('⟹');
+                    i += 4;
+                    continue;
+                }
+                ('<', '=', '=', '=') => {
+                    result.push('⟸');
+                    i += 4;
+                    continue;
+                }
+                ('-', '-', '-', '>') => {
+                    result.push('⟶');
+                    i += 4;
+                    continue;
+                }
+                ('<', '-', '-', '-') => {
+                    result.push('⟵');
+                    i += 4;
+                    continue;
+                }
+                _ => {}
+            }
+        }
+        if i + 3 <= n {
+            match (chars[i], chars[i + 1], chars[i + 2]) {
+                ('=', '=', '>') => {
+                    result.push('⟹');
+                    i += 3;
+                    continue;
+                }
+                ('<', '=', '=') => {
+                    result.push('⟸');
+                    i += 3;
+                    continue;
+                }
+                ('-', '-', '>') => {
+                    result.push('⟶');
+                    i += 3;
+                    continue;
+                }
+                ('<', '-', '-') => {
+                    result.push('⟵');
+                    i += 3;
+                    continue;
+                }
+                ('=', '=', '=') => {
+                    result.push('≡');
+                    i += 3;
+                    continue;
+                }
+                ('!', '=', '=') => {
+                    result.push('≢');
+                    i += 3;
+                    continue;
+                }
+                _ => {}
+            }
+        }
+        if i + 2 <= n {
+            match (chars[i], chars[i + 1]) {
+                ('-', '>') => {
+                    result.push('→');
+                    i += 2;
+                    continue;
+                }
+                ('<', '-') => {
+                    result.push('←');
+                    i += 2;
+                    continue;
+                }
+                ('=', '>') => {
+                    result.push('⇒');
+                    i += 2;
+                    continue;
+                }
+                ('<', '=') => {
+                    result.push('≤');
+                    i += 2;
+                    continue;
+                }
+                ('>', '=') => {
+                    result.push('≥');
+                    i += 2;
+                    continue;
+                }
+                ('!', '=') => {
+                    result.push('≠');
+                    i += 2;
+                    continue;
+                }
+                _ => {}
+            }
+        }
+
+        result.push(chars[i]);
+        i += 1;
+    }
+
+    result
+}
+
 /// Builds an egui LayoutJob supporting inline bold (**text**), italic (*text*),
 /// inline code (`text`), strikethrough (~~text~~), and markdown links ([text](url)).
 pub fn build_inline_job(
@@ -307,8 +418,9 @@ pub fn build_inline_job(
 
     let flush_plain = |acc: &mut String, job: &mut LayoutJob| {
         if !acc.is_empty() {
-            let fmt = TextFormat::simple(FontId::proportional(base_font_size), default_color);
-            job.append(acc, 0.0, fmt);
+            let s = substitute_ligatures(acc);
+            let fmt = TextFormat::simple(crate::font_manager::editor_font_id(base_font_size), default_color);
+            job.append(&s, 0.0, fmt);
             acc.clear();
         }
     };
@@ -319,8 +431,9 @@ pub fn build_inline_job(
             if let Some(end_rel) = chars[i + 2..].windows(2).position(|w| w == ['*', '*']) {
                 let bold_end = i + 2 + end_rel;
                 flush_plain(&mut plain_acc, &mut job);
-                let bold_text: String = chars[i + 2..bold_end].iter().collect();
-                let fmt = TextFormat::simple(FontId::proportional(base_font_size), theme.highlight);
+                let bold_raw: String = chars[i + 2..bold_end].iter().collect();
+                let bold_text = substitute_ligatures(&bold_raw);
+                let fmt = TextFormat::simple(crate::font_manager::editor_font_id(base_font_size), theme.highlight);
                 job.append(&bold_text, 0.0, fmt);
                 i = bold_end + 2;
                 continue;
@@ -332,8 +445,9 @@ pub fn build_inline_job(
             if let Some(end_rel) = chars[i + 2..].windows(2).position(|w| w == ['~', '~']) {
                 let strike_end = i + 2 + end_rel;
                 flush_plain(&mut plain_acc, &mut job);
-                let strike_text: String = chars[i + 2..strike_end].iter().collect();
-                let mut fmt = TextFormat::simple(FontId::proportional(base_font_size), theme.muted);
+                let strike_raw: String = chars[i + 2..strike_end].iter().collect();
+                let strike_text = substitute_ligatures(&strike_raw);
+                let mut fmt = TextFormat::simple(crate::font_manager::editor_font_id(base_font_size), theme.muted);
                 fmt.strikethrough = Stroke::new(1.0, theme.muted);
                 job.append(&strike_text, 0.0, fmt);
                 i = strike_end + 2;
@@ -346,8 +460,9 @@ pub fn build_inline_job(
             if let Some(end_rel) = chars[i + 1..].iter().position(|&c| c == '`') {
                 let code_end = i + 1 + end_rel;
                 flush_plain(&mut plain_acc, &mut job);
-                let code_text: String = chars[i + 1..code_end].iter().collect();
-                let fmt = TextFormat::simple(FontId::monospace(base_font_size * 0.92), theme.text);
+                let code_raw: String = chars[i + 1..code_end].iter().collect();
+                let code_text = substitute_ligatures(&code_raw);
+                let fmt = TextFormat::simple(crate::font_manager::editor_font_id(base_font_size * 0.92), theme.text);
                 job.append(&code_text, 0.0, fmt);
                 i = code_end + 1;
                 continue;
@@ -362,8 +477,9 @@ pub fn build_inline_job(
                     if let Some(close_paren) = chars[bracket_end + 2..].iter().position(|&c| c == ')') {
                         let paren_end = bracket_end + 2 + close_paren;
                         flush_plain(&mut plain_acc, &mut job);
-                        let link_text: String = chars[i + 1..bracket_end].iter().collect();
-                        let mut fmt = TextFormat::simple(FontId::proportional(base_font_size), theme.accent);
+                        let link_raw: String = chars[i + 1..bracket_end].iter().collect();
+                        let link_text = substitute_ligatures(&link_raw);
+                        let mut fmt = TextFormat::simple(crate::font_manager::editor_font_id(base_font_size), theme.accent);
                         fmt.underline = Stroke::new(1.0, theme.accent);
                         job.append(&link_text, 0.0, fmt);
                         i = paren_end + 1;
@@ -378,8 +494,9 @@ pub fn build_inline_job(
             if let Some(end_rel) = chars[i + 1..].iter().position(|&c| c == '*') {
                 let ital_end = i + 1 + end_rel;
                 flush_plain(&mut plain_acc, &mut job);
-                let ital_text: String = chars[i + 1..ital_end].iter().collect();
-                let mut fmt = TextFormat::simple(FontId::proportional(base_font_size), theme.text);
+                let ital_raw: String = chars[i + 1..ital_end].iter().collect();
+                let ital_text = substitute_ligatures(&ital_raw);
+                let mut fmt = TextFormat::simple(crate::font_manager::editor_font_id(base_font_size), theme.text);
                 fmt.italics = true;
                 job.append(&ital_text, 0.0, fmt);
                 i = ital_end + 1;

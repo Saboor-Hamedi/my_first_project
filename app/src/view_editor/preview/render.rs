@@ -46,6 +46,7 @@ pub fn render_markdown_view_inner(
     show_header: bool,
     block_scroll: bool,
 ) -> bool {
+    crate::font_manager::ensure_editor_font(ui.ctx());
     let mut close_clicked = false;
 
     let content_rect = if show_header {
@@ -309,7 +310,7 @@ pub fn render_markdown_view_inner(
                         }
                     } else {
                         // Standard bullet or numbered list
-                        let bullet_font = FontId::proportional(font_size);
+                        let bullet_font = crate::font_manager::editor_font_id(font_size);
                         let b_color = theme.text;
                         let bullet_w = if bullet.ends_with('.') {
                             (bullet.len() as f32 * font_size * 0.58).max(18.0)

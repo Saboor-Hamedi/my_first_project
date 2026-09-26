@@ -2,7 +2,7 @@
 
 use crate::theme::Theme;
 use eframe::egui::text::LayoutJob;
-use eframe::egui::{Color32, FontId, TextFormat};
+use eframe::egui::{Color32, TextFormat};
 
 /// Tokenizes a code line into rich multi-color syntax highlighting.
 pub fn highlight_code_line(
@@ -12,7 +12,7 @@ pub fn highlight_code_line(
     theme: &Theme,
 ) -> LayoutJob {
     let mut job = LayoutJob::default();
-    let mono_font = FontId::monospace(font_size);
+    let mono_font = crate::font_manager::editor_font_id(font_size);
     let chars: Vec<char> = line.chars().collect();
     let n = chars.len();
     let mut i = 0;
@@ -122,7 +122,18 @@ pub fn highlight_code_line(
             continue;
         }
 
-        // 5. Punctuation & Operators
+        // 5. Coding Ligatures and Operators
+        if let Some(lig) = crate::view_editor::ligatures::detect_ligature(&chars, i) {
+            let lig_len = lig.char_len();
+            let raw: String = chars[i..i + lig_len].iter().collect();
+            let sub = crate::view_editor::preview::parser::substitute_ligatures(&raw);
+            let lig_color = Color32::from_rgb(97, 175, 239); // vibrant operator
+            job.append(&sub, 0.0, TextFormat::simple(mono_font.clone(), lig_color));
+            i += lig_len;
+            continue;
+        }
+
+        // 6. Punctuation & Single Operators
         let punc_char = chars[i];
         let punc_color = match punc_char {
             '=' | '+' | '-' | '*' | '/' | '%' | '&' | '|' | '^' | '!' | '<' | '>' | '~' | '?' | ':' => {

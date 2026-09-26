@@ -379,6 +379,93 @@ pub fn render_inline_editor(
         } else {
             editor_painter.galley(pos2(text_left, line_y + galley_y_pad), line.galley.clone(), theme.text);
         }
+
+        // 7b. Render Coding Ligatures (arrows, fat arrows, not-equals, comparisons)
+        if line.char_end > line.char_start && line.char_end <= ed.buf.len() {
+            let line_chars = &ed.buf[line.char_start..line.char_end];
+            let mut char_i = 0;
+            while char_i < line_chars.len() {
+                if let Some(lig) = crate::view_editor::ligatures::detect_ligature(line_chars, char_i) {
+                    let lig_len = lig.char_len();
+                    let buf_start = line.char_start + char_i;
+                    let buf_end = buf_start + lig_len;
+
+                    // Locate start and end glyphs using char_map & galley
+                    let mut g_start = None;
+                    let mut g_end = None;
+                    for (g_idx, &b_idx) in line.char_map.iter().enumerate() {
+                        if b_idx == buf_start && g_start.is_none() {
+                            g_start = Some(g_idx);
+                        }
+                        if b_idx >= buf_end && g_end.is_none() {
+                            g_end = Some(g_idx);
+                        }
+                    }
+
+                    if let Some(g_start_idx) = g_start {
+                        let total_glyphs = line.galley.rows.iter().map(|r| r.glyphs.len()).sum::<usize>();
+                        let g_end_idx = g_end.unwrap_or(g_start_idx + lig_len).min(total_glyphs);
+
+                        let c_start = line.galley.from_ccursor(CCursor::new(g_start_idx));
+                        let r_start = line.galley.pos_from_cursor(&c_start);
+                        let c_end = line.galley.from_ccursor(CCursor::new(g_end_idx));
+                        let r_end = line.galley.pos_from_cursor(&c_end);
+
+                        if (r_start.min.y - r_end.min.y).abs() < 3.0 && r_end.min.x > r_start.min.x {
+                            let x_start = text_left + r_start.min.x;
+                            let x_end = text_left + r_end.min.x;
+                            let cw = (x_end - x_start) / lig_len as f32;
+                            let y_mid = line_y + galley_y_pad + r_start.center().y;
+
+                            // Determine background color behind the characters to mask raw text
+                            let bg_color = if matches!(line.kind, InlineLineKind::CodeLine) {
+                                theme.surface()
+                            } else if matches!(line.kind, InlineLineKind::Quote(_)) {
+                                theme.surface()
+                            } else {
+                                theme.bg
+                            };
+
+                            let mask_rect = Rect::from_min_max(
+                                pos2(x_start - 0.5, line_y + galley_y_pad + r_start.min.y),
+                                pos2(x_end + 0.5, line_y + galley_y_pad + r_start.max.y),
+                            );
+
+                            // If selected, use selection highlight color
+                            let is_selected = if let Some((s_start, s_end)) = sel_range {
+                                buf_start < s_end && buf_end > s_start
+                            } else {
+                                false
+                            };
+                            let fill_color = if is_selected { sel_color } else { bg_color };
+                            editor_painter.rect_filled(mask_rect, 0.0, fill_color);
+
+                            // Ligature color matches syntax / text color
+                            let lig_color = if matches!(line.kind, InlineLineKind::CodeLine) {
+                                Color32::from_rgb(97, 175, 239) // vibrant operator
+                            } else {
+                                theme.text
+                            };
+
+                            let stroke_w = (line.base_font_size * 0.088).clamp(1.2, 1.8);
+                            let stroke = Stroke::new(stroke_w, lig_color);
+                            crate::view_editor::ligatures::draw_ligature(
+                                &editor_painter,
+                                lig,
+                                x_start,
+                                y_mid,
+                                cw,
+                                stroke,
+                            );
+                        }
+                    }
+
+                    char_i += lig_len;
+                } else {
+                    char_i += 1;
+                }
+            }
+        }
     }
 
     // 8. Render Caret Overlay (Strict Layer Priority: Always renders ON TOP of selection and text)
