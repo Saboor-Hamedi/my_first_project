@@ -158,14 +158,18 @@ pub fn handle_global_shortcuts(app: &mut App, ctx: &egui::Context, now: f64) -> 
     }
 
     // AI Assistant input priority: when user is focused on the AI prompt textarea,
-    // absorb typing and shortcuts so input goes exclusively into the prompt and doesn't trigger the editor.
+    // absorb typing and shortcuts so input goes exclusively into the prompt and doesn't trigger the editor or sidebar.
     if app.preview_open && app.right_pane_tab == crate::app::RightPaneTab::AiAgent {
         let ai_input_id = egui::Id::new("deepseek_prompt_input");
-        let is_ai_focused = ctx.memory(|m| m.has_focus(ai_input_id));
+        let is_ai_focused = app.agent_state.is_input_focused
+            || ctx.memory(|m| m.has_focus(ai_input_id))
+            || ctx.wants_keyboard_input();
 
         if is_ai_focused {
+            app.sidebar_focused = false;
             if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
                 ctx.memory_mut(|m| m.surrender_focus(ai_input_id));
+                app.agent_state.is_input_focused = false;
             }
             return Some(false);
         }

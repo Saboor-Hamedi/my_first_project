@@ -31,7 +31,7 @@ impl App {
                 modal_rect,
                 5.0,
                 self.theme.surface(),
-                Stroke::new(1.0, self.theme.border()),
+                Stroke::new(1.0_f32, self.theme.border()),
                 egui::StrokeKind::Inside,
             );
 

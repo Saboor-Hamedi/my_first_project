@@ -44,45 +44,18 @@ pub fn render_welcome_dashboard(
     let mut action = None;
     let center = rect.center();
 
-    // ── 1. Keyboard shortcuts dispatch for dashboard ────────────────────────
-    if !modals_open {
-        ui.input(|i| {
-            if i.key_pressed(Key::N) && !i.modifiers.ctrl && !i.modifiers.alt {
-                action = Some(DashboardAction::NewNote);
-            } else if i.key_pressed(Key::F) && !i.modifiers.ctrl && !i.modifiers.alt {
-                action = Some(DashboardAction::FindNote);
-            } else if i.key_pressed(Key::T) && !i.modifiers.ctrl && !i.modifiers.alt {
-                action = Some(DashboardAction::OpenTerminal);
-            } else if i.key_pressed(Key::A) && !i.modifiers.ctrl && !i.modifiers.alt {
-                action = Some(DashboardAction::OpenAi);
-            } else if i.key_pressed(Key::D) && !i.modifiers.ctrl && !i.modifiers.alt {
-                action = Some(DashboardAction::OpenDocs);
-            } else if i.key_pressed(Key::S) && !i.modifiers.ctrl && !i.modifiers.alt {
-                action = Some(DashboardAction::OpenSettings);
-            } else if i.key_pressed(Key::Z) && !i.modifiers.ctrl && !i.modifiers.alt {
-                action = Some(DashboardAction::ToggleZen);
-            } else if i.key_pressed(Key::Q) && !i.modifiers.ctrl && !i.modifiers.alt {
-                action = Some(DashboardAction::Quit);
-            }
-        });
-
-        if action.is_some() {
-            return action;
-        }
-    }
-
     let use_ascii = rect.width() >= 520.0 && rect.height() >= 440.0;
     let btn_h = 26.0;
     let btn_gap = 5.0;
 
     let action_items: [(&str, &str, &str, DashboardAction); 7] = [
-        ("n", "New Note", "Ctrl+N", DashboardAction::NewNote),
-        ("f", "Find Note", "Ctrl+P", DashboardAction::FindNote),
-        ("t", "Embedded Terminal", ":term", DashboardAction::OpenTerminal),
-        ("a", "AI Assistant", "Ctrl+J", DashboardAction::OpenAi),
-        ("d", "Documentation", ":doc", DashboardAction::OpenDocs),
-        ("s", "Preferences", "Ctrl+,", DashboardAction::OpenSettings),
-        ("z", "Zen Focus Mode", "Ctrl+.", DashboardAction::ToggleZen),
+        ("N", "New Note", "Ctrl+N", DashboardAction::NewNote),
+        ("P", "Find Note", "Ctrl+P", DashboardAction::FindNote),
+        ("T", "Embedded Terminal", "Ctrl+J", DashboardAction::OpenTerminal),
+        ("I", "AI Assistant", "Ctrl+Shift+I", DashboardAction::OpenAi),
+        ("D", "Documentation", ":doc", DashboardAction::OpenDocs),
+        ("S", "Preferences", "Ctrl+,", DashboardAction::OpenSettings),
+        ("Z", "Zen Focus Mode", "Ctrl+.", DashboardAction::ToggleZen),
     ];
 
     // Determine how many buttons fit comfortably in the available height

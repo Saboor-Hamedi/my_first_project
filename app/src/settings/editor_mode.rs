@@ -50,7 +50,7 @@ pub fn render_editor_mode_tab(
         hybrid_card,
         6.0,
         hybrid_bg,
-        Stroke::new(1.0, if is_hybrid { theme.accent } else if hybrid_hover { theme.border().lerp_to_gamma(theme.accent, 0.4) } else { theme.border() }),
+        Stroke::new(1.0_f32, if is_hybrid { theme.accent } else if hybrid_hover { theme.border().lerp_to_gamma(theme.accent, 0.4) } else { theme.border() }),
         egui::StrokeKind::Inside,
     );
 
@@ -105,7 +105,7 @@ pub fn render_editor_mode_tab(
         vim_card,
         6.0,
         vim_bg,
-        Stroke::new(1.0, if is_vim { theme.accent } else if vim_hover { theme.border().lerp_to_gamma(theme.accent, 0.4) } else { theme.border() }),
+        Stroke::new(1.0_f32, if is_vim { theme.accent } else if vim_hover { theme.border().lerp_to_gamma(theme.accent, 0.4) } else { theme.border() }),
         egui::StrokeKind::Inside,
     );
 

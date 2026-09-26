@@ -35,7 +35,7 @@ pub fn paint_water(
         p.circle_stroke(
             r.center,
             radius,
-            Stroke::new(1.0, Color32::from_rgba_unmultiplied(80, 200, 255, a)),
+            Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(80, 200, 255, a)),
         );
     }
 

@@ -17,5 +17,5 @@ pub fn paint_neon(p: &Painter, pos: Pos2, w: f32, lh: f32, accent: Color32) {
     // Crisp vibrant laser core
     let inner = Rect::from_min_size(pos, vec2(w, lh));
     p.rect_filled(inner, 1.0, Color32::WHITE);
-    p.rect_stroke(inner, 1.0, Stroke::new(1.0, accent), StrokeKind::Inside);
+    p.rect_stroke(inner, 1.0, Stroke::new(1.0_f32, accent), StrokeKind::Inside);
 }

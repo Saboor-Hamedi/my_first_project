@@ -155,7 +155,7 @@ pub fn render_accent_dropdown(
         dropdown_rect,
         8.0,
         theme.surface().gamma_multiply(open_t),
-        Stroke::new(1.0, theme.border().gamma_multiply(open_t)),
+        Stroke::new(1.0_f32, theme.border().gamma_multiply(open_t)),
         egui::StrokeKind::Inside,
     );
 
@@ -165,7 +165,7 @@ pub fn render_accent_dropdown(
         Rect::from_min_max(dropdown_rect.min, pos2(dropdown_rect.max.x, dropdown_rect.min.y + header_h));
     painter.line_segment(
         [header_rect.left_bottom(), header_rect.right_bottom()],
-        Stroke::new(1.0, theme.border().gamma_multiply(open_t)),
+        Stroke::new(1.0_f32, theme.border().gamma_multiply(open_t)),
     );
     painter.text(
         pos2(header_rect.min.x + 14.0, header_rect.min.y + 13.0),
@@ -229,7 +229,7 @@ pub fn render_accent_dropdown(
     // Clean transparent section with subtle divider — ZERO background fill
     painter.line_segment(
         [backdrop_card_rect.left_top(), backdrop_card_rect.right_top()],
-        Stroke::new(1.0, theme.border().gamma_multiply(open_t)),
+        Stroke::new(1.0_f32, theme.border().gamma_multiply(open_t)),
     );
 
     // Row 1: Blur Effect Pills (ZERO background, ZERO border)
@@ -363,7 +363,7 @@ pub fn render_accent_dropdown(
         footer_rect,
         5.0,
         reset_bg,
-        Stroke::new(1.0, lerp_color(theme.border(), theme.accent, reset_t)),
+        Stroke::new(1.0_f32, lerp_color(theme.border(), theme.accent, reset_t)),
         egui::StrokeKind::Inside,
     );
     painter.text(
@@ -412,7 +412,7 @@ fn render_color_section(
         rect,
         5.0,
         Color32::from_rgba_unmultiplied(theme.bg.r(), theme.bg.g(), theme.bg.b(), 130),
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -443,7 +443,7 @@ fn render_color_section(
             theme.surface().b(),
             (200.0 + 40.0 * badge_t).min(255.0) as u8,
         ),
-        Stroke::new(1.0, lerp_color(theme.border(), theme.accent, badge_t)),
+        Stroke::new(1.0_f32, lerp_color(theme.border(), theme.accent, badge_t)),
         egui::StrokeKind::Inside,
     );
     let chip_rect = Rect::from_min_size(pos2(badge_rect.min.x + 3.0, badge_rect.min.y + 2.0), vec2(14.0, 14.0));
@@ -500,11 +500,11 @@ fn render_color_section(
         let grown = base_rect.expand(hover_t * 2.0);
 
         let stroke = if is_selected {
-            Stroke::new(1.8, theme.accent)
+            Stroke::new(1.8_f32, theme.accent)
         } else if hover_t > 0.0 {
             Stroke::new(1.0 + 0.5 * hover_t, theme.accent)
         } else {
-            Stroke::new(0.8, theme.border())
+            Stroke::new(0.8_f32, theme.border())
         };
 
         painter.rect(grown, 3.5, swatch, stroke, egui::StrokeKind::Inside);
@@ -579,7 +579,7 @@ fn hex_input(
         text_rect,
         3.0,
         Color32::from_rgba_unmultiplied(theme.bg.r(), theme.bg.g(), theme.bg.b(), 200),
-        Stroke::new(1.0, border),
+        Stroke::new(1.0_f32, border),
         egui::StrokeKind::Inside,
     );
 

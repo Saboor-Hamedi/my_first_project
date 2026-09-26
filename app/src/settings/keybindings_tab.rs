@@ -90,7 +90,7 @@ pub fn render_keybindings_tab(
         reset_all_rect,
         4.0,
         if reset_all_hov { theme.surface() } else { theme.bg },
-        Stroke::new(1.0, if reset_all_hov { theme.accent } else { theme.border() }),
+        Stroke::new(1.0_f32, if reset_all_hov { theme.accent } else { theme.border() }),
         egui::StrokeKind::Inside,
     );
     painter.text(
@@ -140,7 +140,7 @@ pub fn render_keybindings_tab(
         normal_btn_rect,
         4.0,
         normal_bg,
-        Stroke::new(1.0, if is_normal { theme.accent } else { theme.border() }),
+        Stroke::new(1.0_f32, if is_normal { theme.accent } else { theme.border() }),
         egui::StrokeKind::Inside,
     );
     painter.text(
@@ -167,7 +167,7 @@ pub fn render_keybindings_tab(
         visual_btn_rect,
         4.0,
         visual_bg,
-        Stroke::new(1.0, if is_visual { theme.accent } else { theme.border() }),
+        Stroke::new(1.0_f32, if is_visual { theme.accent } else { theme.border() }),
         egui::StrokeKind::Inside,
     );
     painter.text(
@@ -193,7 +193,7 @@ pub fn render_keybindings_tab(
         search_rect,
         4.0,
         theme.surface(),
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
         egui::StrokeKind::Inside,
     );
     painter.text(
@@ -282,7 +282,7 @@ pub fn render_keybindings_tab(
             pos2(row_left, table_header_y + 22.0),
             pos2(row_left + row_w, table_header_y + 22.0),
         ],
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
     );
 
     // ── 9. Scrollable List of Actions ────────────────────────────────────────
@@ -383,7 +383,7 @@ pub fn render_keybindings_tab(
                 reset_rect,
                 3.0,
                 if reset_hov { theme.surface() } else { Color32::TRANSPARENT },
-                Stroke::new(1.0, if reset_hov { theme.accent } else { theme.border() }),
+                Stroke::new(1.0_f32, if reset_hov { theme.accent } else { theme.border() }),
                 egui::StrokeKind::Inside,
             );
             row_painter.text(
@@ -413,7 +413,7 @@ pub fn render_keybindings_tab(
             add_rect,
             3.0,
             if add_hov { theme.surface() } else { Color32::TRANSPARENT },
-            Stroke::new(1.0, if add_hov { theme.accent } else { theme.border() }),
+            Stroke::new(1.0_f32, if add_hov { theme.accent } else { theme.border() }),
             egui::StrokeKind::Inside,
         );
         row_painter.text(
@@ -484,7 +484,7 @@ pub fn render_keybindings_tab(
                         theme.bg
                     },
                     Stroke::new(
-                        1.0,
+                        1.0_f32,
                         if is_capturing_this_stroke || slot_hov { theme.accent } else { theme.border() },
                     ),
                     egui::StrokeKind::Inside,
@@ -660,7 +660,7 @@ pub fn render_keybindings_tab(
             input_rect,
             5.0,
             input_bg,
-            Stroke::new(1.0, if cap.staged_stroke.is_some() { theme.accent } else { theme.border() }),
+            Stroke::new(1.0_f32, if cap.staged_stroke.is_some() { theme.accent } else { theme.border() }),
             egui::StrokeKind::Inside,
         );
 
@@ -747,7 +747,7 @@ pub fn render_keybindings_tab(
             cancel_rect,
             5.0,
             cancel_bg,
-            Stroke::new(1.0, cancel_stroke),
+            Stroke::new(1.0_f32, cancel_stroke),
             egui::StrokeKind::Inside,
         );
         painter.text(
@@ -782,7 +782,7 @@ pub fn render_keybindings_tab(
             save_rect,
             5.0,
             save_bg,
-            Stroke::new(1.0, save_stroke),
+            Stroke::new(1.0_f32, save_stroke),
             egui::StrokeKind::Inside,
         );
         painter.text(

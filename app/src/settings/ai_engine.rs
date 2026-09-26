@@ -47,7 +47,7 @@ pub fn render_ai_tab(
         key_card,
         6.0,
         theme.surface(),
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -76,7 +76,7 @@ pub fn render_ai_tab(
         show_btn,
         4.0,
         if show_hover { theme.surface().lerp_to_gamma(theme.accent, 0.15) } else { theme.bg },
-        Stroke::new(1.0, if show_hover { theme.accent } else { theme.border() }),
+        Stroke::new(1.0_f32, if show_hover { theme.accent } else { theme.border() }),
         egui::StrokeKind::Inside,
     );
     painter.text(
@@ -107,7 +107,7 @@ pub fn render_ai_tab(
         paste_btn,
         4.0,
         if paste_hover { theme.surface().lerp_to_gamma(theme.accent, 0.15) } else { theme.bg },
-        Stroke::new(1.0, if paste_hover { theme.accent } else { theme.border() }),
+        Stroke::new(1.0_f32, if paste_hover { theme.accent } else { theme.border() }),
         egui::StrokeKind::Inside,
     );
     painter.text(
@@ -135,7 +135,7 @@ pub fn render_ai_tab(
             clear_btn,
             4.0,
             if clear_hover { Color32::from_rgba_unmultiplied(220, 60, 60, 24) } else { theme.bg },
-            Stroke::new(1.0, if clear_hover { Color32::from_rgb(220, 60, 60) } else { theme.border() }),
+            Stroke::new(1.0_f32, if clear_hover { Color32::from_rgb(220, 60, 60) } else { theme.border() }),
             egui::StrokeKind::Inside,
         );
         painter.text(
@@ -241,7 +241,7 @@ pub fn render_ai_tab(
             opt_rect,
             6.0,
             bg,
-            Stroke::new(1.0, if is_sel { theme.accent } else if opt_hover { theme.border().lerp_to_gamma(theme.accent, 0.4) } else { theme.border() }),
+            Stroke::new(1.0_f32, if is_sel { theme.accent } else if opt_hover { theme.border().lerp_to_gamma(theme.accent, 0.4) } else { theme.border() }),
             egui::StrokeKind::Inside,
         );
 
@@ -274,7 +274,7 @@ pub fn render_ai_tab(
         info_rect,
         6.0,
         theme.surface(),
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
         egui::StrokeKind::Inside,
     );
 

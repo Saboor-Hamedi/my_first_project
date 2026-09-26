@@ -272,7 +272,7 @@ pub fn render_bottom_dock(
                 pos2(dock_rect.max.x - d, dock_rect.max.y - 4.0),
                 pos2(dock_rect.max.x - 4.0, dock_rect.max.y - d),
             ],
-            Stroke::new(1.4, knob_color),
+            Stroke::new(1.4_f32, knob_color),
         );
     }
 

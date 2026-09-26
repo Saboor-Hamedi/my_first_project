@@ -33,7 +33,7 @@ pub fn paint_electric(p: &Painter, pos: Pos2, w: f32, lh: f32, bolts: &[Bolt]) {
         let a = ((1.0 - b.age / 0.12) * 255.0) as u8;
         p.add(eframe::egui::Shape::line(
             b.pts.clone(),
-            Stroke::new(1.5, Color32::from_rgba_unmultiplied(210, 235, 255, a)),
+            Stroke::new(1.5_f32, Color32::from_rgba_unmultiplied(210, 235, 255, a)),
         ));
     }
 }

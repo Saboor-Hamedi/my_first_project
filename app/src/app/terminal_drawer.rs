@@ -73,7 +73,7 @@ impl App {
             for dx in [-5.0, 0.0, 5.0] {
                 painter.line_segment(
                     [pos2(knob_mid.x + dx, knob_mid.y - 1.2), pos2(knob_mid.x + dx, knob_mid.y + 1.2)],
-                    Stroke::new(1.0, grip_color),
+                    Stroke::new(1.0_f32, grip_color),
                 );
             }
 

@@ -41,7 +41,7 @@ pub fn render_backup_tab(
         path_card,
         6.0,
         theme.surface(),
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -70,7 +70,7 @@ pub fn render_backup_tab(
         pill_rect,
         5.0,
         theme.sidebar_bg(),
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
         egui::StrokeKind::Inside,
     );
     painter.text(
@@ -96,7 +96,7 @@ pub fn render_backup_tab(
         browse_rect,
         5.0,
         browse_bg,
-        Stroke::new(1.0, if browse_hover { theme.accent } else { theme.border() }),
+        Stroke::new(1.0_f32, if browse_hover { theme.accent } else { theme.border() }),
         egui::StrokeKind::Inside,
     );
     if browse_hover {
@@ -126,7 +126,7 @@ pub fn render_backup_tab(
         action_card,
         6.0,
         theme.surface(),
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -168,7 +168,7 @@ pub fn render_backup_tab(
         run_btn_rect,
         5.0,
         run_bg,
-        Stroke::new(1.0, if run_hover { theme.accent } else { theme.border() }),
+        Stroke::new(1.0_f32, if run_hover { theme.accent } else { theme.border() }),
         egui::StrokeKind::Inside,
     );
     painter.text(
@@ -191,7 +191,7 @@ pub fn render_backup_tab(
         info_card,
         6.0,
         theme.surface(),
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
         egui::StrokeKind::Inside,
     );
 

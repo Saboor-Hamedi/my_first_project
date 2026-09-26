@@ -306,7 +306,7 @@ pub fn render_command_suggestions(
         popup_rect,
         6.0,
         theme.surface(),
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -331,7 +331,7 @@ pub fn render_command_suggestions(
     let sep_y = header_rect.max.y + 1.0;
     painter.line_segment(
         [pos2(popup_rect.min.x + 8.0, sep_y), pos2(popup_rect.max.x - 8.0, sep_y)],
-        Stroke::new(1.0, theme.border().linear_multiply(0.6)),
+        Stroke::new(1.0_f32, theme.border().linear_multiply(0.6)),
     );
 
     // Rows

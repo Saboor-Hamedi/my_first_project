@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![allow(float_literal_f32_fallback)]
 
 mod app;
 pub mod accent;

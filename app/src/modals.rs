@@ -85,7 +85,7 @@ pub fn render_search_modal(
 
     // Modern macOS Spotlight container: surface matching active theme with smooth rounded corners
     let glass_bg = theme.surface();
-    let glass_border = Stroke::new(1.0, theme.border());
+    let glass_border = Stroke::new(1.0_f32, theme.border());
     painter.rect(modal_rect, 10.0, glass_bg, glass_border, egui::StrokeKind::Inside);
 
     // ── Search Bar Input Row ────────────────────────────────────────────────
@@ -275,7 +275,7 @@ pub fn render_search_modal(
         let div_y = modal_rect.min.y + bar_h;
         painter.line_segment(
             [pos2(modal_rect.min.x, div_y), pos2(modal_rect.max.x, div_y)],
-            Stroke::new(1.0, theme.border()),
+            Stroke::new(1.0_f32, theme.border()),
         );
 
         let results_y = div_y + 8.0;
@@ -460,7 +460,7 @@ pub fn render_search_modal(
         let footer_y = modal_rect.max.y - 28.0;
         painter.line_segment(
             [pos2(modal_rect.min.x + 16.0, footer_y - 4.0), pos2(modal_rect.max.x - 16.0, footer_y - 4.0)],
-            Stroke::new(1.0, theme.border()),
+            Stroke::new(1.0_f32, theme.border()),
         );
         let footer_hint = if is_theme_picker {
             "↑↓ / Ctrl+J/K  ·  ↵ Apply Theme Live  ·  esc → Commands"
@@ -515,7 +515,7 @@ pub fn render_rename_modal(
         modal_rect,
         5.0,
         theme.surface(),
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -545,7 +545,7 @@ pub fn render_rename_modal(
         input_rect,
         5.0,
         input_bg,
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -629,7 +629,7 @@ pub fn render_delete_confirm_modal(
         modal_rect,
         5.0,
         theme.surface(),
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -745,7 +745,7 @@ pub fn render_delete_confirm_modal(
         cancel_rect,
         5.0,
         cancel_bg,
-        Stroke::new(1.0, cancel_stroke),
+        Stroke::new(1.0_f32, cancel_stroke),
         egui::StrokeKind::Inside,
     );
     painter.text(
@@ -775,7 +775,7 @@ pub fn render_delete_confirm_modal(
         delete_rect,
         5.0,
         del_bg,
-        Stroke::new(1.0, del_stroke),
+        Stroke::new(1.0_f32, del_stroke),
         egui::StrokeKind::Inside,
     );
     painter.text(

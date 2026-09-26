@@ -24,7 +24,7 @@ pub fn paint_candle(
     // Candle wick
     p.line_segment(
         [pos2(wick_x, pos.y), pos2(wick_x, wick_top)],
-        Stroke::new(1.0, Color32::from_rgb(50, 40, 30)),
+        Stroke::new(1.0_f32, Color32::from_rgb(50, 40, 30)),
     );
 
     // Dynamic flame flicker (living animation resting and typing)

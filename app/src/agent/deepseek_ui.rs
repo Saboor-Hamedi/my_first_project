@@ -513,6 +513,9 @@ pub fn render_ai_pane(
         Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 160),
     );
 
+    let has_text_focus = edit_resp.as_ref().map_or(false, |r| r.has_focus());
+    state.is_input_focused = has_text_focus || is_focused;
+
     if request_focus {
         if let Some(ref r) = edit_resp {
             r.request_focus();
@@ -520,7 +523,7 @@ pub fn render_ai_pane(
     }
 
     // Send on Enter (without Shift)
-    let enter_pressed = is_focused && ui.input(|i| i.key_pressed(Key::Enter) && !i.modifiers.shift);
+    let enter_pressed = (is_focused || has_text_focus) && ui.input(|i| i.key_pressed(Key::Enter) && !i.modifiers.shift);
     let is_send_hover = ui.rect_contains_pointer(send_btn_rect);
     let send_clicked = is_send_hover && ui.input(|i| i.pointer.primary_clicked());
 

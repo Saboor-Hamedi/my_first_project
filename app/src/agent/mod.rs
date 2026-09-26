@@ -50,6 +50,7 @@ pub struct AgentState {
     pub worker: AgentWorker,
     pub deepseek_api_key_enc: String,
     pub deepseek_model: String,
+    pub is_input_focused: bool,
 }
 
 impl AgentState {
@@ -66,6 +67,7 @@ impl AgentState {
             worker: AgentWorker::new(),
             deepseek_api_key_enc: String::new(),
             deepseek_model: "deepseek-chat".to_string(), // Pro default
+            is_input_focused: false,
         }
     }
 

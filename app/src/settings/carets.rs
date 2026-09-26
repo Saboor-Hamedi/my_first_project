@@ -79,11 +79,11 @@ pub fn render_carets_tab(
         }
 
         let stroke = if is_selected {
-            Stroke::new(1.0, theme.accent)
+            Stroke::new(1.0_f32, theme.accent)
         } else if hovered {
-            Stroke::new(1.0, theme.border().lerp_to_gamma(theme.accent, 0.4))
+            Stroke::new(1.0_f32, theme.border().lerp_to_gamma(theme.accent, 0.4))
         } else {
-            Stroke::new(1.0, theme.border())
+            Stroke::new(1.0_f32, theme.border())
         };
         painter.rect(
             chip_rect,
@@ -201,7 +201,7 @@ pub fn render_carets_tab(
     painter.circle_stroke(
         pos2(thumb_x, track_y),
         if slider_hover { 8.5 } else { 7.5 },
-        Stroke::new(1.5, theme.border()),
+        Stroke::new(1.5_f32, theme.border()),
     );
 
     painter.text(

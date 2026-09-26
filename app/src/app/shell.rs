@@ -23,7 +23,7 @@ impl App {
             bounds,
             5.0,
             win_bg,
-            Stroke::new(1.0, Color32::from_rgb(32, 34, 40)),
+            Stroke::new(1.0_f32, Color32::from_rgb(32, 34, 40)),
             egui::StrokeKind::Inside,
         );
 
@@ -185,7 +185,7 @@ impl App {
             for dy in [-5.0, 0.0, 5.0] {
                 painter.line_segment(
                     [pos2(knob_mid.x - 1.2, knob_mid.y + dy), pos2(knob_mid.x + 1.2, knob_mid.y + dy)],
-                    Stroke::new(1.0, grip_color),
+                    Stroke::new(1.0_f32, grip_color),
                 );
             }
         }

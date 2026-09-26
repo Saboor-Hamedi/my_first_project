@@ -65,7 +65,7 @@ pub fn render_font_settings(
             6.0,
             bg,
             Stroke::new(
-                1.0,
+                1.0_f32,
                 if is_selected {
                     theme.accent
                 } else if hovered {
