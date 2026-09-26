@@ -1,7 +1,7 @@
 //! Neovim-style minimalist welcome dashboard and quick-action launcher.
 
 use crate::theme::Theme;
-use eframe::egui::{self, pos2, vec2, Align2, FontId, Key, Rect};
+use eframe::egui::{self, pos2, vec2, Align2, FontId, Rect};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DashboardAction {

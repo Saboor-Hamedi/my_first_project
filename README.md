@@ -21,6 +21,7 @@
 [**Showcase**](#-showcase) •
 [**Animated Carets**](#-animated-physics-carets) •
 [**Vim Engine**](#-vim-modal-editing) •
+[**Shortcuts & Commands**](#-essential-keyboard-shortcuts) •
 [**Architecture & egui**](#-built-with-egui) •
 [**Discussions**](https://github.com/Saboor-Hamedi/mindforge/discussions)
 
@@ -173,16 +174,82 @@ Check out the upstream [egui repository](https://github.com/emilk/egui) to learn
 
 | Shortcut | Action |
 |:---|:---|
-| `Ctrl + B` | Toggle Sleek Floating Sidebar |
-| `Ctrl + P` / `Ctrl + F` | Instant Subsequence Fuzzy Search |
-| `Ctrl + E` | Toggle between Inline Editor & Monospace Canvas |
-| `Ctrl + ,` | Open Settings & Customization Modal |
+| `Ctrl + P` | Instant Subsequence Fuzzy Note Search |
+| `Ctrl + Shift + P` / `Ctrl + ,` | Open Settings & Customization Modal |
 | `Ctrl + S` | Force Save Document to SQLite |
-| `F2` | Rename Active Note |
+| `Ctrl + N` | Create New Note |
+| `Ctrl + R` / `F2` | Rename Active Note |
+| `Ctrl + Shift + D` | Delete Active Note |
+| `Ctrl + W` | Close Active Tab |
+| `Ctrl + 1` .. `Ctrl + 9` | Direct Tab Jump (1–9) |
+| `Ctrl + Tab` / `Ctrl + Shift + Tab` | Cycle Tabs Next / Previous |
+| `Ctrl + B` | Toggle Sleek Floating Sidebar (`j`/`k` navigate, `Enter` load, `Tab`/`l` editor) |
+| `Ctrl + E` | Toggle between Inline WYSIWYG & Raw Monospace Canvas |
+| `Ctrl + \` | Toggle Real-Time Split Preview |
+| `Ctrl + .` | Toggle Zen Mode (Pitch-Black Distraction Free) |
+| `Ctrl + [` / `Ctrl + ]` | Dedent / Indent Current Line |
+| `Ctrl + Shift + X` | Toggle Task Checkbox (`- [ ]` ↔ `- [x]`) |
+| `F1` / `Ctrl + H` | Open Help & Built-in Documentation |
 | `F11` | Toggle Fullscreen |
 | `Alt + Left Drag` | Move Borderless Window |
-| `:` | Open Command Dock (Vim command line) |
+| `:` | Open Command Dock (with live autocomplete & fuzzy suggestions) |
 | `Escape` | Dismiss Modals / Autocomplete / Return to Normal Mode |
+
+---
+
+## ⚡ The `:` Command Dock & Autocomplete Engine
+
+MINDFORGE includes an integrated command runner inspired by Vim and modern developer environments. 
+
+Press **`:`** while in Normal Mode (or click the bottom dock) to summon the command bar.
+
+### 🔍 Live Fuzzy Autocomplete & Suggestions
+As you type after `:`, MINDFORGE instantly opens a floating autocomplete window with live fuzzy-matched candidates ranked from your **command history** and the **built-in command catalog**:
+- **Navigate suggestions**: Press `Up` / `Down` or `Ctrl + K` / `Ctrl + J`.
+- **Autocomplete**: Press `Tab` to fill the highlighted command into the prompt.
+- **Execute**: Press `Enter` to run the command immediately.
+- **Dismiss**: Press `Escape` to close the command dock.
+- **History recall**: MINDFORGE stores a persistent bash-like history of your last 200 executed commands.
+
+### 📋 Available `:` Commands
+
+| Category | Command | Description |
+|:---|:---|:---|
+| **Files & Storage** | `:w` / `:write` | Save active note to SQLite |
+| | `:q` / `:quit` | Close active tab or view |
+| | `:wq` / `:x` | Save note and close tab |
+| | `:r [title]` | Rename the active note |
+| | `:d` | Delete the active note |
+| | `:clear` | Clear active buffer |
+| | `:export` | Export note to Markdown (`.md`) file |
+| | `:import` | Import an external text or markdown file |
+| | `:backup` | Create an immediate SQLite point-in-time snapshot |
+| **Themes & Customization** | `:theme [name]` | Live switch between 19 themes (`tokyo_night`, `catppuccin`, `dracula`, `nord`, etc.) |
+| | `:font [name]` | Switch typography (`jetbrains_mono`, `fira_code`, `cascadia_code`, `victor_mono`, `iosevka`) |
+| | `:caret [style]` | Switch animated cursors (`fire`, `water`, `electric`, `matrix`, `ice`, `glitch`, `neon`, etc.) |
+| | `:luna [style]` | Switch LunaLine status bar style (`pill`, `powerline`, `floating`, `minimal`) |
+| | `:sound [profile]` | Configure mechanical switch typing audio (`thocky`, `clacky`, `silent`, `off`) |
+| | `:settings` | Open preferences and customization modal (`Ctrl+Shift+P` / `Ctrl+,`) |
+| **Panes & Views** | `:preview` / `:nopreview` | Toggle or close Markdown live split preview |
+| | `:sidebar` | Toggle floating notes sidebar |
+| | `:outline` / `:ol` | Toggle document headings outline panel |
+| | `:backlinks` / `:bl` | Toggle bi-directional backlinks panel |
+| | `:term` | Toggle embedded terminal pane |
+| | `:doc` | Open built-in reference documentation reader |
+| | `:zen` | Toggle distraction-free Zen mode |
+| | `:ai` | Toggle DeepSeek AI Assistant drawer |
+| | `:tabs` | Toggle document tabs strip |
+| | `:titlebar` | Toggle window titlebar |
+| | `:stats` | View productivity statistics and word counts |
+| | `:scan` / `:scans` | Run web security vulnerability scan or review scan history |
+| **Editor Configuration** | `:set nu` / `:set nonu` | Show or hide line numbers |
+| | `:set showcmd` / `:set noshowcmd` | Toggle floating keystroke visualizer card |
+| | `:mode [vim\|hybrid]` | Switch between Vim modal motions and Hybrid writing |
+| | `:live` / `:raw` | Switch between inline rendered markdown and raw monospace |
+| | `:noh` | Clear search highlight matches |
+| **Cognitive Frameworks** | `:explain` | Open Feynman technique scratchpad for concept deconstruction |
+| | `:decide` / `:resolve` | Open calibrated decision journal and Brier score tracking |
+| | `:add Q \| A \| tag` | Create a spaced repetition retrieval card (SuperMemo SM-2) |
 
 ---
 
