@@ -36,23 +36,66 @@ No Chromium. No Electron. Zero telemetry. Just your thoughts, your code, and you
 
 ---
 
-## 📸 Showcase
-
-### ✍️ Live Inline Markdown Editor & Split Preview
-Live formatting with active-line syntax expansion, multi-color syntax highlighting, custom vector checkboxes, and typography ligatures.
+## 📸 Showcase & Interface Slides
 
 <div align="center">
-  <img src="images/editor.png" alt="Live Inline Editor & Markdown Preview" width="100%" />
+  <p><i>Click on any slide thumbnail below to jump directly, or expand the slides to inspect full high-resolution interface views:</i></p>
+
+  <table>
+    <tr>
+      <td align="center" width="33%">
+        <a href="#-slide-1-fullscreen-zen-workspace--dual-pane-preview">
+          <img src="images/fullscreen.png" alt="Slide 1 Thumbnail" width="260" /><br />
+          <b>Slide 1: Zen Workspace</b>
+        </a>
+      </td>
+      <td align="center" width="33%">
+        <a href="#-slide-2-live-inline-markdown-editor--coding-ligatures">
+          <img src="images/editor.png" alt="Slide 2 Thumbnail" width="260" /><br />
+          <b>Slide 2: Inline Editor</b>
+        </a>
+      </td>
+      <td align="center" width="33%">
+        <a href="#-slide-3-minimalist-welcome-dashboard--knowledge-hub">
+          <img src="images/welcome.png" alt="Slide 3 Thumbnail" width="260" /><br />
+          <b>Slide 3: Welcome Hub</b>
+        </a>
+      </td>
+    </tr>
+  </table>
 </div>
 
 <br />
 
-### 🌌 Minimalist Welcome Dashboard & Zen Workspace
-Instant access to your notes, keyboard navigation, recents, and document search.
+<details open id="-slide-1-fullscreen-zen-workspace--dual-pane-preview">
+  <summary><h3>🌌 Slide 1: Fullscreen Zen Workspace & Dual-Pane Preview</h3></summary>
+  <p align="center">
+    <i>Borderless pitch-black window, floating outline sidebar, and real-time live preview powered by GPU rendering.</i><br/><br/>
+    <a href="images/fullscreen.png">
+      <img src="images/fullscreen.png" alt="Fullscreen Zen Workspace & Dual-Pane Preview" width="100%" />
+    </a>
+  </p>
+</details>
 
-<div align="center">
-  <img src="images/welcome.png" alt="Welcome Dashboard" width="100%" />
-</div>
+<details open id="-slide-2-live-inline-markdown-editor--coding-ligatures">
+  <summary><h3>✍️ Slide 2: Live Inline Markdown Editor & Coding Ligatures</h3></summary>
+  <p align="center">
+    <i>Active-line syntax expansion, pixel-aligned selection, interactive task checkboxes, and coding font ligatures (<code>-&gt;</code>, <code>=&gt;</code>, <code>===&gt;</code>, <code>!=</code>, <code>===</code>).</i><br/><br/>
+    <a href="images/editor.png">
+      <img src="images/editor.png" alt="Live Inline Markdown Editor & Coding Ligatures" width="100%" />
+    </a>
+  </p>
+</details>
+
+<details open id="-slide-3-minimalist-welcome-dashboard--knowledge-hub">
+  <summary><h3>🚀 Slide 3: Minimalist Welcome Dashboard & Knowledge Hub</h3></summary>
+  <p align="center">
+    <i>Instant document launchpad, recent notes, fast keyboard navigation, and zero-latency fuzzy search.</i><br/><br/>
+    <a href="images/welcome.png">
+      <img src="images/welcome.png" alt="Minimalist Welcome Dashboard & Knowledge Hub" width="100%" />
+    </a>
+  </p>
+</details>
 
 ---
 
