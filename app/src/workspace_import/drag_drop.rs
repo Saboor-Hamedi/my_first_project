@@ -69,7 +69,7 @@ pub fn render_hover_indicator(
     painter.rect_stroke(
         inner_rect,
         8.0,
-        Stroke::new(2.0, theme.accent),
+        Stroke::new(2.0_f32, theme.accent),
         egui::StrokeKind::Inside,
     );
 

@@ -236,7 +236,7 @@ pub fn render_tab_bar(
             let tick_mid_y = tab_bar_rect.center().y;
             clip_painter.line_segment(
                 [pos2(tick_x, tick_mid_y - 6.0), pos2(tick_x, tick_mid_y + 6.0)],
-                Stroke::new(1.0, theme.border()),
+                Stroke::new(1.0_f32, theme.border()),
             );
         }
     }

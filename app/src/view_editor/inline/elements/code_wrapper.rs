@@ -181,7 +181,7 @@ pub fn render_code_block_card(
         card_rect,
         5.0,
         theme.surface(),
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
         StrokeKind::Inside,
     );
 
@@ -213,7 +213,7 @@ pub fn render_code_block_card(
         );
         painter.line_segment(
             [pos2(card_left, top_y + header_h), pos2(card_right, top_y + header_h)],
-            Stroke::new(0.8, divider_color),
+            Stroke::new(0.8_f32, divider_color),
         );
     }
 

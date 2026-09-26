@@ -353,11 +353,11 @@ pub const BUILTIN_COMMANDS: &[BuiltinCommand] = &[
         action: PaletteAction::CloseTab,
     },
     BuiltinCommand {
-        title: "Command Palette & Settings",
-        snippet: "Search settings, themes, preferences, and shortcuts",
-        badge: "Ctrl+Shift+P",
-        icon: "⚡",
-        action: PaletteAction::OpenSetting(crate::settings::SettingTab::Shortcuts),
+        title: "Settings & Preferences Modal",
+        snippet: "Open full preferences dialog (theme, sounds, keys, AI, carets)",
+        badge: "Ctrl+,",
+        icon: "⚙",
+        action: PaletteAction::OpenSetting(crate::settings::SettingTab::Theme),
     },
     BuiltinCommand {
         title: "Import Obsidian Vault or Folder",

@@ -57,7 +57,7 @@ pub fn render_right_sidebar(
     painter.rect_filled(rect, 0.0, bg_color);
     painter.line_segment(
         [rect.left_top(), rect.left_bottom()],
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
     );
 
     // 2. Sleek Dual-Tab Header Bar (Outline & Backlinks)
@@ -66,7 +66,7 @@ pub fn render_right_sidebar(
 
     painter.line_segment(
         [pos2(tab_bar_rect.min.x, tab_bar_rect.max.y), pos2(tab_bar_rect.max.x, tab_bar_rect.max.y)],
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
     );
 
     let tab_w = tab_bar_rect.width() * 0.5;
@@ -98,7 +98,7 @@ pub fn render_right_sidebar(
         // Active indicator line on bottom
         painter.line_segment(
             [pos2(outline_rect.min.x + 12.0, outline_rect.max.y - 1.5), pos2(outline_rect.max.x - 12.0, outline_rect.max.y - 1.5)],
-            Stroke::new(2.0, theme.accent),
+            Stroke::new(2.0_f32, theme.accent),
         );
     }
 
@@ -135,7 +135,7 @@ pub fn render_right_sidebar(
     if is_backlinks_active {
         painter.line_segment(
             [pos2(backlinks_rect.min.x + 12.0, backlinks_rect.max.y - 1.5), pos2(backlinks_rect.max.x - 12.0, backlinks_rect.max.y - 1.5)],
-            Stroke::new(2.0, theme.accent),
+            Stroke::new(2.0_f32, theme.accent),
         );
     }
 

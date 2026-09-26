@@ -257,7 +257,7 @@ pub fn render_editor_body(
                         let underline_y = line_y + lh - 2.0;
                         editor_painter.line_segment(
                             [pos2(match_x, underline_y), pos2(match_x + match_w, underline_y)],
-                            Stroke::new(if is_current { 1.5 } else { 1.0 }, match_color),
+                            Stroke::new(if is_current { 1.5_f32 } else { 1.0_f32 }, match_color),
                         );
                     }
                 }

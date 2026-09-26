@@ -114,9 +114,10 @@ impl BlurEffect {
 }
 
 /// Applies DWM blur / acrylic backdrop to the application window on Windows 11/10.
-pub fn apply_window_blur(effect: BlurEffect) {
+pub fn apply_window_blur(_effect: BlurEffect) {
     #[cfg(target_os = "windows")]
     unsafe {
+        let effect = _effect;
         use win32::*;
 
         // Find window handle for our process first

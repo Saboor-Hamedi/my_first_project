@@ -173,9 +173,9 @@ Check out the upstream [egui repository](https://github.com/emilk/egui) to learn
 ## ⌨️ Essential Keyboard Shortcuts
 
 | Shortcut | Action |
-|:---|:---|
-| `Ctrl + P` | Instant Subsequence Fuzzy Note Search |
-| `Ctrl + Shift + P` / `Ctrl + ,` | Open Settings & Customization Modal |
+| `Ctrl + P` | Instant Subsequence Fuzzy Note & File Search |
+| `Ctrl + Shift + P` | Command Palette (Fuzzy Search Commands & Settings via `>`) |
+| `Ctrl + ,` | Open Settings & Preferences Modal |
 | `Ctrl + S` | Force Save Document to SQLite |
 | `Ctrl + N` | Create New Note |
 | `Ctrl + R` / `F2` | Rename Active Note |
@@ -183,13 +183,15 @@ Check out the upstream [egui repository](https://github.com/emilk/egui) to learn
 | `Ctrl + W` | Close Active Tab |
 | `Ctrl + 1` .. `Ctrl + 9` | Direct Tab Jump (1–9) |
 | `Ctrl + Tab` / `Ctrl + Shift + Tab` | Cycle Tabs Next / Previous |
-| `Ctrl + B` | Toggle Sleek Floating Sidebar (`j`/`k` navigate, `Enter` load, `Tab`/`l` editor) |
+| `Ctrl + B` | Toggle Sleek Floating Sidebar (Open / Close in 1 Keystroke) |
+| `Ctrl + H` | Move Focus Left (from Editor to Sidebar) |
+| `Ctrl + L` / `l` | Move Focus Right (from Sidebar to Editor) |
 | `Ctrl + E` | Toggle between Inline WYSIWYG & Raw Monospace Canvas |
 | `Ctrl + \` | Toggle Real-Time Split Preview |
 | `Ctrl + .` | Toggle Zen Mode (Pitch-Black Distraction Free) |
 | `Ctrl + [` / `Ctrl + ]` | Dedent / Indent Current Line |
 | `Ctrl + Shift + X` | Toggle Task Checkbox (`- [ ]` ↔ `- [x]`) |
-| `F1` / `Ctrl + H` | Open Help & Built-in Documentation |
+| `F1` | Open Help & Built-in Documentation |
 | `F11` | Toggle Fullscreen |
 | `Alt + Left Drag` | Move Borderless Window |
 | `:` | Open Command Dock (with live autocomplete & fuzzy suggestions) |
@@ -229,7 +231,7 @@ As you type after `:`, MINDFORGE instantly opens a floating autocomplete window 
 | | `:caret [style]` | Switch animated cursors (`fire`, `water`, `electric`, `matrix`, `ice`, `glitch`, `neon`, etc.) |
 | | `:luna [style]` | Switch LunaLine status bar style (`pill`, `powerline`, `floating`, `minimal`) |
 | | `:sound [profile]` | Configure mechanical switch typing audio (`thocky`, `clacky`, `silent`, `off`) |
-| | `:settings` | Open preferences and customization modal (`Ctrl+Shift+P` / `Ctrl+,`) |
+| | `:settings` | Open preferences and customization modal (`Ctrl+,`) |
 | **Panes & Views** | `:preview` / `:nopreview` | Toggle or close Markdown live split preview |
 | | `:sidebar` | Toggle floating notes sidebar |
 | | `:outline` / `:ol` | Toggle document headings outline panel |

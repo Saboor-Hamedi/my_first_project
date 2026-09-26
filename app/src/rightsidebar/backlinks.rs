@@ -23,7 +23,7 @@ pub fn render_backlinks_panel(
         // Vector chain link icon
         let icon_rect = Rect::from_center_size(pos2(center.x, center.y - 32.0), vec2(28.0, 28.0));
         let stroke = Stroke::new(
-            1.8,
+            1.8_f32,
             eframe::egui::Color32::from_rgba_unmultiplied(theme.accent.r(), theme.accent.g(), theme.accent.b(), 130),
         );
         let ic = icon_rect.center();

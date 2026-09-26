@@ -102,7 +102,7 @@ pub fn render_ai_pane(
     let divider_color = Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 40);
     painter.line_segment(
         [pos2(rect.min.x, action_bar_rect.max.y), pos2(rect.max.x, action_bar_rect.max.y)],
-        Stroke::new(1.0, divider_color),
+        Stroke::new(1.0_f32, divider_color),
     );
 
     // ── Calculate Dynamic Scrollable Textarea Height ─────────────────────────
@@ -417,7 +417,7 @@ pub fn render_ai_pane(
     let input_top_y = rect.max.y - input_area_h;
     painter.line_segment(
         [pos2(rect.min.x, input_top_y), pos2(rect.max.x, input_top_y)],
-        Stroke::new(1.0, divider_color),
+        Stroke::new(1.0_f32, divider_color),
     );
 
     // ── Bottom Input Row (Aligned with balanced margins) ──────────────────────
@@ -447,9 +447,9 @@ pub fn render_ai_pane(
         theme.surface()
     };
     let border_stroke = if is_focused {
-        Stroke::new(1.0, theme.accent)
+        Stroke::new(1.0_f32, theme.accent)
     } else {
-        Stroke::new(1.0, theme.border())
+        Stroke::new(1.0_f32, theme.border())
     };
 
     painter.rect(
@@ -548,7 +548,7 @@ pub fn render_ai_pane(
     }
 
     let (send_bg, send_border, arrow_color) = if state.is_thinking {
-        (theme.bg, Stroke::new(1.0, theme.border()), theme.muted)
+        (theme.bg, Stroke::new(1.0_f32, theme.border()), theme.muted)
     } else if has_content {
         let bg = if is_send_hover {
             theme.accent.lerp_to_gamma(Color32::WHITE, 0.15)
@@ -567,7 +567,7 @@ pub fn render_ai_pane(
         } else {
             input_bg
         };
-        let stroke = Stroke::new(1.0, if is_send_hover { theme.accent } else { theme.border() });
+        let stroke = Stroke::new(1.0_f32, if is_send_hover { theme.accent } else { theme.border() });
         let arrow = if is_send_hover { theme.accent } else { theme.muted };
         (bg, stroke, arrow)
     };
@@ -587,7 +587,7 @@ pub fn render_ai_pane(
         painter.circle_filled(c, pulse_r, theme.accent);
     } else {
         // Crisp upward vector arrow
-        let arrow_stroke = Stroke::new(2.0, arrow_color);
+        let arrow_stroke = Stroke::new(2.0_f32, arrow_color);
         painter.line_segment([pos2(c.x, c.y + 5.0), pos2(c.x, c.y - 5.0)], arrow_stroke);
         painter.line_segment([pos2(c.x - 4.5, c.y - 0.5), pos2(c.x, c.y - 5.0)], arrow_stroke);
         painter.line_segment([pos2(c.x + 4.5, c.y - 0.5), pos2(c.x, c.y - 5.0)], arrow_stroke);
@@ -698,8 +698,8 @@ fn render_chat_markdown(ui: &mut egui::Ui, text: &str, theme: &Theme, block_seed
                             let p1 = pos2(cb_rect.min.x + 3.0, cb_rect.min.y + 7.0);
                             let p2 = pos2(cb_rect.min.x + 5.5, cb_rect.min.y + 9.5);
                             let p3 = pos2(cb_rect.min.x + 10.5, cb_rect.min.y + 4.0);
-                            ui.painter().line_segment([p1, p2], Stroke::new(1.6, theme.bg));
-                            ui.painter().line_segment([p2, p3], Stroke::new(1.6, theme.bg));
+                            ui.painter().line_segment([p1, p2], Stroke::new(1.6_f32, theme.bg));
+                            ui.painter().line_segment([p2, p3], Stroke::new(1.6_f32, theme.bg));
                         } else {
                             ui.painter().rect_filled(
                                 cb_rect,
@@ -709,7 +709,7 @@ fn render_chat_markdown(ui: &mut egui::Ui, text: &str, theme: &Theme, block_seed
                             ui.painter().rect_stroke(
                                 cb_rect,
                                 3.0,
-                                Stroke::new(1.4, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 140)),
+                                Stroke::new(1.4_f32, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 140)),
                                 egui::StrokeKind::Inside,
                             );
                         }
@@ -748,7 +748,7 @@ fn render_chat_markdown(ui: &mut egui::Ui, text: &str, theme: &Theme, block_seed
                     code_rect,
                     5.0,
                     theme.surface(),
-                    Stroke::new(1.0, theme.border()),
+                    Stroke::new(1.0_f32, theme.border()),
                     egui::StrokeKind::Inside,
                 );
 
@@ -841,7 +841,7 @@ fn render_chat_markdown(ui: &mut egui::Ui, text: &str, theme: &Theme, block_seed
                     btn_rect,
                     3.0,
                     btn_bg,
-                    Stroke::new(1.0, if is_copied { Color32::from_rgb(60, 200, 110) } else if is_btn_hovered { theme.accent } else { theme.border() }),
+                    Stroke::new(1.0_f32, if is_copied { Color32::from_rgb(60, 200, 110) } else if is_btn_hovered { theme.accent } else { theme.border() }),
                     egui::StrokeKind::Inside,
                 );
                 ui.painter().text(
@@ -1015,7 +1015,7 @@ fn render_chat_markdown(ui: &mut egui::Ui, text: &str, theme: &Theme, block_seed
                 ui.painter().rect_stroke(
                     content_clip,
                     4.0,
-                    Stroke::new(1.0, theme.border()),
+                    Stroke::new(1.0_f32, theme.border()),
                     egui::StrokeKind::Inside,
                 );
 
@@ -1055,7 +1055,7 @@ fn render_chat_markdown(ui: &mut egui::Ui, text: &str, theme: &Theme, block_seed
                     if r_idx + 1 < rows.len() {
                         t_painter.line_segment(
                             [r_rect.left_bottom(), r_rect.right_bottom()],
-                            Stroke::new(0.8, Color32::from_rgba_unmultiplied(theme.border().r(), theme.border().g(), theme.border().b(), 80)),
+                            Stroke::new(0.8_f32, Color32::from_rgba_unmultiplied(theme.border().r(), theme.border().g(), theme.border().b(), 80)),
                         );
                     }
                     for (c_idx, galley) in row_galleys.into_iter().enumerate() {
@@ -1091,7 +1091,7 @@ fn render_thumbs_up_icon(painter: &egui::Painter, rect: Rect, active: bool, hove
     } else {
         Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 160)
     };
-    let stroke = Stroke::new(1.3, color);
+    let stroke = Stroke::new(1.3_f32, color);
 
     let c = rect.center();
     // Cuff/wrist box on left
@@ -1131,7 +1131,7 @@ fn render_thumbs_down_icon(painter: &egui::Painter, rect: Rect, active: bool, ho
     } else {
         Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 160)
     };
-    let stroke = Stroke::new(1.3, color);
+    let stroke = Stroke::new(1.3_f32, color);
 
     let c = rect.center();
     // Cuff/wrist box on left

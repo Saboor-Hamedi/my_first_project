@@ -23,7 +23,7 @@ pub fn render_horizontal_rule(
         let mid_y = (line_y + line_h * 0.5).round();
         painter.line_segment(
             [pos2(text_left - 4.0, mid_y), pos2(content_right - 8.0, mid_y)],
-            Stroke::new(1.0, theme.border()),
+            Stroke::new(1.0_f32, theme.border()),
         );
     }
 }

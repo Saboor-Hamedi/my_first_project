@@ -546,7 +546,7 @@ pub fn render_wikilink_autocomplete(
         menu_rect,
         6.0,
         theme.surface(),
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
         egui::StrokeKind::Inside,
     );
 

@@ -364,7 +364,7 @@ pub fn render_inline_editor(
                     let underline_y = line_y + galley_y_pad + r1.min.y + r1.height().max(16.0) - 2.0;
                     editor_painter.line_segment(
                         [pos2(text_left + r1.min.x, underline_y), pos2(text_left + r2.max.x.max(r1.min.x + 6.0), underline_y)],
-                        Stroke::new(if is_active_match { 1.5 } else { 1.0 }, match_color),
+                        Stroke::new(if is_active_match { 1.5_f32 } else { 1.0_f32 }, match_color),
                     );
                 }
             }

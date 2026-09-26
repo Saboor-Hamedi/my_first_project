@@ -55,7 +55,7 @@ pub fn render_toggle(
         rect,
         r,
         track_bg,
-        Stroke::new(1.0, stroke_color),
+        Stroke::new(1.0_f32, stroke_color),
         egui::StrokeKind::Inside,
     );
 

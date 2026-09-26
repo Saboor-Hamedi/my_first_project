@@ -138,7 +138,7 @@ pub fn render_table_block_decorations(
     painter.rect_stroke(
         table_rect,
         4.0,
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
         StrokeKind::Inside,
     );
 
@@ -187,7 +187,7 @@ pub fn render_table_row_decorations(
         );
         painter.line_segment(
             [row_rect.left_bottom(), row_rect.right_bottom()],
-            Stroke::new(0.8, divider_color),
+            Stroke::new(0.8_f32, divider_color),
         );
     }
 }

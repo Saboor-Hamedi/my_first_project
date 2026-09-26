@@ -198,7 +198,7 @@ pub fn render_window_controls(
             pos2(min_c.x - 5.5, min_c.y + 1.0),
             pos2(min_c.x + 5.5, min_c.y + 1.0),
         ],
-        Stroke::new(1.5, min_stroke_color),
+        Stroke::new(1.5_f32, min_stroke_color),
     );
 
     // 4. Maximize / Restore Button (□)
@@ -222,7 +222,7 @@ pub fn render_window_controls(
         painter.rect_stroke(
             Rect::from_center_size(pos2(max_c.x + 2.0, max_c.y - 2.0), vec2(s * 2.0 - 1.0, s * 2.0 - 1.0)),
             1.0,
-            Stroke::new(1.2, max_stroke_color),
+            Stroke::new(1.2_f32, max_stroke_color),
             egui::StrokeKind::Inside,
         );
         // Foreground window mask + stroke — use translucent title_bg so the
@@ -235,7 +235,7 @@ pub fn render_window_controls(
         painter.rect_stroke(
             Rect::from_center_size(pos2(max_c.x - 1.8, max_c.y + 1.8), vec2(s * 2.0, s * 2.0)),
             1.0,
-            Stroke::new(1.2, max_stroke_color),
+            Stroke::new(1.2_f32, max_stroke_color),
             egui::StrokeKind::Inside,
         );
     } else {
@@ -243,7 +243,7 @@ pub fn render_window_controls(
         painter.rect_stroke(
             Rect::from_center_size(max_c, vec2(s * 2.0, s * 2.0)),
             1.0,
-            Stroke::new(1.3, max_stroke_color),
+            Stroke::new(1.3_f32, max_stroke_color),
             egui::StrokeKind::Inside,
         );
     }
@@ -271,11 +271,11 @@ pub fn render_window_controls(
     let d = 4.4;
     painter.line_segment(
         [pos2(close_c.x - d, close_c.y - d), pos2(close_c.x + d, close_c.y + d)],
-        Stroke::new(1.5, close_stroke_color),
+        Stroke::new(1.5_f32, close_stroke_color),
     );
     painter.line_segment(
         [pos2(close_c.x + d, close_c.y - d), pos2(close_c.x - d, close_c.y + d)],
-        Stroke::new(1.5, close_stroke_color),
+        Stroke::new(1.5_f32, close_stroke_color),
     );
 
     (action, accent_rect)

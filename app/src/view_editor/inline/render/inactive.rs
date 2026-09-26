@@ -250,7 +250,7 @@ pub fn render_inactive_line(
             }
             InlineSpanKind::Strike => {
                 let mut fmt = TextFormat::simple(default_font.clone(), theme.muted);
-                fmt.strikethrough = Stroke::new(1.0, theme.muted);
+                fmt.strikethrough = Stroke::new(1.0_f32, theme.muted);
                 if abs_end >= abs_start + 2 * m {
                     append_run_and_map(job, charmap, chars, abs_start + m..abs_end - m, fmt);
                 }
@@ -258,7 +258,7 @@ pub fn render_inactive_line(
             InlineSpanKind::Link { .. } => {
                 // Render only [text], hide (url)
                 let mut fmt = TextFormat::simple(default_font.clone(), theme.accent);
-                fmt.underline = Stroke::new(1.0, theme.accent);
+                fmt.underline = Stroke::new(1.0_f32, theme.accent);
                 if let Some(close_bracket) = chars[abs_start..abs_end].iter().position(|&c| c == ']') {
                     append_run_and_map(job, charmap, chars, abs_start + 1..abs_start + close_bracket, fmt);
                 } else {
@@ -268,7 +268,7 @@ pub fn render_inactive_line(
             InlineSpanKind::WikiLink { .. } => {
                 let fmt_marker = TextFormat::simple(default_font.clone(), theme.muted);
                 let mut fmt_body = TextFormat::simple(default_font.clone(), theme.accent);
-                fmt_body.underline = Stroke::new(1.0, theme.accent);
+                fmt_body.underline = Stroke::new(1.0_f32, theme.accent);
 
                 append_run_and_map(job, charmap, chars, abs_start..(abs_start + 2).min(abs_end), fmt_marker.clone());
                 if abs_end >= abs_start + 4 {
@@ -287,7 +287,7 @@ pub fn render_inactive_line(
             }
             InlineSpanKind::Autolink { ref url } => {
                 let mut fmt = TextFormat::simple(default_font.clone(), theme.accent);
-                fmt.underline = Stroke::new(1.0, theme.accent);
+                fmt.underline = Stroke::new(1.0_f32, theme.accent);
                 append_and_map(job, charmap, url, abs_start + 1, fmt);
             }
             InlineSpanKind::FootnoteRef { ref id } => {

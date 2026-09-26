@@ -137,6 +137,7 @@ impl SoundEngine {
 
 // --- MULTI-VOICE HARDWARE AUDIO MIXER ---
 
+#[cfg(windows)]
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct WaveFormatEx {
@@ -149,6 +150,7 @@ struct WaveFormatEx {
     cb_size: u16,
 }
 
+#[cfg(windows)]
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct WaveHdr {
@@ -162,6 +164,7 @@ struct WaveHdr {
     reserved: usize,
 }
 
+#[cfg(windows)]
 impl Default for WaveHdr {
     fn default() -> Self {
         Self {
@@ -195,6 +198,7 @@ extern "system" {
     fn waveOutClose(hwo: usize) -> u32;
 }
 
+#[cfg(windows)]
 const NUM_CHANNELS: usize = 4;
 
 struct MultiVoicePlayer {
@@ -204,13 +208,15 @@ struct MultiVoicePlayer {
     headers: [WaveHdr; NUM_CHANNELS],
     #[cfg(windows)]
     prepared: [bool; NUM_CHANNELS],
+    #[allow(dead_code)]
     channel_idx: usize,
 }
 
 impl MultiVoicePlayer {
-    pub fn new(sample_rate: u32) -> Self {
+    pub fn new(_sample_rate: u32) -> Self {
         #[cfg(windows)]
         {
+            let sample_rate = _sample_rate;
             let wfx = WaveFormatEx {
                 w_format_tag: 1, // WAVE_FORMAT_PCM
                 n_channels: 1,

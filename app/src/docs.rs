@@ -393,7 +393,7 @@ pub fn render_doc_sidebar(
     let div_y = origin.y + 44.0;
     painter.line_segment(
         [pos2(rect.min.x + 16.0, div_y), pos2(rect.max.x - 16.0, div_y)],
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
     );
 
     // Navigation items (Body matching sidebar/body.rs)
@@ -478,7 +478,7 @@ pub fn render_doc_sidebar(
         Color32::TRANSPARENT
     };
     let settings_stroke = if settings_hovered {
-        Stroke::new(1.0, theme.border())
+        Stroke::new(1.0_f32, theme.border())
     } else {
         Stroke::NONE
     };
@@ -517,7 +517,7 @@ pub fn render_doc_sidebar(
         Color32::TRANSPARENT
     };
     let back_stroke = if back_hovered {
-        Stroke::new(1.0, theme.border())
+        Stroke::new(1.0_f32, theme.border())
     } else {
         Stroke::NONE
     };

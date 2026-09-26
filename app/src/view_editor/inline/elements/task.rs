@@ -23,8 +23,8 @@ pub fn render_task_checkbox(
         let p1 = pos2(box_rect.min.x + 3.2, box_rect.min.y + 7.2);
         let p2 = pos2(box_rect.min.x + 6.2, box_rect.min.y + 10.8);
         let p3 = pos2(box_rect.min.x + 11.5, box_rect.min.y + 3.8);
-        painter.line_segment([p1, p2], Stroke::new(2.0, check_color));
-        painter.line_segment([p2, p3], Stroke::new(2.0, check_color));
+        painter.line_segment([p1, p2], Stroke::new(2.0_f32, check_color));
+        painter.line_segment([p2, p3], Stroke::new(2.0_f32, check_color));
     } else {
         // Empty outlined box with smooth hover glow
         let border_color = if is_hovered { theme.accent } else { theme.border() };
@@ -42,7 +42,7 @@ pub fn render_task_checkbox(
             box_rect,
             radius,
             fill_color,
-            Stroke::new(1.3, border_color),
+            Stroke::new(1.3_f32, border_color),
             eframe::egui::StrokeKind::Inside,
         );
     }

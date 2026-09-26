@@ -67,7 +67,7 @@ pub fn render_markdown_view_inner(
         painter.rect_filled(header_rect, 0.0, header_bg);
         painter.line_segment(
             [pos2(header_rect.min.x, header_rect.max.y), pos2(header_rect.max.x, header_rect.max.y)],
-            Stroke::new(1.0, theme.border()),
+            Stroke::new(1.0_f32, theme.border()),
         );
 
         // Header title
@@ -303,7 +303,7 @@ pub fn render_markdown_view_inner(
                             let strike_y = current_y + text_h * 0.52;
                             content_painter.line_segment(
                                 [pos2(text_start.x, strike_y), pos2(text_start.x + available_w - 28.0, strike_y)],
-                                Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 120)),
+                                Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 120)),
                             );
                         } else {
                             content_painter.galley(pos2(item_start_x + 24.0, current_y), galley, theme.text);
@@ -370,7 +370,7 @@ pub fn render_markdown_view_inner(
                 if current_y >= rect.min.y && current_y <= rect.max.y {
                     content_painter.line_segment(
                         [pos2(start_x, current_y), pos2(start_x + max_text_w, current_y)],
-                        Stroke::new(1.0, theme.border()),
+                        Stroke::new(1.0_f32, theme.border()),
                     );
                 }
                 current_y += 10.0;

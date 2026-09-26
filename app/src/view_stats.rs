@@ -173,7 +173,7 @@ pub fn render_stats(
                     chart_container,
                     5.0,
                     theme.surface(),
-                    Stroke::new(1.0, theme.border()),
+                    Stroke::new(1.0_f32, theme.border()),
                     egui::StrokeKind::Inside,
                 );
 
@@ -297,7 +297,7 @@ pub fn render_stats(
                             } else {
                                 theme.surface()
                             },
-                            Stroke::new(1.0, if is_today { theme.accent } else { theme.border() }),
+                            Stroke::new(1.0_f32, if is_today { theme.accent } else { theme.border() }),
                             egui::StrokeKind::Inside,
                         );
 
@@ -411,7 +411,7 @@ fn draw_metric_card(
         rect,
         5.0,
         theme.surface(),
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
         egui::StrokeKind::Inside,
     );
 

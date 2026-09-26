@@ -448,7 +448,7 @@ pub fn build_inline_job(
                 let strike_raw: String = chars[i + 2..strike_end].iter().collect();
                 let strike_text = substitute_ligatures(&strike_raw);
                 let mut fmt = TextFormat::simple(crate::font_manager::editor_font_id(base_font_size), theme.muted);
-                fmt.strikethrough = Stroke::new(1.0, theme.muted);
+                fmt.strikethrough = Stroke::new(1.0_f32, theme.muted);
                 job.append(&strike_text, 0.0, fmt);
                 i = strike_end + 2;
                 continue;
@@ -480,7 +480,7 @@ pub fn build_inline_job(
                         let link_raw: String = chars[i + 1..bracket_end].iter().collect();
                         let link_text = substitute_ligatures(&link_raw);
                         let mut fmt = TextFormat::simple(crate::font_manager::editor_font_id(base_font_size), theme.accent);
-                        fmt.underline = Stroke::new(1.0, theme.accent);
+                        fmt.underline = Stroke::new(1.0_f32, theme.accent);
                         job.append(&link_text, 0.0, fmt);
                         i = paren_end + 1;
                         continue;

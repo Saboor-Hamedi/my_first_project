@@ -36,7 +36,7 @@ pub fn render_sidebar_footer(
         Color32::TRANSPARENT
     };
     let stroke = if is_hovered {
-        Stroke::new(1.0, theme.border())
+        Stroke::new(1.0_f32, theme.border())
     } else {
         Stroke::NONE
     };

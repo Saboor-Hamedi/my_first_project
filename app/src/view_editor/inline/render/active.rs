@@ -218,7 +218,7 @@ pub fn render_active_line(
                 let m = span.marker_len;
                 let fmt_marker = TextFormat::simple(syntax_font.clone(), syntax_color);
                 let mut fmt_body = TextFormat::simple(default_font.clone(), theme.muted);
-                fmt_body.strikethrough = Stroke::new(1.0, theme.muted);
+                fmt_body.strikethrough = Stroke::new(1.0_f32, theme.muted);
 
                 append_run_and_map(job, charmap, chars, abs_start..abs_start + m, fmt_marker.clone());
                 if abs_end >= abs_start + 2 * m {
@@ -228,13 +228,13 @@ pub fn render_active_line(
             }
             InlineSpanKind::Link { .. } | InlineSpanKind::Image { .. } => {
                 let mut fmt_text = TextFormat::simple(default_font.clone(), theme.accent);
-                fmt_text.underline = Stroke::new(1.0, theme.accent);
+                fmt_text.underline = Stroke::new(1.0_f32, theme.accent);
                 append_run_and_map(job, charmap, chars, abs_start..abs_end, fmt_text);
             }
             InlineSpanKind::WikiLink { .. } => {
                 let fmt_marker = TextFormat::simple(default_font.clone(), theme.muted);
                 let mut fmt_body = TextFormat::simple(default_font.clone(), theme.accent);
-                fmt_body.underline = Stroke::new(1.0, theme.accent);
+                fmt_body.underline = Stroke::new(1.0_f32, theme.accent);
 
                 append_run_and_map(job, charmap, chars, abs_start..(abs_start + 2).min(abs_end), fmt_marker.clone());
                 if abs_end >= abs_start + 4 {
@@ -246,7 +246,7 @@ pub fn render_active_line(
             }
             InlineSpanKind::Autolink { .. } => {
                 let mut fmt = TextFormat::simple(default_font.clone(), theme.accent);
-                fmt.underline = Stroke::new(1.0, theme.accent);
+                fmt.underline = Stroke::new(1.0_f32, theme.accent);
                 append_run_and_map(job, charmap, chars, abs_start..abs_end, fmt);
             }
             InlineSpanKind::FootnoteRef { .. } => {

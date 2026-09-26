@@ -146,7 +146,10 @@ pub fn render_shortcuts_tab(
         ]),
         ("NAVIGATION", &[
             ("Ctrl + P",      "Fuzzy search across notes"),
-            ("Ctrl + B",      "Toggle notes sidebar"),
+            ("Ctrl+Shift+P",  "Command Palette (commands & settings via >)"),
+            ("Ctrl + B",      "Toggle notes sidebar (open / close)"),
+            ("Ctrl + H",      "Focus notes sidebar (left)"),
+            ("Ctrl + L / l",  "Focus editor (right)"),
             ("Ctrl + I",      "Toggle backlinks sidebar"),
             ("Ctrl+Shift+O",  "Toggle outline (H1-H6) sidebar"),
             ("Ctrl + .",      "Toggle Zen mode (distraction-free editor)"),

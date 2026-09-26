@@ -59,7 +59,7 @@ pub fn render_scan_history(
     // Divider
     p.line_segment(
         [pos2(start_x, current_y), pos2(start_x + max_w, current_y)],
-        Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 40)),
+        Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 40)),
     );
     current_y += 16.0;
 
@@ -96,7 +96,7 @@ pub fn render_scan_history(
             p.rect_stroke(
                 item_rect,
                 4.0,
-                Stroke::new(1.0, theme.accent),
+                Stroke::new(1.0_f32, theme.accent),
                 egui::StrokeKind::Inside,
             );
         } else if is_hovered {

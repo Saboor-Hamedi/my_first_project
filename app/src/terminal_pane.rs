@@ -610,7 +610,7 @@ impl TerminalPane {
             for dy in [-5.0, 0.0, 5.0] {
                 painter.line_segment(
                     [pos2(knob_mid.x - 1.0, knob_mid.y + dy), pos2(knob_mid.x + 1.0, knob_mid.y + dy)],
-                    Stroke::new(1.0, theme.bg),
+                    Stroke::new(1.0_f32, theme.bg),
                 );
             }
 
@@ -631,7 +631,7 @@ impl TerminalPane {
         painter.rect_filled(sessions_header_rect, 0.0, sessions_bg);
         painter.line_segment(
             [pos2(sessions_header_rect.min.x, sessions_header_rect.max.y), pos2(sessions_header_rect.max.x, sessions_header_rect.max.y)],
-            Stroke::new(1.0, theme.border()),
+            Stroke::new(1.0_f32, theme.border()),
         );
 
         // Sessions Header Label

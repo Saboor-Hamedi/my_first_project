@@ -110,7 +110,7 @@ pub fn render_lunaline(params: LunaLineRenderParams) -> bool {
                 actual_bar_rect,
                 8.0,
                 theme.surface(),
-                Stroke::new(1.0, theme.border()),
+                Stroke::new(1.0_f32, theme.border()),
                 egui::StrokeKind::Inside,
             );
         }
@@ -119,7 +119,7 @@ pub fn render_lunaline(params: LunaLineRenderParams) -> bool {
                 actual_bar_rect,
                 5.0,
                 base_dock_bg,
-                Stroke::new(0.5, theme.border().gamma_multiply(0.4)),
+                Stroke::new(0.5_f32, theme.border().gamma_multiply(0.4)),
                 egui::StrokeKind::Inside,
             );
         }
@@ -167,7 +167,7 @@ pub fn render_lunaline(params: LunaLineRenderParams) -> bool {
                 pos2(actual_bar_rect.max.x - d, actual_bar_rect.max.y - 4.0),
                 pos2(actual_bar_rect.max.x - 4.0, actual_bar_rect.max.y - d),
             ],
-            Stroke::new(1.3, knob_color),
+            Stroke::new(1.3_f32, knob_color),
         );
     }
 
@@ -205,7 +205,7 @@ pub fn render_lunaline(params: LunaLineRenderParams) -> bool {
                 ai_btn_rect,
                 11.0,
                 ai_bg,
-                if params.is_ai_open || is_ai_hovered { Stroke::new(1.0, theme.accent.gamma_multiply(0.7)) } else { Stroke::NONE },
+                if params.is_ai_open || is_ai_hovered { Stroke::new(1.0_f32, theme.accent.gamma_multiply(0.7)) } else { Stroke::NONE },
                 egui::StrokeKind::Inside,
             );
         }
@@ -228,7 +228,7 @@ pub fn render_lunaline(params: LunaLineRenderParams) -> bool {
         let enc_rect = Rect::from_min_size(pos2(right_x, bar_center_y - enc_h * 0.5), vec2(enc_w, enc_h));
 
         if matches!(config.style, LunaStyle::Pill | LunaStyle::Floating) {
-            painter.rect(enc_rect, 4.0, theme.surface(), Stroke::new(0.5, theme.border()), egui::StrokeKind::Inside);
+            painter.rect(enc_rect, 4.0, theme.surface(), Stroke::new(0.5_f32, theme.border()), egui::StrokeKind::Inside);
         }
         painter.text(enc_rect.center(), Align2::CENTER_CENTER, enc_str, font_info.clone(), theme.muted);
         right_x -= 8.0;
@@ -250,7 +250,7 @@ pub fn render_lunaline(params: LunaLineRenderParams) -> bool {
         let prog_rect = Rect::from_min_size(pos2(right_x, bar_center_y - prog_h * 0.5), vec2(prog_w, prog_h));
 
         if matches!(config.style, LunaStyle::Pill | LunaStyle::Floating) {
-            painter.rect(prog_rect, 4.0, theme.surface(), Stroke::new(0.5, theme.border()), egui::StrokeKind::Inside);
+            painter.rect(prog_rect, 4.0, theme.surface(), Stroke::new(0.5_f32, theme.border()), egui::StrokeKind::Inside);
         }
         painter.text(prog_rect.center(), Align2::CENTER_CENTER, &progress_str, font_info.clone(), theme.muted);
         right_x -= 8.0;
@@ -265,7 +265,7 @@ pub fn render_lunaline(params: LunaLineRenderParams) -> bool {
         let pos_rect = Rect::from_min_size(pos2(right_x, bar_center_y - pos_h * 0.5), vec2(pos_w, pos_h));
 
         if matches!(config.style, LunaStyle::Pill | LunaStyle::Floating) {
-            painter.rect(pos_rect, 4.0, theme.surface(), Stroke::new(0.5, theme.border()), egui::StrokeKind::Inside);
+            painter.rect(pos_rect, 4.0, theme.surface(), Stroke::new(0.5_f32, theme.border()), egui::StrokeKind::Inside);
         }
         painter.text(pos_rect.center(), Align2::CENTER_CENTER, &pos_str, font_info.clone(), theme.text);
         right_x -= 8.0;
@@ -291,7 +291,7 @@ pub fn render_lunaline(params: LunaLineRenderParams) -> bool {
         let metrics_rect = Rect::from_min_size(pos2(right_x, bar_center_y - metrics_h * 0.5), vec2(metrics_w, metrics_h));
 
         if matches!(config.style, LunaStyle::Pill | LunaStyle::Floating) {
-            painter.rect(metrics_rect, 4.0, theme.surface(), Stroke::new(0.5, theme.border()), egui::StrokeKind::Inside);
+            painter.rect(metrics_rect, 4.0, theme.surface(), Stroke::new(0.5_f32, theme.border()), egui::StrokeKind::Inside);
         }
         painter.text(metrics_rect.center(), Align2::CENTER_CENTER, &metrics_str, font_info.clone(), theme.muted);
         right_x -= 12.0;
@@ -433,7 +433,7 @@ pub fn render_lunaline(params: LunaLineRenderParams) -> bool {
                 let info_rect = Rect::from_min_size(pos2(left_x, bar_center_y - info_h * 0.5), vec2(info_w, info_h));
 
                 if matches!(config.style, LunaStyle::Pill | LunaStyle::Floating) {
-                    painter.rect(info_rect, 6.0, theme.surface(), Stroke::new(0.5, theme.border()), egui::StrokeKind::Inside);
+                    painter.rect(info_rect, 6.0, theme.surface(), Stroke::new(0.5_f32, theme.border()), egui::StrokeKind::Inside);
                 }
                 let text_anchor = pos2(info_rect.min.x + 8.0, bar_center_y);
                 painter.text(text_anchor, Align2::LEFT_CENTER, &info_str, font_info.clone(), theme.text);

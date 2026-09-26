@@ -218,7 +218,7 @@ pub fn render_sidebar_body(
                         btn_rect,
                         5.0,
                         b_bg,
-                        egui::Stroke::new(1.0, theme.border()),
+                        egui::Stroke::new(1.0_f32, theme.border()),
                         egui::StrokeKind::Inside,
                     );
                     ui.painter().text(
@@ -245,7 +245,7 @@ pub fn render_sidebar_body(
                         btn_rect,
                         5.0,
                         b_bg,
-                        egui::Stroke::new(1.0, theme.border()),
+                        egui::Stroke::new(1.0_f32, theme.border()),
                         egui::StrokeKind::Inside,
                     );
                     ui.painter().text(

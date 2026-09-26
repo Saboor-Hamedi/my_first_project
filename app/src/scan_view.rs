@@ -67,7 +67,7 @@ pub fn render_scan_view(
         // Divider
         p.line_segment(
             [pos2(start_x, current_y), pos2(start_x + max_w, current_y)],
-            Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 40)),
+            Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 40)),
         );
         current_y += 16.0;
 
@@ -181,7 +181,7 @@ pub fn render_scan_view(
     // Top divider
     p.line_segment(
         [pos2(start_x, current_y), pos2(start_x + max_w, current_y)],
-        Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 40)),
+        Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 40)),
     );
     current_y += 18.0;
 
@@ -259,7 +259,7 @@ pub fn render_scan_view(
     current_y += 16.0;
     p.line_segment(
         [pos2(start_x, current_y), pos2(start_x + max_w, current_y)],
-        Stroke::new(1.0, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 25)),
+        Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(theme.muted.r(), theme.muted.g(), theme.muted.b(), 25)),
     );
     current_y += 14.0;
 

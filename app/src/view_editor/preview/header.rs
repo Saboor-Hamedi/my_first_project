@@ -27,7 +27,7 @@ pub fn render_right_pane_header(
             pos2(header_rect.min.x, header_rect.max.y),
             pos2(header_rect.max.x, header_rect.max.y),
         ],
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
     );
 
     let chip_margin_y = 4.0;
@@ -92,7 +92,7 @@ pub fn render_right_pane_header(
         match tab_kind {
             crate::app::RightPaneTab::Preview => {
                 // Vector eye icon (almond outline + pupil)
-                let stroke = Stroke::new(1.3, icon_color);
+                let stroke = Stroke::new(1.3_f32, icon_color);
                 let p_l = pos2(icon_center.x - 5.5, icon_center.y);
                 let p_r = pos2(icon_center.x + 5.5, icon_center.y);
                 let p_t = pos2(icon_center.x, icon_center.y - 3.2);
@@ -120,7 +120,7 @@ pub fn render_right_pane_header(
             }
             crate::app::RightPaneTab::Backlinks => {
                 // Vector chain link icon
-                let stroke = Stroke::new(1.4, icon_color);
+                let stroke = Stroke::new(1.4_f32, icon_color);
                 let c = icon_center;
                 painter.line_segment([pos2(c.x - 3.5, c.y + 3.5), pos2(c.x + 3.5, c.y - 3.5)], stroke);
                 painter.circle_stroke(pos2(c.x - 2.5, c.y + 2.5), 2.5, stroke);
@@ -128,7 +128,7 @@ pub fn render_right_pane_header(
             }
             crate::app::RightPaneTab::Outline => {
                 // Vector outline list bars
-                let stroke = Stroke::new(1.3, icon_color);
+                let stroke = Stroke::new(1.3_f32, icon_color);
                 let c = icon_center;
                 painter.line_segment([pos2(c.x - 4.5, c.y - 4.0), pos2(c.x + 4.5, c.y - 4.0)], stroke);
                 painter.line_segment([pos2(c.x - 4.5, c.y), pos2(c.x + 2.5, c.y)], stroke);

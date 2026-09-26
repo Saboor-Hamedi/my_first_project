@@ -165,7 +165,7 @@ pub fn render_hover_wikilink_popup(
         popup_rect,
         8.0,
         theme.surface(),
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -175,7 +175,7 @@ pub fn render_hover_wikilink_popup(
     // Header subtle divider
     painter.line_segment(
         [pos2(header_rect.min.x, header_rect.max.y), pos2(header_rect.max.x, header_rect.max.y)],
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
     );
 
     // Left: Document / Folder icon
@@ -214,7 +214,7 @@ pub fn render_hover_wikilink_popup(
     let is_open_hovered = pointer_pos.map_or(false, |p| open_btn_rect.contains(p));
     let link_color = if is_open_hovered { theme.accent } else { theme.muted };
     let link_c = open_btn_rect.center();
-    let stroke = Stroke::new(1.3, link_color);
+    let stroke = Stroke::new(1.3_f32, link_color);
     painter.line_segment([pos2(link_c.x - 4.0, link_c.y + 4.0), pos2(link_c.x + 4.0, link_c.y - 4.0)], stroke);
     painter.circle_stroke(pos2(link_c.x - 2.2, link_c.y + 2.2), 2.2, stroke);
     painter.circle_stroke(pos2(link_c.x + 2.2, link_c.y - 2.2), 2.2, stroke);
@@ -227,7 +227,7 @@ pub fn render_hover_wikilink_popup(
     let is_close_hovered = pointer_pos.map_or(false, |p| close_btn_rect.contains(p));
     let close_color = if is_close_hovered { theme.accent } else { theme.muted };
     let close_c = close_btn_rect.center();
-    let x_stroke = Stroke::new(1.3, close_color);
+    let x_stroke = Stroke::new(1.3_f32, close_color);
     painter.line_segment([pos2(close_c.x - 3.5, close_c.y - 3.5), pos2(close_c.x + 3.5, close_c.y + 3.5)], x_stroke);
     painter.line_segment([pos2(close_c.x + 3.5, close_c.y - 3.5), pos2(close_c.x - 3.5, close_c.y + 3.5)], x_stroke);
 

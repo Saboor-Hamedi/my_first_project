@@ -38,7 +38,7 @@ pub fn render_import_modal(
         modal_rect,
         6.0,
         theme.surface(),
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -56,7 +56,7 @@ pub fn render_import_modal(
             pos2(header_rect.min.x, header_rect.max.y),
             pos2(header_rect.max.x, header_rect.max.y),
         ],
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
     );
 
     // Title
@@ -163,7 +163,7 @@ pub fn render_import_modal(
         bar_rect,
         3.0,
         theme.bg,
-        Stroke::new(1.0, theme.border()),
+        Stroke::new(1.0_f32, theme.border()),
         egui::StrokeKind::Inside,
     );
 
@@ -217,7 +217,7 @@ pub fn render_import_modal(
             box_rect,
             4.0,
             theme.bg,
-            Stroke::new(1.0, theme.border()),
+            Stroke::new(1.0_f32, theme.border()),
             egui::StrokeKind::Inside,
         );
 
