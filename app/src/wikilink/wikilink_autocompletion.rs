@@ -17,6 +17,8 @@ pub struct WikiLinkAutocompleteState {
     pub selected_index: usize,
     /// Exact pixel position on screen right under the `[[` trigger
     pub trigger_screen_pos: Pos2,
+    /// Line height of the trigger line (for calculating top placement without overlap)
+    pub trigger_line_height: f32,
     /// Caret position where user explicitly dismissed autocomplete (via Escape, Enter, or Click Outside)
     pub dismissed_cur: Option<usize>,
 }
@@ -346,7 +348,104 @@ pub fn apply_autocomplete_insertion(
     target.to_string()
 }
 
-/// Renders the autocomplete dropdown right under `[[` and handles arrow/ctrl+j,k/enter navigation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AutocompletePlacement {
+    Bottom,
+    Top,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AutocompleteGeometry {
+    pub menu_rect: Rect,
+    pub placement: AutocompletePlacement,
+    pub max_visible: usize,
+    pub scroll_offset: usize,
+}
+
+/// Computes smart position and dimension for the wikilink autocomplete popup.
+///
+/// Smart placement rules:
+/// 1. Default to Bottom (right under `[[`) if it comfortably fits the ideal item list.
+/// 2. If space below is insufficient, flip to Top (above `[[`) if top has sufficient space and more room than bottom.
+/// 3. On small screens / constrained viewports where neither side fits the full ideal height,
+///    intelligently pick the side with the larger available space and adapt the visible item count (clamped to fit),
+///    guaranteeing that the popup NEVER overlaps or obscures the `[[` trigger line!
+pub fn compute_autocomplete_geometry(
+    trigger_bottom: Pos2,
+    trigger_line_height: f32,
+    total_items: usize,
+    selected_index: usize,
+    window_bounds: Rect,
+) -> AutocompleteGeometry {
+    let item_h = 28.0;
+    let padding_h = 12.0;
+    let menu_w = 320.0;
+
+    // Horizontal placement with safe margins
+    let mut menu_x = trigger_bottom.x;
+    if menu_x + menu_w > window_bounds.max.x - 10.0 {
+        menu_x = (window_bounds.max.x - menu_w - 10.0).max(window_bounds.min.x + 10.0);
+    } else {
+        menu_x = menu_x.max(window_bounds.min.x + 10.0);
+    }
+
+    let lh = if trigger_line_height > 8.0 {
+        trigger_line_height
+    } else {
+        20.0
+    };
+
+    // Bottom anchor: sits right under the `[[` line
+    let bottom_anchor_y = trigger_bottom.y;
+    // Top anchor: sits right above the `[[` line (with a 2px gap)
+    let top_anchor_y = (trigger_bottom.y - lh - 4.0).max(window_bounds.min.y);
+
+    // Screen safe vertical boundaries
+    let safe_top = window_bounds.min.y + 32.0;
+    let safe_bottom = window_bounds.max.y - 28.0;
+
+    let space_below = (safe_bottom - bottom_anchor_y).max(0.0);
+    let space_above = (top_anchor_y - safe_top).max(0.0);
+
+    let ideal_visible = 6.min(total_items).max(1);
+    let ideal_h = ideal_visible as f32 * item_h + padding_h;
+
+    // Smart placement decision:
+    let (placement, visible_count, menu_y) = if space_below >= ideal_h {
+        // Fits completely below: place right under `[[`
+        (AutocompletePlacement::Bottom, ideal_visible, bottom_anchor_y)
+    } else if space_above >= ideal_h && space_above > space_below {
+        // Fits above and top has more room: place right above `[[`
+        (AutocompletePlacement::Top, ideal_visible, top_anchor_y - ideal_h)
+    } else if space_below >= space_above {
+        // Constrained space: bottom has more or equal room; adapt visible item count to fit space_below
+        let max_fit = (((space_below - padding_h) / item_h).floor() as usize).clamp(1, ideal_visible);
+        (AutocompletePlacement::Bottom, max_fit, bottom_anchor_y)
+    } else {
+        // Constrained space: top has more room; adapt visible item count to fit space_above
+        let max_fit = (((space_above - padding_h) / item_h).floor() as usize).clamp(1, ideal_visible);
+        let actual_h = max_fit as f32 * item_h + padding_h;
+        (AutocompletePlacement::Top, max_fit, (top_anchor_y - actual_h).max(safe_top))
+    };
+
+    let actual_h = visible_count as f32 * item_h + padding_h;
+    let menu_rect = Rect::from_min_size(pos2(menu_x, menu_y), vec2(menu_w, actual_h));
+
+    let scroll_offset = if selected_index >= visible_count {
+        selected_index + 1 - visible_count
+    } else {
+        0
+    };
+
+    AutocompleteGeometry {
+        menu_rect,
+        placement,
+        max_visible: visible_count,
+        scroll_offset,
+    }
+}
+
+/// Renders the autocomplete dropdown smartly above or below `[[` and handles arrow/ctrl+j,k/enter navigation.
 pub fn render_wikilink_autocomplete(
     ui: &egui::Ui,
     painter: &egui::Painter,
@@ -360,21 +459,18 @@ pub fn render_wikilink_autocomplete(
     }
 
     let item_h = 28.0;
-    let max_visible = 6.min(state.filtered_items.len());
-    let list_h = max_visible as f32 * item_h + 12.0;
     let menu_w = 320.0;
 
-    let mut menu_x = state.trigger_screen_pos.x;
-    let mut menu_y = state.trigger_screen_pos.y;
-
-    if menu_x + menu_w > window_bounds.max.x - 10.0 {
-        menu_x = (window_bounds.max.x - menu_w - 10.0).max(window_bounds.min.x + 10.0);
-    }
-    if menu_y + list_h > window_bounds.max.y - 30.0 {
-        menu_y = (state.trigger_screen_pos.y - list_h - 24.0).max(window_bounds.min.y + 35.0);
-    }
-
-    let menu_rect = Rect::from_min_size(pos2(menu_x, menu_y), vec2(menu_w, list_h));
+    let geo = compute_autocomplete_geometry(
+        state.trigger_screen_pos,
+        state.trigger_line_height,
+        state.filtered_items.len(),
+        state.selected_index,
+        window_bounds,
+    );
+    let menu_rect = geo.menu_rect;
+    let max_visible = geo.max_visible;
+    let scroll_offset = geo.scroll_offset;
 
     // Dismiss dropdown immediately if the user touches or clicks anywhere else on screen
     let clicked_outside = ui.input(|i| {
@@ -456,7 +552,8 @@ pub fn render_wikilink_autocomplete(
 
     // Render items
     let mut cur_y = menu_rect.min.y + 6.0;
-    for (idx, item) in state.filtered_items.iter().take(max_visible).enumerate() {
+    for (rel_idx, item) in state.filtered_items.iter().skip(scroll_offset).take(max_visible).enumerate() {
+        let idx = scroll_offset + rel_idx;
         let is_selected = idx == state.selected_index;
         let item_rect = Rect::from_min_size(pos2(menu_rect.min.x + 6.0, cur_y), vec2(menu_w - 12.0, item_h));
 
@@ -618,5 +715,70 @@ mod tests {
         ed.cur = ed.buf.len();
         state.check_trigger(&ed, &notes);
         assert!(state.is_active, "Autocomplete must reactivate when user types or moves cursor");
+    }
+
+    #[test]
+    fn test_compute_autocomplete_geometry_prefers_bottom_when_space_available() {
+        let window_bounds = Rect::from_min_size(pos2(0.0, 0.0), vec2(1120.0, 740.0));
+        let trigger_pos = pos2(150.0, 200.0);
+        let trigger_lh = 20.0;
+        let trigger_bottom = pos2(trigger_pos.x, trigger_pos.y + trigger_lh + 2.0);
+
+        let geo = compute_autocomplete_geometry(trigger_bottom, trigger_lh, 6, 0, window_bounds);
+        assert_eq!(geo.placement, AutocompletePlacement::Bottom);
+        assert_eq!(geo.max_visible, 6);
+        // Popup starts right under [[
+        assert_eq!(geo.menu_rect.min.y, trigger_bottom.y);
+        assert!(geo.menu_rect.min.y >= trigger_pos.y + trigger_lh, "Must be under trigger");
+    }
+
+    #[test]
+    fn test_compute_autocomplete_geometry_flips_to_top_when_space_below_insufficient() {
+        // Small screen: 700x500
+        let window_bounds = Rect::from_min_size(pos2(0.0, 0.0), vec2(700.0, 500.0));
+        let trigger_pos = pos2(100.0, 420.0); // near the bottom
+        let trigger_lh = 20.0;
+        let trigger_bottom = pos2(trigger_pos.x, trigger_pos.y + trigger_lh + 2.0);
+
+        let geo = compute_autocomplete_geometry(trigger_bottom, trigger_lh, 6, 0, window_bounds);
+        assert_eq!(geo.placement, AutocompletePlacement::Top);
+        assert_eq!(geo.max_visible, 6);
+        // Popup bottom is strictly above the trigger line (never overlapping [[)
+        assert!(geo.menu_rect.max.y <= trigger_pos.y, "Must be above [[ without overlapping");
+        assert!(geo.menu_rect.min.y >= window_bounds.min.y + 32.0, "Must stay within safe top margin");
+    }
+
+    #[test]
+    fn test_compute_autocomplete_geometry_small_screen_adaptive_fit() {
+        // Constrained small screen: 600x380
+        let window_bounds = Rect::from_min_size(pos2(0.0, 0.0), vec2(600.0, 380.0));
+        let trigger_pos = pos2(80.0, 210.0);
+        let trigger_lh = 20.0;
+        let trigger_bottom = pos2(trigger_pos.x, trigger_pos.y + trigger_lh + 2.0);
+
+        let geo = compute_autocomplete_geometry(trigger_bottom, trigger_lh, 6, 0, window_bounds);
+        // Validates that it picks the side with more space and adapts item count to fit cleanly
+        assert!(geo.menu_rect.max.y <= window_bounds.max.y - 28.0);
+        assert!(geo.menu_rect.min.y >= window_bounds.min.y + 32.0);
+
+        if geo.placement == AutocompletePlacement::Bottom {
+            assert!(geo.menu_rect.min.y >= trigger_bottom.y);
+        } else {
+            assert!(geo.menu_rect.max.y <= trigger_pos.y);
+        }
+    }
+
+    #[test]
+    fn test_compute_autocomplete_geometry_scroll_offset() {
+        let window_bounds = Rect::from_min_size(pos2(0.0, 0.0), vec2(800.0, 600.0));
+        let trigger_bottom = pos2(100.0, 200.0);
+
+        // Total 10 items, selected index 4 with max_visible 6
+        let geo = compute_autocomplete_geometry(trigger_bottom, 20.0, 10, 4, window_bounds);
+        assert_eq!(geo.scroll_offset, 0);
+
+        // Selected index 7 with max_visible 6 -> scroll_offset should be 2 so item 7 is in view
+        let geo2 = compute_autocomplete_geometry(trigger_bottom, 20.0, 10, 7, window_bounds);
+        assert_eq!(geo2.scroll_offset, 2);
     }
 }

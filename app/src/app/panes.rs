@@ -254,6 +254,7 @@ impl App {
         } else {
             (body_rect, None, None)
         };
+        self.last_editor_rect = Some(actual_editor_rect);
 
         let modals_open = self.settings_open
             || self.search_open
@@ -276,6 +277,7 @@ impl App {
         let show_dashboard = self.mode == Mode::Normal && (self.show_welcome || self.open_notes.is_empty());
 
         let (ed_font_size, ed_cw, ed_lh) = self.zoom.editor_metrics(self.font_size, ui.ctx());
+        self.last_ed_font_size = Some(ed_font_size);
 
         // Keep visual lines updated to exact editor width
         let target_ed = if self.mode == Mode::Doc { &self.doc_ed } else { &self.ed };
@@ -290,8 +292,14 @@ impl App {
                 0.0
             };
             let pad_x = if self.show_line_numbers { 16.0 } else { 24.0 };
+            let pad_y = 10.0;
             let safe_w = effective_editor_w;
             let effective_gutter_w = if safe_w > gutter_w + 40.0 { gutter_w } else { 0.0 };
+            let text_left = (actual_editor_rect.min.x + effective_gutter_w + pad_x).min(actual_editor_rect.max.x);
+            let curr_scroll_y = if self.mode == Mode::Doc { self.doc_scroll_y } else { self.scroll_y };
+            let ed_origin = pos2(text_left, actual_editor_rect.min.y - curr_scroll_y + pad_y);
+            self.last_ed_origin = Some(ed_origin);
+
             let wrap_w = (effective_editor_w - effective_gutter_w - pad_x - 24.0).max(120.0);
             let inline_layout = crate::view_editor::inline::compute_inline_layout_ctx(
                 ui.ctx(),
@@ -299,7 +307,7 @@ impl App {
                 wrap_w,
                 ed_font_size,
                 &self.theme,
-                0.0,
+                text_left,
             );
             inline_layout.compute_visual_lines()
         } else {

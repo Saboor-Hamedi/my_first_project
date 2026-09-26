@@ -10,10 +10,10 @@ use eframe::egui::{Color32, FontId};
 /// Uses monospace typography with subtle, tasteful scale factors for seamless editor transitions.
 pub fn heading_metrics(level: u8, base_font_size: f32) -> (FontId, f32) {
     match level {
-        1 => (FontId::monospace(base_font_size * 1.18), (base_font_size * 1.70).round()),
-        2 => (FontId::monospace(base_font_size * 1.12), (base_font_size * 1.62).round()),
-        3 => (FontId::monospace(base_font_size * 1.06), (base_font_size * 1.58).round()),
-        _ => (FontId::monospace(base_font_size), (base_font_size * 1.55).round()),
+        1 => (crate::font_manager::editor_font_id(base_font_size * 1.18), (base_font_size * 1.70).round()),
+        2 => (crate::font_manager::editor_font_id(base_font_size * 1.12), (base_font_size * 1.62).round()),
+        3 => (crate::font_manager::editor_font_id(base_font_size * 1.06), (base_font_size * 1.58).round()),
+        _ => (crate::font_manager::editor_font_id(base_font_size), (base_font_size * 1.55).round()),
     }
 }
 

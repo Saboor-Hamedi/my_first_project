@@ -61,7 +61,7 @@ pub fn render_inactive_line(
         _ => (base_font_size, (base_font_size * 1.55).round()),
     };
 
-    let default_font = FontId::proportional(font_size);
+    let default_font = crate::font_manager::editor_font_id(font_size);
 
     let base_text_color = match kind {
         InlineLineKind::Heading(lvl) | InlineLineKind::SetextHeading(lvl) => heading_color(*lvl, theme),
@@ -223,7 +223,7 @@ pub fn render_inactive_line(
                 append_run_and_map(job, charmap, chars, abs_start + 1..abs_end, fmt);
             }
             InlineSpanKind::Code => {
-                let fmt = TextFormat::simple(FontId::monospace(font_size * 0.95), theme.text);
+                let fmt = TextFormat::simple(crate::font_manager::editor_font_id(font_size * 0.95), theme.text);
                 if abs_end >= abs_start + 2 * m {
                     append_run_and_map(job, charmap, chars, abs_start + m..abs_end - m, fmt);
                 }
@@ -291,12 +291,12 @@ pub fn render_inactive_line(
                 append_and_map(job, charmap, url, abs_start + 1, fmt);
             }
             InlineSpanKind::FootnoteRef { ref id } => {
-                let fmt = TextFormat::simple(FontId::monospace(font_size * 0.85), theme.text);
+                let fmt = TextFormat::simple(crate::font_manager::editor_font_id(font_size * 0.85), theme.text);
                 let s = format!("[^{id}]");
                 append_and_map(job, charmap, &s, abs_start, fmt);
             }
             InlineSpanKind::Html { ref tag } => {
-                let fmt = TextFormat::simple(FontId::monospace(font_size * 0.9), theme.muted);
+                let fmt = TextFormat::simple(crate::font_manager::editor_font_id(font_size * 0.9), theme.muted);
                 let s = format!("<{tag}>");
                 append_and_map(job, charmap, &s, abs_start, fmt);
             }

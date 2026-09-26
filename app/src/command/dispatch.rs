@@ -895,6 +895,7 @@ pub fn execute_command(app: &mut App, raw: &str, now: f64) {
                     key: "selected_font".into(),
                     val: target.to_string(),
                 });
+                app.font_dirty = true;
                 app.set_status(format!("Editor font set to {}", target), now);
             }
         }

@@ -474,23 +474,26 @@ impl App {
                 && !self.show_welcome
                 && !self.open_notes.is_empty();
 
-            let actual_editor_rect = if is_preview_active {
-                let divider_w = 11.0;
-                let total_w = editor_panel_rect.width();
-                let available_w = (total_w - divider_w).max(300.0);
-                let min_w = 150.0f32;
-                let min_right_w = 150.0f32;
-                let max_w = (available_w - min_right_w).max(min_w);
-                let left_w = (available_w * self.split_ratio).clamp(min_w, max_w);
-                Rect::from_min_max(body_rect.min, pos2(editor_panel_rect.min.x + left_w, body_rect.max.y))
-            } else {
-                body_rect
-            };
+            let actual_editor_rect = self.last_editor_rect.unwrap_or_else(|| {
+                if is_preview_active {
+                    let divider_w = 11.0;
+                    let total_w = editor_panel_rect.width();
+                    let available_w = (total_w - divider_w).max(300.0);
+                    let min_w = 150.0f32;
+                    let min_right_w = 150.0f32;
+                    let max_w = (available_w - min_right_w).max(min_w);
+                    let left_w = (available_w * self.split_ratio).clamp(min_w, max_w);
+                    Rect::from_min_max(body_rect.min, pos2(editor_panel_rect.min.x + left_w, body_rect.max.y))
+                } else {
+                    body_rect
+                }
+            });
 
+            let effective_font_size = self.last_ed_font_size.unwrap_or(self.font_size);
             let gutter_w = if self.show_line_numbers {
                 let total_lines = (self.ed.buf.iter().filter(|&&c| c == '\n').count() + 1).max(1);
                 let digits = total_lines.to_string().len().max(2);
-                (digits as f32 * (self.font_size * 0.55) + 14.0).max(28.0)
+                (digits as f32 * (effective_font_size * 0.55) + 14.0).max(28.0)
             } else {
                 0.0
             };
@@ -498,14 +501,14 @@ impl App {
             let pad_y = 10.0;
             let effective_gutter_w = if actual_editor_rect.width() > gutter_w + 40.0 { gutter_w } else { 0.0 };
             let text_left = (actual_editor_rect.min.x + effective_gutter_w + pad_x).min(actual_editor_rect.max.x);
-            let ed_origin = pos2(text_left, actual_editor_rect.min.y - self.scroll_y + pad_y);
+            let ed_origin = self.last_ed_origin.unwrap_or_else(|| pos2(text_left, actual_editor_rect.min.y - self.scroll_y + pad_y));
             let wrap_w = (actual_editor_rect.max.x - text_left - 24.0).max(120.0);
 
             let inline_layout = crate::view_editor::inline::compute_inline_layout_ctx(
                 ui.ctx(),
                 &self.ed,
                 wrap_w,
-                self.font_size,
+                effective_font_size,
                 &self.theme,
                 text_left,
             );
@@ -521,6 +524,7 @@ impl App {
                 if self.wikilink_autocomplete.is_active {
                     let (trigger_pos, trigger_lh) = inline_layout.pos_for_char(self.wikilink_autocomplete.trigger_start, ed_origin);
                     self.wikilink_autocomplete.trigger_screen_pos = pos2(trigger_pos.x, trigger_pos.y + trigger_lh + 2.0);
+                    self.wikilink_autocomplete.trigger_line_height = trigger_lh;
                 }
 
                 if let Some(crate::wikilink::wikilink_autocompletion::AutocompleteAction::Inserted { inserted_text: _ }) =
@@ -552,17 +556,33 @@ impl App {
                     for link in &links {
                         let (start_pos, line_h) = inline_layout.pos_for_char(link.start, ed_origin);
                         let (end_pos, _) = inline_layout.pos_for_char(link.end, ed_origin);
-                        let link_rect = Rect::from_min_max(
-                            pos2(start_pos.x.min(end_pos.x) - 4.0, start_pos.y - 2.0),
-                            pos2(start_pos.x.max(end_pos.x) + 4.0, start_pos.y + line_h + 3.0),
-                        );
-                        let is_hit = link_rect.contains(pos) || (char_idx >= link.start && char_idx <= link.end);
+
+                        let is_single_line = (start_pos.y - end_pos.y).abs() < line_h * 0.7;
+                        let is_hit = if is_single_line {
+                            let link_rect = Rect::from_min_max(
+                                pos2(start_pos.x.min(end_pos.x) - 2.0, start_pos.y - 2.0),
+                                pos2(start_pos.x.max(end_pos.x) + 2.0, start_pos.y + line_h + 2.0),
+                            );
+                            link_rect.contains(pos)
+                        } else {
+                            let r1 = Rect::from_min_max(
+                                pos2(start_pos.x - 2.0, start_pos.y - 2.0),
+                                pos2(actual_editor_rect.max.x, start_pos.y + line_h + 2.0),
+                            );
+                            let r2 = Rect::from_min_max(
+                                pos2(actual_editor_rect.min.x, end_pos.y - 2.0),
+                                pos2(end_pos.x + 2.0, end_pos.y + line_h + 2.0),
+                            );
+                            (r1.contains(pos) || r2.contains(pos))
+                                && (char_idx >= link.start && char_idx <= link.end)
+                        };
 
                         if is_hit {
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                             let anchor = pos2(start_pos.x, start_pos.y + line_h);
                             found_hover = Some((link.target.clone(), anchor));
 
-                            if ui.input(|i| i.pointer.primary_clicked()) {
+                            if ui.input(|i| i.pointer.primary_clicked() || i.pointer.button_pressed(egui::PointerButton::Primary)) {
                                 if let Some(note) = crate::wikilink::resolve_wikilink(&link.target, &self.notes_list) {
                                     self.open_note_by_id(note.id, now);
                                 } else {

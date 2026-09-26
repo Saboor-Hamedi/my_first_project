@@ -23,6 +23,7 @@ use crate::mode::Mode;
 use crate::settings::SettingTab;
 use crate::sound::SoundEngine;
 use crate::theme::Theme;
+use eframe::egui::{Pos2, Rect};
 use crate::updater::UpdateManager;
 use crate::vim::VimEngine;
 
@@ -145,7 +146,11 @@ pub struct App {
     pub is_dragging_splitter: bool,
     pub show_line_numbers: bool,
     pub is_dirty: bool,
+    pub font_dirty: bool,
     pub last_saved_time: f64,
+    pub last_editor_rect: Option<Rect>,
+    pub last_ed_origin: Option<Pos2>,
+    pub last_ed_font_size: Option<f32>,
 
     // Database & worker channel
     pub db: Option<Database>,
@@ -323,6 +328,11 @@ impl eframe::App for App {
                     self.set_status("Terminal session ended", now);
                 }
             }
+        }
+
+        if self.font_dirty {
+            self.font_dirty = false;
+            crate::font_manager::apply_font(ctx, &self.selected_font);
         }
 
         let typed = handle_input(self, ctx, now);

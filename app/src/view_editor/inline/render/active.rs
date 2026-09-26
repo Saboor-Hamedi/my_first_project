@@ -60,8 +60,8 @@ pub fn render_active_line(
         _ => (base_font_size, (base_font_size * 1.55).round()),
     };
 
-    let default_font = FontId::proportional(font_size);
-    let syntax_font = FontId::monospace(font_size);
+    let default_font = crate::font_manager::editor_font_id(font_size);
+    let syntax_font = crate::font_manager::editor_font_id(font_size);
 
     let syntax_color = Color32::from_rgba_unmultiplied(
         theme.muted.r(),
@@ -250,11 +250,11 @@ pub fn render_active_line(
                 append_run_and_map(job, charmap, chars, abs_start..abs_end, fmt);
             }
             InlineSpanKind::FootnoteRef { .. } => {
-                let fmt = TextFormat::simple(FontId::monospace(font_size * 0.85), theme.text);
+                let fmt = TextFormat::simple(crate::font_manager::editor_font_id(font_size * 0.85), theme.text);
                 append_run_and_map(job, charmap, chars, abs_start..abs_end, fmt);
             }
             InlineSpanKind::Html { .. } => {
-                let fmt = TextFormat::simple(FontId::monospace(font_size * 0.9), theme.muted);
+                let fmt = TextFormat::simple(crate::font_manager::editor_font_id(font_size * 0.9), theme.muted);
                 append_run_and_map(job, charmap, chars, abs_start..abs_end, fmt);
             }
             InlineSpanKind::HardBreak => {

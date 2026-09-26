@@ -105,23 +105,30 @@ pub fn find_font_file(font_name: &str) -> Option<PathBuf> {
         ]
     } else if normalized.contains("victor") {
         vec![
+            "VictorMono-VariableFont_wght.ttf",
             "VictorMono-Regular.ttf",
             "VictorMono-Medium.ttf",
             "VictorMono.ttf",
             "victormono-regular.ttf",
             "Victor Mono Regular.ttf",
+            "VictorMono-Italic-VariableFont_wght.ttf",
         ]
     } else if normalized.contains("iosevka") {
         vec![
+            "SGr-Iosevka-Regular.ttc",
+            "IoskeleyMono-Regular.ttf",
             "Iosevka-Regular.ttf",
             "iosevka-regular.ttf",
             "Iosevka.ttf",
             "iosevka.ttf",
             "IosevkaFixed-Regular.ttf",
             "IosevkaTerm-Regular.ttf",
+            "SGr-Iosevka-Medium.ttc",
+            "SGr-Iosevka-Bold.ttc",
         ]
     } else if normalized.contains("berkeley") {
         vec![
+            "IoskeleyMono-Regular.ttf",
             "BerkeleyMono-Regular.ttf",
             "BerkeleyMono.ttf",
             "berkeleymono-regular.ttf",
@@ -151,9 +158,13 @@ pub fn find_font_file(font_name: &str) -> Option<PathBuf> {
     }
     search_dirs.push(PathBuf::from("fonts"));
     search_dirs.push(PathBuf::from("app/assets"));
+    search_dirs.push(PathBuf::from("assets"));
 
-    for dir in &search_dirs {
-        for candidate in &candidate_names {
+    fn search_recursive(dir: &std::path::Path, candidates: &[&str], depth: usize) -> Option<PathBuf> {
+        if depth > 4 {
+            return None;
+        }
+        for candidate in candidates {
             let p = dir.join(candidate);
             if p.exists() {
                 if let Ok(bytes) = std::fs::read(&p) {
@@ -162,6 +173,23 @@ pub fn find_font_file(font_name: &str) -> Option<PathBuf> {
                     }
                 }
             }
+        }
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.is_dir() {
+                    if let Some(found) = search_recursive(&p, candidates, depth + 1) {
+                        return Some(found);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    for dir in &search_dirs {
+        if let Some(found) = search_recursive(dir, &candidate_names, 0) {
+            return Some(found);
         }
     }
 
@@ -223,30 +251,55 @@ pub fn apply_font(ctx: &egui::Context, font_name: &str) {
         "jetbrains_mono".to_string()
     };
 
-    // Apply to monospace
-    let mono = fonts.families.get_mut(&FontFamily::Monospace).unwrap();
-    mono.clear();
-    mono.push(active_font_key.clone());
-    if active_font_key != "jetbrains_mono" {
-        mono.push("jetbrains_mono".into());
-    }
-    #[cfg(target_os = "windows")]
-    if fonts.font_data.contains_key("win_emoji") {
-        mono.push("win_emoji".into());
+    // Dedicated Editor Font Family: strictly used by the editor buffer and inline editor
+    fonts.families.insert(
+        FontFamily::Name(EDITOR_FONT_FAMILY.into()),
+        vec![
+            active_font_key.clone(),
+            "jetbrains_mono".into(),
+            #[cfg(target_os = "windows")]
+            "win_emoji".into(),
+        ],
+    );
+
+    // Standard Monospace Family: Keep stable with clean JetBrains Mono so other UI components
+    // (LunaLine statusbar, command line dock, badges, dialogs) remain clean and consistent.
+    if let Some(mono) = fonts.families.get_mut(&FontFamily::Monospace) {
+        mono.insert(0, "jetbrains_mono".into());
+        #[cfg(target_os = "windows")]
+        if fonts.font_data.contains_key("win_emoji") {
+            mono.push("win_emoji".into());
+        }
     }
 
-    // Apply to proportional
-    let prop = fonts.families.get_mut(&FontFamily::Proportional).unwrap();
-    prop.clear();
-    prop.push(active_font_key);
-    prop.push("jetbrains_mono".into());
+    // Standard Proportional Family: Preserve egui default fonts for UI menus and dialogs
     #[cfg(target_os = "windows")]
-    if fonts.font_data.contains_key("win_emoji") {
-        prop.push("win_emoji".into());
+    if let Some(prop) = fonts.families.get_mut(&FontFamily::Proportional) {
+        if fonts.font_data.contains_key("win_emoji") {
+            prop.push("win_emoji".into());
+        }
     }
 
+    ctx.data_mut(|d| d.insert_temp(eframe::egui::Id::new("editor_font_initialized"), true));
     ctx.set_fonts(fonts);
     ctx.request_repaint();
+}
+
+pub const EDITOR_FONT_FAMILY: &str = "editor_font";
+
+/// Returns a `FontId` configured to use the user's active editor coding typeface.
+#[inline]
+pub fn editor_font_id(size: f32) -> eframe::egui::FontId {
+    eframe::egui::FontId::new(size, FontFamily::Name(EDITOR_FONT_FAMILY.into()))
+}
+
+/// Ensures that the editor font family is bound on the given egui context.
+/// Completely crash-proof: automatically initializes fallback fonts if unconfigured.
+pub fn ensure_editor_font(ctx: &eframe::egui::Context) {
+    let initialized = ctx.data(|d| d.get_temp::<bool>(eframe::egui::Id::new("editor_font_initialized"))).unwrap_or(false);
+    if !initialized {
+        apply_font(ctx, "default");
+    }
 }
 
 #[cfg(test)]
@@ -270,6 +323,13 @@ mod tests {
         assert!(is_font_available("JetBrains Mono"));
         assert!(is_font_available("jetbrains_mono"));
         assert!(is_font_available("default"));
+    }
+
+    #[test]
+    fn test_downloaded_fonts_are_discovered() {
+        assert!(is_font_available("Victor Mono"), "Victor Mono should be discovered in assets");
+        assert!(is_font_available("Iosevka"), "Iosevka should be discovered in assets");
+        assert!(is_font_available("Berkeley Mono"), "Berkeley Mono should be discovered in assets");
     }
 
     #[test]

@@ -153,6 +153,10 @@ impl App {
             right_sidebar_state: crate::rightsidebar::RightSidebarState::default(),
             hover_wikilink: crate::wikilink::hover_wikilink::HoverWikiLinkState::default(),
             wikilink_autocomplete: crate::wikilink::wikilink_autocompletion::WikiLinkAutocompleteState::default(),
+            font_dirty: false,
+            last_editor_rect: None,
+            last_ed_origin: None,
+            last_ed_font_size: None,
         };
 
         app.load_settings();

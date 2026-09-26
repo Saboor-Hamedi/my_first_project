@@ -58,7 +58,7 @@ impl ZoomState {
         // Optical scale calibration: egui's monospace glyphs are ~9% larger than proportional glyphs.
         // Calibrating raw monospace font size by 0.92 ensures seamless optical scale when toggling Ctrl+E.
         let raw_font_size = (ed_font_size * 0.92).round().max(8.0);
-        let font = FontId::monospace(raw_font_size);
+        let font = crate::font_manager::editor_font_id(raw_font_size);
         let (cw, lh) = ctx.fonts(|f| {
             let sample_100 = "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM";
             let g100 = f.layout_no_wrap(sample_100.to_owned(), font.clone(), Color32::WHITE);

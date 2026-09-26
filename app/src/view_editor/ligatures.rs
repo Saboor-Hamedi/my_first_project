@@ -4,24 +4,32 @@ use eframe::egui::{self, pos2, vec2, Align2, Color32, FontId, Rect, Stroke};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LigatureKind {
-    ArrowRight,        // ->
-    ArrowLeft,         // <-
-    FatArrowRight,     // =>
-    TripleEquals,      // ===
-    NotTripleEquals,   // !==
-    DoubleEquals,      // ==
-    NotEquals,         // !=
-    LessOrEqual,       // <=
-    GreaterOrEqual,    // >=
-    LongArrowRight,    // -->
-    LongArrowLeft,     // <--
-    LongFatArrowRight, // ==>
-    LongFatArrowLeft,  // <==
+    ArrowRight,            // ->
+    ArrowLeft,             // <-
+    FatArrowRight,         // =>
+    TripleEquals,          // ===
+    NotTripleEquals,       // !==
+    DoubleEquals,          // ==
+    NotEquals,             // !=
+    LessOrEqual,           // <=
+    GreaterOrEqual,        // >=
+    LongArrowRight,        // -->
+    LongArrowLeft,         // <--
+    LongFatArrowRight,     // ==>
+    LongFatArrowLeft,      // <==
+    VeryLongArrowRight,    // --->
+    VeryLongArrowLeft,     // <---
+    VeryLongFatArrowRight, // ===>
+    VeryLongFatArrowLeft,  // <===
 }
 
 impl LigatureKind {
     pub fn char_len(&self) -> usize {
         match self {
+            Self::VeryLongArrowRight
+            | Self::VeryLongArrowLeft
+            | Self::VeryLongFatArrowRight
+            | Self::VeryLongFatArrowLeft => 4,
             Self::TripleEquals
             | Self::NotTripleEquals
             | Self::LongArrowRight
@@ -40,14 +48,23 @@ impl LigatureKind {
 }
 
 pub fn detect_ligature(chars: &[char], i: usize) -> Option<LigatureKind> {
+    if i + 4 <= chars.len() {
+        match (chars[i], chars[i + 1], chars[i + 2], chars[i + 3]) {
+            ('=', '=', '=', '>') => return Some(LigatureKind::VeryLongFatArrowRight),
+            ('<', '=', '=', '=') => return Some(LigatureKind::VeryLongFatArrowLeft),
+            ('-', '-', '-', '>') => return Some(LigatureKind::VeryLongArrowRight),
+            ('<', '-', '-', '-') => return Some(LigatureKind::VeryLongArrowLeft),
+            _ => {}
+        }
+    }
     if i + 3 <= chars.len() {
         match (chars[i], chars[i + 1], chars[i + 2]) {
-            ('=', '=', '=') => return Some(LigatureKind::TripleEquals),
-            ('!', '=', '=') => return Some(LigatureKind::NotTripleEquals),
-            ('-', '-', '>') => return Some(LigatureKind::LongArrowRight),
-            ('<', '-', '-') => return Some(LigatureKind::LongArrowLeft),
             ('=', '=', '>') => return Some(LigatureKind::LongFatArrowRight),
             ('<', '=', '=') => return Some(LigatureKind::LongFatArrowLeft),
+            ('-', '-', '>') => return Some(LigatureKind::LongArrowRight),
+            ('<', '-', '-') => return Some(LigatureKind::LongArrowLeft),
+            ('=', '=', '=') => return Some(LigatureKind::TripleEquals),
+            ('!', '=', '=') => return Some(LigatureKind::NotTripleEquals),
             _ => {}
         }
     }
@@ -76,95 +93,79 @@ pub fn draw_ligature(
 ) {
     let cols = kind.char_len() as f32;
     let x_end = x_start + cols * cw;
-    let dx = cw * 0.44;
-    let dy = cw * 0.38;
     let bar_gap = (cw * 0.17).clamp(2.0, 3.2);
 
+    // Aerodynamic, sharp, modern arrowhead dimensions matching Fira Code / JetBrains Mono
+    let thin_head_dx = (cw * 0.50).clamp(4.0, 8.5);
+    let thin_head_dy = (cw * 0.26).clamp(2.2, 4.5);
+
+    let fat_head_dx = (cw * 0.54).clamp(4.5, 9.5);
+    let fat_head_dy = (cw * 0.32).max(bar_gap + 1.2);
+
     match kind {
-        LigatureKind::ArrowRight => {
-            let tip = pos2(x_end - cw * 0.18, y_mid);
-            let start = pos2(x_start + cw * 0.10, y_mid);
+        LigatureKind::ArrowRight
+        | LigatureKind::LongArrowRight
+        | LigatureKind::VeryLongArrowRight => {
+            let tip = pos2(x_end - cw * 0.14, y_mid);
+            let start = pos2(x_start + cw * 0.08, y_mid);
             painter.line_segment([start, tip], stroke);
-            painter.line_segment([pos2(tip.x - dx, tip.y - dy), tip], stroke);
-            painter.line_segment([pos2(tip.x - dx, tip.y + dy), tip], stroke);
+            painter.line_segment([pos2(tip.x - thin_head_dx, y_mid - thin_head_dy), tip], stroke);
+            painter.line_segment([pos2(tip.x - thin_head_dx, y_mid + thin_head_dy), tip], stroke);
         }
-        LigatureKind::ArrowLeft => {
-            let tip = pos2(x_start + cw * 0.18, y_mid);
-            let end = pos2(x_end - cw * 0.10, y_mid);
+        LigatureKind::ArrowLeft
+        | LigatureKind::LongArrowLeft
+        | LigatureKind::VeryLongArrowLeft => {
+            let tip = pos2(x_start + cw * 0.14, y_mid);
+            let end = pos2(x_end - cw * 0.08, y_mid);
             painter.line_segment([tip, end], stroke);
-            painter.line_segment([pos2(tip.x + dx, tip.y - dy), tip], stroke);
-            painter.line_segment([pos2(tip.x + dx, tip.y + dy), tip], stroke);
+            painter.line_segment([pos2(tip.x + thin_head_dx, y_mid - thin_head_dy), tip], stroke);
+            painter.line_segment([pos2(tip.x + thin_head_dx, y_mid + thin_head_dy), tip], stroke);
         }
-        LigatureKind::LongArrowRight => {
-            let tip = pos2(x_end - cw * 0.18, y_mid);
-            let start = pos2(x_start + cw * 0.10, y_mid);
-            painter.line_segment([start, tip], stroke);
-            painter.line_segment([pos2(tip.x - dx, tip.y - dy), tip], stroke);
-            painter.line_segment([pos2(tip.x - dx, tip.y + dy), tip], stroke);
+        LigatureKind::FatArrowRight
+        | LigatureKind::LongFatArrowRight
+        | LigatureKind::VeryLongFatArrowRight => {
+            let tip = pos2(x_end - cw * 0.14, y_mid);
+            // Exact geometric intersection so the parallel bars join seamlessly into the arrowhead wings with zero gap
+            let intersect_x = tip.x - bar_gap * (fat_head_dx / fat_head_dy);
+            let start_x = x_start + cw * 0.08;
+            painter.line_segment(
+                [pos2(start_x, y_mid - bar_gap), pos2(intersect_x, y_mid - bar_gap)],
+                stroke,
+            );
+            painter.line_segment(
+                [pos2(start_x, y_mid + bar_gap), pos2(intersect_x, y_mid + bar_gap)],
+                stroke,
+            );
+            painter.line_segment([pos2(tip.x - fat_head_dx, y_mid - fat_head_dy), tip], stroke);
+            painter.line_segment([pos2(tip.x - fat_head_dx, y_mid + fat_head_dy), tip], stroke);
         }
-        LigatureKind::LongArrowLeft => {
-            let tip = pos2(x_start + cw * 0.18, y_mid);
-            let end = pos2(x_end - cw * 0.10, y_mid);
-            painter.line_segment([tip, end], stroke);
-            painter.line_segment([pos2(tip.x + dx, tip.y - dy), tip], stroke);
-            painter.line_segment([pos2(tip.x + dx, tip.y + dy), tip], stroke);
-        }
-        LigatureKind::FatArrowRight => {
-            let tip = pos2(x_end - cw * 0.18, y_mid);
-            let shaft_end_x = tip.x - dx * 0.45;
-            let start_x = x_start + cw * 0.10;
+        LigatureKind::LongFatArrowLeft
+        | LigatureKind::VeryLongFatArrowLeft => {
+            let tip = pos2(x_start + cw * 0.14, y_mid);
+            let intersect_x = tip.x + bar_gap * (fat_head_dx / fat_head_dy);
+            let end_x = x_end - cw * 0.08;
             painter.line_segment(
-                [pos2(start_x, y_mid - bar_gap), pos2(shaft_end_x, y_mid - bar_gap)],
+                [pos2(intersect_x, y_mid - bar_gap), pos2(end_x, y_mid - bar_gap)],
                 stroke,
             );
             painter.line_segment(
-                [pos2(start_x, y_mid + bar_gap), pos2(shaft_end_x, y_mid + bar_gap)],
+                [pos2(intersect_x, y_mid + bar_gap), pos2(end_x, y_mid + bar_gap)],
                 stroke,
             );
-            painter.line_segment([pos2(tip.x - dx, tip.y - dy), tip], stroke);
-            painter.line_segment([pos2(tip.x - dx, tip.y + dy), tip], stroke);
-        }
-        LigatureKind::LongFatArrowRight => {
-            let tip = pos2(x_end - cw * 0.18, y_mid);
-            let shaft_end_x = tip.x - dx * 0.45;
-            let start_x = x_start + cw * 0.10;
-            painter.line_segment(
-                [pos2(start_x, y_mid - bar_gap), pos2(shaft_end_x, y_mid - bar_gap)],
-                stroke,
-            );
-            painter.line_segment(
-                [pos2(start_x, y_mid + bar_gap), pos2(shaft_end_x, y_mid + bar_gap)],
-                stroke,
-            );
-            painter.line_segment([pos2(tip.x - dx, tip.y - dy), tip], stroke);
-            painter.line_segment([pos2(tip.x - dx, tip.y + dy), tip], stroke);
-        }
-        LigatureKind::LongFatArrowLeft => {
-            let tip = pos2(x_start + cw * 0.18, y_mid);
-            let shaft_start_x = tip.x + dx * 0.45;
-            let end_x = x_end - cw * 0.10;
-            painter.line_segment(
-                [pos2(shaft_start_x, y_mid - bar_gap), pos2(end_x, y_mid - bar_gap)],
-                stroke,
-            );
-            painter.line_segment(
-                [pos2(shaft_start_x, y_mid + bar_gap), pos2(end_x, y_mid + bar_gap)],
-                stroke,
-            );
-            painter.line_segment([pos2(tip.x + dx, tip.y - dy), tip], stroke);
-            painter.line_segment([pos2(tip.x + dx, tip.y + dy), tip], stroke);
+            painter.line_segment([pos2(tip.x + fat_head_dx, y_mid - fat_head_dy), tip], stroke);
+            painter.line_segment([pos2(tip.x + fat_head_dx, y_mid + fat_head_dy), tip], stroke);
         }
         LigatureKind::TripleEquals => {
-            let x_left = x_start + cw * 0.10;
-            let x_right = x_end - cw * 0.10;
+            let x_left = x_start + cw * 0.08;
+            let x_right = x_end - cw * 0.08;
             let sep = (cw * 0.25).clamp(2.8, 4.2);
             painter.line_segment([pos2(x_left, y_mid - sep), pos2(x_right, y_mid - sep)], stroke);
             painter.line_segment([pos2(x_left, y_mid), pos2(x_right, y_mid)], stroke);
             painter.line_segment([pos2(x_left, y_mid + sep), pos2(x_right, y_mid + sep)], stroke);
         }
         LigatureKind::NotTripleEquals => {
-            let x_left = x_start + cw * 0.10;
-            let x_right = x_end - cw * 0.10;
+            let x_left = x_start + cw * 0.08;
+            let x_right = x_end - cw * 0.08;
             let sep = (cw * 0.25).clamp(2.8, 4.2);
             painter.line_segment([pos2(x_left, y_mid - sep), pos2(x_right, y_mid - sep)], stroke);
             painter.line_segment([pos2(x_left, y_mid), pos2(x_right, y_mid)], stroke);
@@ -179,8 +180,8 @@ pub fn draw_ligature(
             );
         }
         LigatureKind::DoubleEquals => {
-            let x_left = x_start + cw * 0.10;
-            let x_right = x_end - cw * 0.10;
+            let x_left = x_start + cw * 0.08;
+            let x_right = x_end - cw * 0.08;
             painter.line_segment(
                 [pos2(x_left, y_mid - bar_gap), pos2(x_right, y_mid - bar_gap)],
                 stroke,
@@ -191,8 +192,8 @@ pub fn draw_ligature(
             );
         }
         LigatureKind::NotEquals => {
-            let x_left = x_start + cw * 0.10;
-            let x_right = x_end - cw * 0.10;
+            let x_left = x_start + cw * 0.08;
+            let x_right = x_end - cw * 0.08;
             painter.line_segment(
                 [pos2(x_left, y_mid - bar_gap), pos2(x_right, y_mid - bar_gap)],
                 stroke,
@@ -362,5 +363,12 @@ pub mod tests {
         // find ==
         let eq_pos = chars.windows(2).enumerate().find(|&(idx, w)| w == ['=', '='] && (idx == 0 || chars[idx-1] != '=') && chars.get(idx+2) != Some(&'=')).unwrap().0;
         assert_eq!(detect_ligature(&chars, eq_pos), Some(LigatureKind::DoubleEquals));
+
+        // Test multi-char arrows ==>, ===>, -->, --->
+        let fat_chars: Vec<char> = "==> ===> --> --->".chars().collect();
+        assert_eq!(detect_ligature(&fat_chars, 0), Some(LigatureKind::LongFatArrowRight));
+        assert_eq!(detect_ligature(&fat_chars, 4), Some(LigatureKind::VeryLongFatArrowRight));
+        assert_eq!(detect_ligature(&fat_chars, 9), Some(LigatureKind::LongArrowRight));
+        assert_eq!(detect_ligature(&fat_chars, 13), Some(LigatureKind::VeryLongArrowRight));
     }
 }

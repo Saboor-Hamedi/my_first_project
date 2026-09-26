@@ -28,7 +28,7 @@ pub fn render_editor_body(
     show_line_numbers: bool,
     vim_mode: Option<crate::vim::VimSubMode>,
 ) {
-    let font = FontId::monospace(font_size);
+    let font = crate::font_manager::editor_font_id(font_size);
     let font_h = painter.layout_no_wrap("M".to_owned(), font.clone(), Color32::WHITE).size().y;
     let y_pad = ((lh - font_h) * 0.5).round().max(0.0);
     let stroke_w = (font_size * 0.088).clamp(1.2, 1.8);

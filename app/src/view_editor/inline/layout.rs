@@ -81,6 +81,7 @@ pub fn compute_inline_layout_ctx(
     theme: &Theme,
     _ed_origin_x: f32,
 ) -> InlineEditorLayout {
+    crate::font_manager::ensure_editor_font(ctx);
     let mut layout = InlineEditorLayout::new();
     let buf = &ed.buf;
     let n = buf.len();
