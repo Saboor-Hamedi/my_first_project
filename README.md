@@ -11,8 +11,9 @@
 [![GUI: egui](https://img.shields.io/badge/Built_with-egui-8A2BE2?style=for-the-badge&logo=rust&logoColor=white)](https://github.com/emilk/egui)
 [![Modal: Vim](https://img.shields.io/badge/Modal_Engine-Vim_Keymap-019733?style=for-the-badge&logo=vim&logoColor=white)](https://www.vim.org/)
 [![Storage: SQLite](https://img.shields.io/badge/Storage-Local_SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
-[![Tests](https://img.shields.io/badge/Tests-176_Passing-brightgreen?style=for-the-badge)](https://github.com/Saboor-Hamedi/my_first_project)
-[![Release](https://img.shields.io/badge/Release-v0.1.13-orange?style=for-the-badge)](https://github.com/Saboor-Hamedi/my_first_project/releases)
+[![Tests](https://img.shields.io/badge/Tests-187_Passing-brightgreen?style=for-the-badge)](https://github.com/Saboor-Hamedi/mindforge)
+[![Release](https://img.shields.io/badge/Release-v0.1.14-orange?style=for-the-badge)](https://github.com/Saboor-Hamedi/mindforge/releases)
+[![Discussions](https://img.shields.io/badge/Discussions-Community_Q%26A-blueviolet?style=for-the-badge&logo=github)](https://github.com/Saboor-Hamedi/mindforge/discussions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 
 [**Quick Start**](#-quick-start) •
@@ -20,7 +21,8 @@
 [**Showcase**](#-showcase) •
 [**Animated Carets**](#-animated-physics-carets) •
 [**Vim Engine**](#-vim-modal-editing) •
-[**Architecture & egui**](#-built-with-egui)
+[**Architecture & egui**](#-built-with-egui) •
+[**Discussions**](https://github.com/Saboor-Hamedi/mindforge/discussions)
 
 </div>
 
@@ -193,15 +195,15 @@ Make sure you have the [Rust toolchain](https://rustup.rs/) installed (1.78+ rec
 
 ```bash
 # Clone the repository
-git clone https://github.com/Saboor-Hamedi/my_first_project.git
-cd my_first_project
+git clone https://github.com/Saboor-Hamedi/mindforge.git
+cd mindforge
 
 # Run with maximum GPU optimizations
 cargo run --release
 ```
 
 ### Running Test Suite
-MINDFORGE maintains an extensive suite of 176 unit tests covering font metrics, inline markdown layout invariants, Vim text objects, and Wikilink resolution:
+MINDFORGE maintains an extensive suite of 187 unit tests covering font metrics, inline markdown layout invariants, Vim text objects, and Wikilink resolution:
 
 ```bash
 cargo test --workspace
@@ -221,7 +223,7 @@ Backing up your entire knowledge graph is as simple as copying `mindforge.db`.
 
 ## 🤝 Contributing
 
-Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/Saboor-Hamedi/my_first_project/issues).
+Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/Saboor-Hamedi/mindforge/issues) or join the [community discussions](https://github.com/Saboor-Hamedi/mindforge/discussions).
 
 1. Fork the Project
 2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
