@@ -48,13 +48,6 @@ pub const SUPPORTED_FONTS: &[FontMetadata] = &[
         preview_snippet: "type Result<T> = std::result::Result<T, Error>;",
         is_embedded: false,
     },
-    FontMetadata {
-        id: "berkeley_mono",
-        display_name: "Berkeley Mono",
-        description: "Precision-engineered typeface for craft developers",
-        preview_snippet: "SELECT * FROM notes WHERE topic MATCH 'rust*';",
-        is_embedded: false,
-    },
 ];
 
 /// Validates raw font binary headers to prevent any epaint parser panics.
@@ -116,7 +109,6 @@ pub fn find_font_file(font_name: &str) -> Option<PathBuf> {
     } else if normalized.contains("iosevka") {
         vec![
             "SGr-Iosevka-Regular.ttc",
-            "IoskeleyMono-Regular.ttf",
             "Iosevka-Regular.ttf",
             "iosevka-regular.ttf",
             "Iosevka.ttf",
@@ -125,15 +117,6 @@ pub fn find_font_file(font_name: &str) -> Option<PathBuf> {
             "IosevkaTerm-Regular.ttf",
             "SGr-Iosevka-Medium.ttc",
             "SGr-Iosevka-Bold.ttc",
-        ]
-    } else if normalized.contains("berkeley") {
-        vec![
-            "IoskeleyMono-Regular.ttf",
-            "BerkeleyMono-Regular.ttf",
-            "BerkeleyMono.ttf",
-            "berkeleymono-regular.ttf",
-            "BerkeleyMono-Regular.otf",
-            "Berkeley Mono Regular.ttf",
         ]
     } else if normalized.contains("hack") {
         vec![
@@ -314,8 +297,7 @@ mod tests {
         assert!(names.iter().any(|n| n.contains("Victor Mono")));
         assert!(names.iter().any(|n| n.contains("Fira Code")));
         assert!(names.iter().any(|n| n.contains("Cascadia") || n.contains("Caskaydia")));
-        assert!(names.iter().any(|n| n.contains("Berkeley Mono")));
-        assert_eq!(SUPPORTED_FONTS.len(), 6);
+        assert_eq!(SUPPORTED_FONTS.len(), 5);
     }
 
     #[test]
@@ -328,8 +310,7 @@ mod tests {
     #[test]
     fn test_downloaded_fonts_are_discovered() {
         assert!(is_font_available("Victor Mono"), "Victor Mono should be discovered in assets");
-        assert!(is_font_available("Iosevka"), "Iosevka should be discovered in assets");
-        assert!(is_font_available("Berkeley Mono"), "Berkeley Mono should be discovered in assets");
+        assert!(is_font_available("Fira Code"), "Fira Code should be discovered in assets");
     }
 
     #[test]
